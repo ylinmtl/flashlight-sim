@@ -48,10 +48,10 @@ cam_f_stop = 8  # Aperture (e.g., 2.8, 4.0, 5.6, 8.0).
 cam_shutter_speed_s = 1.0 / 3.0  # Shutter speed in seconds (e.g., 1.0/60.0).
 
 # --- SIMULATION RESOLUTION & ANGULAR DENSITY ---
-sim_grid_res = 1024  # Target plane virtual resolution representing width and height in pixels.
-sim_emitter_elements = 192  # LED die subdivision (e.g., 128x128 = 16,384 discrete emission points).
-sim_theta_step_deg = 0.05  # Theta angular resolution (elevation from dead center).
-sim_phi_step_deg = 0.05  # Phi angular resolution (rotation around the die).
+sim_grid_res = 300  # Target plane virtual resolution representing width and height in pixels.
+sim_emitter_elements = 10  # LED die subdivision (e.g., 128x128 = 16,384 discrete emission points).
+sim_theta_step_deg = 0.1  # Theta angular resolution (elevation from dead center).
+sim_phi_step_deg = 0.1  # Phi angular resolution (rotation around the die).
 
 # ==============================================================================
 # 1. SIMULATION FALLBACKS & THRESHOLDS
