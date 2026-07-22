@@ -164,10 +164,9 @@ def get_standard_emitter_intensity_vec(theta_rad):
     return intensity
 
 def calculate_lumens(emitter, current_amps):
-    """Calculates the true theoretical lumen output using diode physics.
+    """Calculates the theoretical lumen output using diode physics.
 
-    Voltage is modeled as a logarithmic curve to physically guarantee safe 
-    scaling during extreme overdrive scenarios:
+    Voltage is modeled as a logarithmic curve:
     V(I) = V_turn_on + V_scale * ln(I + 1)
 
     Args:
@@ -190,7 +189,7 @@ def calculate_lumens(emitter, current_amps):
 # ==============================================================================
 
 @njit
-def process_single_ray(ex, ey, ez_base, vx, vy, vz, flux,
+def (ex, ey, ez_base, vx, vy, vz, flux,
                        focal_length, z_bottom, z_min_cut, z_hole_top, z_max_cut,
                        radius_max, r_hole, target_z_mm, grid_res, wall_radius_m,
                        reflectivity_parabola, reflectivity_cylinder, reflectivity_gasket,
@@ -1023,7 +1022,7 @@ def generate_flashlight_plot(emitter_name, reflector_name, finish_type, save_pat
         amp_val = amps * pct
         lm_mode = calculate_lumens(selected_emitter, amp_val)
         cd_mode = max_cd * (lm_mode / total_flux)
-        throw_mode = np.sqrt(cd_mode / 0.25)
+        throw_mode = np.sqrt(cd_mode * 4)
         table_str += f"{int(pct*100):>4}% | {amp_val:>4.1f} | {int(lm_mode):>6,} | {int(cd_mode):>8,} | {int(throw_mode):>4,}m\n"
 
     # Format shared output title for all requested plots.
