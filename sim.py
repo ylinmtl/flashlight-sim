@@ -69,7 +69,7 @@ lumen_calc_step_deg = 0.05  # Step size used for integrating the Lambertian curv
 default_reflectivity_smooth = 0.85  # Percentage of light conserved when bouncing off a smooth mirror finish.
 default_reflectivity_op = 0.80  # Percentage of light conserved off an orange peel finish.
 default_reflectivity_cylinder = 0.8  # Percentage of light conserved off the cylindrical hole wall.
-default_reflectivity_gasket = 0.1  # Percentage of light conserved off the white plastic gasket.
+default_reflectivity_gasket = 0.0  # Percentage of light conserved off the white plastic gasket.
 default_op_blur_strength = 6.0  # Base Gaussian blur sigma applied to orange peel hotspots.
 
 # --- BEAM GEOMETRY MEASUREMENT THRESHOLDS ---
