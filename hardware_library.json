@@ -5,7 +5,7 @@
         "519A_5000K": {"die_length_mm": 2.0, "die_width_mm": 2.0, "shape": "square", "footprint_x_mm": 3.5, "footprint_y_mm": 3.5, "height_mm": 0.77, "max_current_amps": 5.0, "vf_turn_on_v": 2.739, "vf_scale": 0.377, "base_efficacy_lm_w": 136.3, "droop_factor": 0.142, "dome_size_mm": 3.1, "refractive_index": 1.41},
         "719A_5000K": {"die_length_mm": 2.0, "die_width_mm": 2.0, "shape": "square", "footprint_x_mm": 3.5, "footprint_y_mm": 3.5, "height_mm": 0.88, "max_current_amps": 1.8, "vf_turn_on_v": 6.009, "vf_scale": 0.962, "base_efficacy_lm_w": 106.1, "droop_factor": 0.184, "dome_size_mm": 0.0, "refractive_index": 1.0},
         "B35AM_5700K": {"die_length_mm": 3.12, "die_width_mm": 3.12, "shape": "square", "footprint_x_mm": 3.65,"footprint_y_mm": 3.65,"height_mm": 0.73, "max_current_amps": 2.4, "vf_turn_on_v": 5.278, "vf_scale": 0.754, "base_efficacy_lm_w": 133.3, "droop_factor": 0.125, "dome_size_mm": 0.0, "refractive_index": 1.0},
-        "GT_FC40_5000K": {"die_length_mm": 5.55, "die_width_mm": 5.55, "shape": "square", "footprint_x_mm": 7.0, "footprint_y_mm": 7.0, "height_mm": 1.0, "max_current_amps": 2.5, "vf_turn_on_v": 9.523, "vf_scale": 1.787, "base_efficacy_lm_w": 107.9, "droop_factor": 0.0845, "dome_size_mm": 0.0, "refractive_index": 1.0},
+        "GT_FC40_5000K": {"die_length_mm": 5.55, "die_width_mm": 5.55, "shape": "square", "footprint_x_mm": 7.0, "footprint_y_mm": 7.0, "height_mm": 1.0, "max_current_amps": 2.5, "vf_turn_on_v": 10.873, "vf_scale": 1.3395, "base_efficacy_lm_w": 112.75, "droop_factor": 0.0905, "dome_size_mm": 0.0, "refractive_index": 1.0},
         "KW_CULPM1.TG": {"die_length_mm": 1.59, "die_width_mm": 1.25, "shape": "square", "footprint_x_mm": 4.0, "footprint_y_mm": 4.0, "height_mm": 0.732, "max_current_amps": 8.0, "vf_turn_on_v": 2.600, "vf_scale": 0.364, "base_efficacy_lm_w": 94.2, "droop_factor": 0.058, "dome_size_mm": 0.0, "refractive_index": 1.0},
         "LHP531_6500K": {"die_length_mm": 3.67, "die_width_mm": 3.67, "shape": "square", "footprint_x_mm": 5.0, "footprint_y_mm": 5.0, "height_mm": 0.8, "max_current_amps": 9.0, "vf_turn_on_v": 1.737, "vf_scale": 0.535, "base_efficacy_lm_w": 161.0, "droop_factor": 0.0329, "dome_size_mm": 0.0, "refractive_index": 1.0},
         "LHP531_5000K": {"die_length_mm": 3.67, "die_width_mm": 3.67, "shape": "square", "footprint_x_mm": 5.0, "footprint_y_mm": 5.0, "height_mm": 0.8, "max_current_amps": 5.0, "vf_turn_on_v": 1.832, "vf_scale": 0.487, "base_efficacy_lm_w": 156.2, "droop_factor": 0.0321, "dome_size_mm": 0.0, "refractive_index": 1.0},
@@ -19,7 +19,7 @@
         "SFT25R_6500K": {"die_length_mm": 1.7, "die_width_mm": 1.7, "shape": "round", "footprint_x_mm": 5.0, "footprint_y_mm": 5.0, "height_mm": 1.0, "max_current_amps": 8.0, "vf_turn_on_v": 2.485, "vf_scale": 0.598, "base_efficacy_lm_w": 135.1, "droop_factor": 0.0900, "dome_size_mm": 0.0, "refractive_index": 1.0},
         "SFT40_3000K": {"die_length_mm": 1.97, "die_width_mm": 1.97, "shape": "square", "footprint_x_mm": 5.0, "footprint_y_mm": 5.0, "height_mm": 1.0, "max_current_amps": 8.0, "vf_turn_on_v": 1.882, "vf_scale": 0.819, "base_efficacy_lm_w": 96.3, "droop_factor": 0.0842, "dome_size_mm": 0.0, "refractive_index": 1.0},
         "SFT40_6500K": {"die_length_mm": 1.97, "die_width_mm": 1.97, "shape": "square", "footprint_x_mm": 5.0, "footprint_y_mm": 5.0, "height_mm": 1.0, "max_current_amps": 8.0, "vf_turn_on_v": 1.734, "vf_scale": 0.818, "base_efficacy_lm_w": 162.8, "droop_factor": 0.0738, "dome_size_mm": 0.0, "refractive_index": 1.0},
-        "SFT42R_6500K": {"die_length_mm": 2.32, "die_width_mm": 2.32, "shape": "round", "footprint_x_mm": 5.0, "footprint_y_mm": 5.0, "height_mm": 1.0, "max_current_amps": 13.0, "vf_turn_on_v": 2.336, "vf_scale": 0.479, "base_efficacy_lm_w": 164.9, "droop_factor": 0.0642, "dome_size_mm": 0.0, "refractive_index": 1.0},
+        "SFT42R_6500K": {"die_length_mm": 2.32, "die_width_mm": 2.32, "shape": "round", "footprint_x_mm": 5.0, "footprint_y_mm": 5.0, "height_mm": 1.0, "max_current_amps": 10.0, "vf_turn_on_v": 2.336, "vf_scale": 0.479, "base_efficacy_lm_w": 164.9, "droop_factor": 0.0642, "dome_size_mm": 0.0, "refractive_index": 1.0},
         "SFT60_6500K": {"die_length_mm": 2.25, "die_width_mm": 2.25, "shape": "square", "footprint_x_mm": 5.0, "footprint_y_mm": 5.0, "height_mm": 0.7, "max_current_amps": 15.0, "vf_turn_on_v": 2.465, "vf_scale": 0.366, "base_efficacy_lm_w": 149.7, "droop_factor": 0.0390, "dome_size_mm": 0.0, "refractive_index": 1.0},
         "SFT70_3000K": {"die_length_mm": 2.38, "die_width_mm": 2.38, "shape": "square", "footprint_x_mm": 5.0, "footprint_y_mm": 5.0, "height_mm": 1.0, "max_current_amps": 8.0, "vf_turn_on_v": 4.800, "vf_scale": 1.092, "base_efficacy_lm_w": 92.7, "droop_factor": 0.1046, "dome_size_mm": 0.0, "refractive_index": 1.0},
         "SFT70_6500K": {"die_length_mm": 2.38, "die_width_mm": 2.38, "shape": "square", "footprint_x_mm": 5.0, "footprint_y_mm": 5.0, "height_mm": 1.0, "max_current_amps": 8.0, "vf_turn_on_v": 4.591, "vf_scale": 1.233, "base_efficacy_lm_w": 140.5, "droop_factor": 0.0977, "dome_size_mm": 0.0, "refractive_index": 1.0},
@@ -60,16 +60,16 @@
         "10mm_7070": {"outer_diameter_mm": 10.0, "gasket_thickness_mm": 1.0, "gasket_total_height_mm": 2.25, "gasket_opening_mm": 10.0},
         "9mm_5050": {"outer_diameter_mm": 9.0, "gasket_thickness_mm": 1.0, "gasket_total_height_mm": 2.25, "gasket_opening_mm": 7.25},
         "9mm_4040": {"outer_diameter_mm": 9.0, "gasket_thickness_mm": 0.7, "gasket_total_height_mm": 1.2, "gasket_opening_mm": 7.25},
+        "9mm_3535": {"outer_diameter_mm": 9.0, "gasket_thickness_mm": 0.7, "gasket_total_height_mm": 1.2, "gasket_opening_mm": 7.25},
         "9mm_3030": {"outer_diameter_mm": 9.0, "gasket_thickness_mm": 0.7, "gasket_total_height_mm": 1.2, "gasket_opening_mm": 7.25},
         "7mm_5050_Round": {"outer_diameter_mm": 7.0, "gasket_thickness_mm": 1.0, "gasket_total_height_mm": 2.25, "gasket_opening_mm": 5.3},
         "7mm_5050_Butterfly": {"outer_diameter_mm": 7.0, "gasket_thickness_mm": 0.73, "gasket_total_height_mm": 1.2, "gasket_opening_mm": 5.3},
         "7mm_5050_Butterfly_Oversize": {"outer_diameter_mm": 7.0, "gasket_thickness_mm": 0.73, "gasket_total_height_mm": 1.2, "gasket_opening_mm": 5.3},
         "7mm_4040": {"outer_diameter_mm": 7.0, "gasket_thickness_mm": 0.7, "gasket_total_height_mm": 1.2, "gasket_opening_mm": 5.3},
-        "9mm_3535": {"outer_diameter_mm": 9.0, "gasket_thickness_mm": 0.7, "gasket_total_height_mm": 1.2, "gasket_opening_mm": 7.25},
-        "5mm_3535": {"outer_diameter_mm": 5.0, "gasket_thickness_mm": 0.7, "gasket_total_height_mm": 1.2, "gasket_opening_mm": 4.0},
-        "5mm_3030": {"outer_diameter_mm": 5.0, "gasket_thickness_mm": 0.7, "gasket_total_height_mm": 1.2, "gasket_opening_mm": 4.0},
         "7mm_3535_Square": {"outer_diameter_mm": 7.0, "gasket_thickness_mm": 0.7, "gasket_total_height_mm": 1.2, "gasket_opening_mm": 5.3},
         "7mm_3535_Round": {"outer_diameter_mm": 7.0, "gasket_thickness_mm": 0.7, "gasket_total_height_mm": 1.2, "gasket_opening_mm": 5.3},
-        "7mm_3030": {"outer_diameter_mm": 7.0, "gasket_thickness_mm": 0.7, "gasket_total_height_mm": 1.2, "gasket_opening_mm": 5.3}
+        "7mm_3030": {"outer_diameter_mm": 7.0, "gasket_thickness_mm": 0.7, "gasket_total_height_mm": 1.2, "gasket_opening_mm": 5.3},
+        "5mm_3535": {"outer_diameter_mm": 5.0, "gasket_thickness_mm": 0.7, "gasket_total_height_mm": 1.2, "gasket_opening_mm": 4.0},
+        "5mm_3030": {"outer_diameter_mm": 5.0, "gasket_thickness_mm": 0.7, "gasket_total_height_mm": 1.2, "gasket_opening_mm": 4.0}
     }
 }
