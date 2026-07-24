@@ -14,6 +14,13 @@ from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg as FigureCanvas
 # Import your core engine components
 from fea_engine import SimulationConfig, HardwareLibrary, run_simulation_job
 
+def resource_path(relative_path):
+    """Get absolute path to resource, works for dev and for PyInstaller"""
+    if hasattr(sys, '_MEIPASS'):
+        return os.path.join(sys._MEIPASS, relative_path)
+    return os.path.join(os.path.dirname(os.path.abspath(__file__)), relative_path)
+
+
 class SimulationWorker(QThread):
     """
     Background thread to run the FEA simulation without freezing the GUI.
@@ -162,15 +169,21 @@ class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
         
-        ui_path = os.path.join(os.path.dirname(__file__), 'mainwindow.ui')
+        # Load the UI file via the resource_path
+        ui_path = resource_path('mainwindow.ui')
         if not os.path.exists(ui_path):
             QMessageBox.critical(self, "Error", f"Could not find UI file: {ui_path}")
             sys.exit(1)
         uic.loadUi(ui_path, self)
 
         try:
-            self.config = SimulationConfig()
-            self.library = HardwareLibrary()
+            self.config = SimulationConfig(
+                filepath=resource_path("simulation_settings.json"),
+                default_filepath=resource_path("default_settings.json")
+            )
+            self.library = HardwareLibrary(
+                filepath=resource_path("hardware_library.json")
+            )
         except Exception as e:
             QMessageBox.critical(self, "Initialization Error", str(e))
             sys.exit(1)
@@ -191,7 +204,6 @@ class MainWindow(QMainWindow):
             self.grpPlot.setLayout(QVBoxLayout())
 
     def setup_widget_mappings(self):
-        # Added the new txtRef_gasket_reflectivity field
         self.reflector_map = {
             "diameter_mm": self.txtRef_diameter_mm,
             "height_mm": self.txtRef_height_mm,

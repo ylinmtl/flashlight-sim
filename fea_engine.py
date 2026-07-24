@@ -24,6 +24,12 @@ import matplotlib.patches as patches
 from scipy.ndimage import gaussian_filter
 from numba import cuda, njit
 
+def resource_path(relative_path):
+    """Get absolute path to resource, works for dev and for PyInstaller"""
+    if hasattr(sys, '_MEIPASS'):
+        return os.path.join(sys._MEIPASS, relative_path)
+    return os.path.join(os.path.dirname(os.path.abspath(__file__)), relative_path)
+
 # ==============================================================================
 # 1. CONFIGURATION & DATA MANAGEMENT
 # ==============================================================================
@@ -45,6 +51,10 @@ class SimulationConfig:
     plot_intensity_y: bool
     plot_intensity_45: bool
     batch_output_directory: str
+    
+    # --- OUTPUT TOGGLES ---
+    export_csv: bool
+    export_plots: bool
     
     use_auto_exposure: bool
     auto_exposure_compensation_ev: float
@@ -79,9 +89,9 @@ class SimulationConfig:
     default_reflector_base_thickness_mm: float
     default_focus_offset_mm: float
 
-    def __init__(self, filepath="simulation_settings.json", default_filepath="default_settings.json"):
-        self.filepath = filepath
-        self.default_filepath = default_filepath
+    def __init__(self, filepath=None, default_filepath=None):
+        self.filepath = filepath or resource_path("simulation_settings.json")
+        self.default_filepath = default_filepath or resource_path("default_settings.json")
         self.load_settings()
 
     def load_settings(self):
@@ -98,8 +108,15 @@ class SimulationConfig:
                 f"CRITICAL: Missing both '{self.filepath}' and '{self.default_filepath}'."
             )
             
+        # Ensure backward compatibility with older JSON files that lack the output toggles
+        if "export_csv" not in data: data["export_csv"] = True
+        if "export_plots" not in data: data["export_plots"] = True
+            
         for key, value in data.items():
             setattr(self, key, value)
+            
+        # Save immediately to append the missing keys to the active JSON file
+        self.save_settings()
 
     def save_settings(self):
         data = {k: v for k, v in self.__dict__.items() if not k.startswith('_') and k not in ('filepath', 'default_filepath')}
@@ -119,8 +136,8 @@ class SimulationConfig:
 # ==============================================================================
 
 class HardwareLibrary:
-    def __init__(self, filepath="hardware_library.json"):
-        self.filepath = filepath
+    def __init__(self, filepath=None):
+        self.filepath = filepath or resource_path("hardware_library.json")
         self._emitters = {}
         self._reflectors = {}
         self._gaskets = {}
@@ -615,7 +632,8 @@ def render_intensity_profile(slice_lux, dist_array, suffix_name, title_str, save
     plt.title(f"{title_str}\n[Intensity Profile: {suffix_name}]", color='#CCCCCC', pad=15)
     plt.tight_layout()
     
-    if save_path:
+    # Save the 1D line plot only if both conditions are met
+    if save_path and config.export_plots:
         base, ext = os.path.splitext(save_path)
         out = f"{base}_{suffix_name}{ext}"
         plt.savefig(out, facecolor='black', edgecolor='none', dpi=150, bbox_inches='tight')
@@ -676,7 +694,8 @@ def generate_flashlight_plot(emitter_name, reflector_name, gasket_name, finish_t
         plt.title(title_str, color='#CCCCCC', pad=15)
         plt.tight_layout(rect=[0, 0.05, 1, 1])
 
-        if save_path:
+        # Save the wall shot only if both conditions are met
+        if save_path and config.export_plots:
             plt.savefig(save_path, facecolor='black', edgecolor='none', dpi=150, bbox_inches='tight')
 
     x_dist = np.linspace(-config.wall_radius_m, config.wall_radius_m, config.sim_grid_res)
@@ -708,7 +727,9 @@ def run_simulation_job(config: SimulationConfig, library: HardwareLibrary,
     csv_headers = ["Reflector", "Emitter", "Gasket", "Finish", "Max Candela (cd)", "Throw (m)", "Total Lumens", "Spill Angle (deg)", "Corona Angle (deg)", "Hotspot Angle (deg)", "Cd/Lm Ratio"]
 
     existing_data = {}
-    if os.path.exists(csv_filepath):
+    
+    # Read the historical data ONLY if CSV exporting is enabled
+    if config.export_csv and os.path.exists(csv_filepath):
         with open(csv_filepath, mode='r', newline='') as f:
             for row in csv.DictReader(f):
                 gasket_val = row.get("Gasket", "None")
@@ -753,9 +774,11 @@ def run_simulation_job(config: SimulationConfig, library: HardwareLibrary,
             existing_data[(metrics["Reflector"], metrics["Emitter"], metrics["Gasket"], metrics["Finish"])] = metrics
             if log_callback: log_callback("Simulation complete.")
 
-    with open(csv_filepath, mode='w', newline='') as f:
-        writer = csv.DictWriter(f, fieldnames=csv_headers)
-        writer.writeheader()
-        for row in existing_data.values(): writer.writerow(row)
+    # Write the CSV file ONLY if exporting is enabled
+    if config.export_csv:
+        with open(csv_filepath, mode='w', newline='') as f:
+            writer = csv.DictWriter(f, fieldnames=csv_headers)
+            writer.writeheader()
+            for row in existing_data.values(): writer.writerow(row)
 
     return returned_figure, existing_data
