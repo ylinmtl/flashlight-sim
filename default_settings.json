@@ -1,7 +1,7 @@
 {
     "active_emitter_name": "519A_5000K",
-    "active_reflector_name": "S2_S6_S8_T6",
-    "active_gasket_name": "7mm 5050 Butterfly Oversize",
+    "active_reflector_name": "S2plus_S3_T4",
+    "active_gasket_name": "7mm_3535_Square",
     "reflector_finish": "orange_peel",
     "generate_all_plots": false,
     "max_multiple_reflections": 4,
