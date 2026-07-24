@@ -7,17 +7,27 @@ via Numba (CUDA) with an automatic fallback to multithreaded CPU processing.
 """
 
 import os
+import sys
 import math
 import csv
 import time
 import json
 import numpy as np
+
+# REQUIRED for thread-safe GUI rendering. Prevents Matplotlib from opening detached windows.
+import matplotlib
+matplotlib.use('Agg') 
 import matplotlib.pyplot as plt
+
 import matplotlib.colors as mcolors
 import matplotlib.patches as patches
 from scipy.ndimage import gaussian_filter
 from numba import cuda, njit
 
+# ==============================================================================
+# 0. QUICK-SET ACTIVE HARDWARE SELECTION & VISUALIZATION
+# (Settings now managed dynamically via SimulationConfig & JSON)
+# ==============================================================================
 # ==============================================================================
 # 1. CONFIGURATION & DATA MANAGEMENT
 # ==============================================================================
@@ -25,103 +35,68 @@ from numba import cuda, njit
 class SimulationConfig:
     """Encapsulates all simulation constraints, thresholds, and camera settings via external JSON."""
     
-    # --- Expected Attributes & Original Descriptions ---
+    # Hardware Selection
+    active_emitter_name: str  # String matching a key in the EMITTERS dictionary to select the active LED.
+    active_reflector_name: str  # String matching a key in the REFLECTORS dictionary to select the active housing.
+    active_gasket_name: str  # String matching a key in the GASKETS dictionary to select the active gasket.
+    reflector_finish: str  # Surface finish of the reflector. Options are "smooth" or "orange_peel".
     
-    # String matching a key in the EMITTERS dictionary to select the active LED.
-    active_emitter_name: str
-    # String matching a key in the REFLECTORS dictionary to select the active housing.
-    active_reflector_name: str
-    # String matching a key in the GASKETS dictionary to select the active gasket.
-    active_gasket_name: str
-    # Surface finish of the reflector. Options are "smooth" or "orange_peel".
-    reflector_finish: str
+    # Ray Tracing Constraints
+    max_multiple_reflections: int  # Integer determining how many bounces to track. 0 = direct light only, 1 = up to 1 extra bounce.
+    use_reflector_opening: bool  # Boolean. True = force reflector opening size; False = use emitter footprint diagonal if it's larger.
     
-    # Integer determining how many bounces to track. 0 = direct light only, 1 = up to 1 extra bounce.
-    max_multiple_reflections: int
-    # Boolean. True = force reflector opening size; False = use emitter footprint diagonal if it's larger.
-    use_reflector_opening: bool
+    # --- SIMULATION SPACE (AUTO-SCALING FOV) ---
+    target_distance_m: float  # Float distance from the flashlight to the simulated wall along the Z-axis in meters.
+    canvas_fov_deg: float  # Float field of view (degrees) of the internal simulation grid capturing the rays.
+    plot_fov_deg: float  # Float field of view (degrees) for the generated output plot (zooms the camera in/out).
     
-    # Float distance from the flashlight to the simulated wall along the Z-axis in meters.
-    target_distance_m: float
-    # Float field of view (degrees) of the internal simulation grid capturing the rays.
-    canvas_fov_deg: float
-    # Float field of view (degrees) for the generated output plot (zooms the camera in/out).
-    plot_fov_deg: float
+    # --- VISUALIZATION TOGGLES ---
+    generate_all_plots: bool  # Boolean. True = batch render all valid hardware combinations to disk. False = render active selection only.
+    show_human_silhouette: bool  # Boolean. True = draw a 1.75m scale human silhouette centered in the plot for reference.
+    plot_wall_shot: bool  # Boolean. True = generate the standard 2D wall projection image.
+    plot_intensity_x: bool  # Boolean. True = generate a 2D line graph of intensity across the X-axis.
+    plot_intensity_y: bool  # Boolean. True = generate a 2D line graph of intensity across the Y-axis.
+    plot_intensity_45: bool  # Boolean. True = generate a 2D line graph of intensity across a 45-degree diagonal axis.
+    batch_output_directory: str  # String directory path where generated CSVs and plot images will be saved.
     
-    # Boolean. True = batch render all valid hardware combinations to disk. False = render active selection only.
-    generate_all_plots: bool
-    # Boolean. True = draw a 1.75m scale human silhouette centered in the plot for reference.
-    show_human_silhouette: bool
-    # Boolean. True = generate the standard 2D wall projection image.
-    plot_wall_shot: bool
-    # Boolean. True = generate a 2D line graph of intensity across the X-axis.
-    plot_intensity_x: bool
-    # Boolean. True = generate a 2D line graph of intensity across the Y-axis.
-    plot_intensity_y: bool
-    # Boolean. True = generate a 2D line graph of intensity across a 45-degree diagonal axis.
-    plot_intensity_45: bool
-    # String directory path where generated CSVs and plot images will be saved.
-    batch_output_directory: str
+    # --- PHOTOREALISTIC CAMERA SIMULATION SETTINGS ---
+    use_auto_exposure: bool  # Boolean. True = normalize brightness per light automatically. False = lock to manual camera settings.
+    auto_exposure_compensation_ev: float  # Float EV compensation when auto-exposure is enabled (+1.0 = 2x brighter, -1.0 = half as bright).
+    cam_iso: int  # Integer camera sensor sensitivity (ISO). Used only when use_auto_exposure is False.
+    cam_f_stop: float  # Integer/Float camera aperture size (e.g., 2.8, 4.0, 5.6, 8.0). Used only when use_auto_exposure is False.
+    cam_shutter_speed_s: float  # Float camera shutter speed in seconds. Used only when use_auto_exposure is False.
     
-    # Boolean. True = normalize brightness per light automatically. False = lock to manual camera settings.
-    use_auto_exposure: bool
-    # Float EV compensation when auto-exposure is enabled (+1.0 = 2x brighter, -1.0 = half as bright).
-    auto_exposure_compensation_ev: float
-    # Integer camera sensor sensitivity (ISO). Used only when use_auto_exposure is False.
-    cam_iso: int
-    # Integer/Float camera aperture size (e.g., 2.8, 4.0, 5.6, 8.0). Used only when use_auto_exposure is False.
-    cam_f_stop: float
-    # Float camera shutter speed in seconds. Used only when use_auto_exposure is False.
-    cam_shutter_speed_s: float
+    # --- SIMULATION RESOLUTION & ANGULAR DENSITY ---
+    sim_grid_res: int  # Integer resolution (width and height in pixels) of the square target plane array.
+    sim_emitter_elements: int  # Integer subdivision count for the LED die (e.g., 10 generates a 10x10 grid of emission points).
+    sim_theta_step_deg: float  # Float angular resolution for elevation from dead center (determines ray count).
+    sim_phi_step_deg: float  # Float angular resolution for rotation around the die (determines ray count).
     
-    # Integer resolution (width and height in pixels) of the square target plane array.
-    sim_grid_res: int
-    # Integer subdivision count for the LED die (e.g., 10 generates a 10x10 grid of emission points).
-    sim_emitter_elements: int
-    # Float angular resolution for elevation from dead center (determines ray count).
-    sim_theta_step_deg: float
-    # Float angular resolution for rotation around the die (determines ray count).
-    sim_phi_step_deg: float
-    
-    # Float angular limits (elevation). 0.1 avoids divide-by-zero at dead center.
-    sim_theta_min_deg: float
+    # ==============================================================================
+    # 1. SIMULATION FALLBACKS & THRESHOLDS (Original Section 1)
+    # ==============================================================================
+    sim_theta_min_deg: float  # Float angular limits (elevation). 0.1 avoids divide-by-zero at dead center.
     sim_theta_max_deg: float
-    # Float angular limits (rotation). 0 to 360 for full sphere coverage.
-    sim_phi_min_deg: float
+    sim_phi_min_deg: float  # Float angular limits (rotation). 0 to 360 for full sphere coverage.
     sim_phi_max_deg: float
-    # Float step size used when integrating the Lambertian curve for theoretical lumen calibration.
-    lumen_calc_step_deg: float
+    lumen_calc_step_deg: float  # Float step size used when integrating the Lambertian curve for theoretical lumen calibration.
     
-    # Float proportion of light conserved off a smooth mirror finish.
-    default_reflectivity_smooth: float
-    # Float proportion of light conserved off an orange peel (textured) finish.
-    default_reflectivity_op: float
-    # Float proportion of light conserved off the inner cylindrical hole wall.
-    default_reflectivity_cylinder: float
-    # Float proportion of light conserved off the white plastic centering gasket.
-    default_reflectivity_gasket: float
-    # Float base Gaussian blur sigma applied to simulate scattering from orange peel hotspots.
-    default_op_blur_strength: float
+    default_reflectivity_smooth: float  # Float proportion of light conserved off a smooth mirror finish.
+    default_reflectivity_op: float  # Float proportion of light conserved off an orange peel (textured) finish.
+    default_reflectivity_cylinder: float  # Float proportion of light conserved off the inner cylindrical hole wall.
+    default_reflectivity_gasket: float  # Float proportion of light conserved off the white plastic centering gasket.
+    default_op_blur_strength: float  # Float base Gaussian blur sigma applied to simulate scattering from orange peel hotspots.
     
-    # Float minimum absolute lux required to define the outer edge of direct spill.
-    spill_visible_threshold_lux: float
-    # Float proportion (1%) of peak hotspot intensity defining the visible edge of the corona.
-    corona_visible_threshold: float
-    # Float proportion (50%) of peak intensity defining the true hotspot (FWHM standard).
-    hotspot_fwhm_threshold: float
+    spill_visible_threshold_lux: float  # Float minimum absolute lux required to define the outer edge of direct spill.
+    corona_visible_threshold: float  # Float proportion (1%) of peak hotspot intensity defining the visible edge of the corona.
+    hotspot_fwhm_threshold: float  # Float proportion (50%) of peak intensity defining the true hotspot (FWHM standard).
     
-    # Float standard thickness for LED centering gaskets in mm.
-    default_gasket_thickness_mm: float
-    # Float total structural height of the gasket in mm.
-    default_gasket_total_height_mm: float
-    # Float inner diameter of the gasket opening in mm (0 defaults to the emitter footprint).
-    default_gasket_opening_mm: float
-    # Float thickness subtracted from outer diameter to find internal width in mm.
-    default_reflector_wall_thickness_mm: float
-    # Float thickness subtracted from total height to find internal depth in mm.
-    default_reflector_base_thickness_mm: float
-    # Float offset in mm assuming perfect focal alignment if not explicitly specified.
-    default_focus_offset_mm: float
+    default_gasket_thickness_mm: float  # Float standard thickness for LED centering gaskets in mm.
+    default_gasket_total_height_mm: float  # Float total structural height of the gasket in mm.
+    default_gasket_opening_mm: float  # Float inner diameter of the gasket opening in mm (0 defaults to the emitter footprint).
+    default_reflector_wall_thickness_mm: float  # Float thickness subtracted from outer diameter to find internal width in mm.
+    default_reflector_base_thickness_mm: float  # Float thickness subtracted from total height to find internal depth in mm.
+    default_focus_offset_mm: float  # Float offset in mm assuming perfect focal alignment if not explicitly specified.
 
     def __init__(self, filepath="simulation_settings.json", default_filepath="default_settings.json"):
         self.filepath = filepath
@@ -134,11 +109,8 @@ class SimulationConfig:
             with open(self.filepath, 'r') as f:
                 data = json.load(f)
         elif os.path.exists(self.default_filepath):
-            print(f"[{self.filepath}] not found. Generating a new profile from [{self.default_filepath}]...")
             with open(self.default_filepath, 'r') as f:
                 data = json.load(f)
-            
-            # Create the missing simulation_settings.json for the user
             with open(self.filepath, 'w') as f:
                 json.dump(data, f, indent=4)
         else:
@@ -147,27 +119,30 @@ class SimulationConfig:
                 "Cannot initialize the simulation settings."
             )
             
-        # Bind the loaded dictionary keys as class attributes
         for key, value in data.items():
             setattr(self, key, value)
 
     def save_settings(self):
         """Writes the active configuration state back to the active JSON file."""
-        # Filter out properties and internal file path variables
         data = {k: v for k, v in self.__dict__.items() if not k.startswith('_') and k not in ('filepath', 'default_filepath')}
         with open(self.filepath, 'w') as f:
             json.dump(data, f, indent=4)
 
     @property
     def wall_radius_m(self) -> float:
-        """Automatically calculate the physical canvas size based on distance and viewing angle."""
+        """Automatically calculate the physical canvas sizes based on distance and viewing angles."""
+        # wall_radius_m = 10.0  # Float radius of the capture grid in meters. (Historical reference)
         return self.target_distance_m * math.tan(math.radians(self.canvas_fov_deg / 2.0))
 
     @property
     def plot_radius_m(self) -> float:
         """Automatically calculate the final rendered plot radius in meters."""
+        # plot_radius_m = 10  # Float radius of the final rendered plot in meters. (Historical reference)
         return self.target_distance_m * math.tan(math.radians(self.plot_fov_deg / 2.0))
 
+# ==============================================================================
+# 2. HARDWARE LIBRARIES (Now managed dynamically via JSON Database)
+# ==============================================================================
 
 class HardwareLibrary:
     """Manages the serialization and retrieval of hardware data from a JSON file."""
@@ -190,35 +165,22 @@ class HardwareLibrary:
             raise FileNotFoundError(f"Could not find {self.filepath}. Please ensure the JSON file is in the directory.")
 
     def save_database(self):
-        data = {
-            "emitters": self._emitters,
-            "reflectors": self._reflectors,
-            "gaskets": self._gaskets
-        }
+        data = {"emitters": self._emitters, "reflectors": self._reflectors, "gaskets": self._gaskets}
         with open(self.filepath, 'w') as f:
             json.dump(data, f, indent=4)
 
-    def get_emitter(self, name: str) -> dict:
-        return self._emitters[name]
-        
-    def list_emitters(self) -> list:
-        return list(self._emitters.keys())
+    def get_emitter(self, name: str) -> dict: return self._emitters[name]
+    def list_emitters(self) -> list: return list(self._emitters.keys())
 
-    def get_reflector(self, name: str) -> dict:
-        return self._reflectors[name]
-        
-    def list_reflectors(self) -> list:
-        return list(self._reflectors.keys())
+    def get_reflector(self, name: str) -> dict: return self._reflectors[name]
+    def list_reflectors(self) -> list: return list(self._reflectors.keys())
 
-    def get_gasket(self, name: str) -> dict:
-        return self._gaskets[name]
-        
-    def list_gaskets(self) -> list:
-        return list(self._gaskets.keys())
+    def get_gasket(self, name: str) -> dict: return self._gaskets[name]
+    def list_gaskets(self) -> list: return list(self._gaskets.keys())
 
 
 # ==============================================================================
-# 2. HELPERS & HARDWARE INTERPOLATION
+# 3. HELPERS & HARDWARE INTERPOLATION
 # ==============================================================================
 
 def get_standard_emitter_intensity_vec(theta_rad):
@@ -332,7 +294,7 @@ def get_sim_geometry(reflector, emitter, gasket, finish, config: SimulationConfi
     }
 
 # ==============================================================================
-# 3. MATH & FINITE ELEMENT ANALYSIS (FEA) ENGINE
+# 4. MATH & FINITE ELEMENT ANALYSIS (FEA) ENGINE
 # ==============================================================================
 
 @njit
@@ -348,11 +310,9 @@ def solve_quadratic(a, b, c):
         A tuple of floats (t1, t2) representing the two roots. 
         Returns (1e9, 1e9) if there are no real roots or if 'a' is effectively zero. 
     """
-    if a < 1e-8:
-        return 1e9, 1e9
+    if a < 1e-8: return 1e9, 1e9
     disc = b**2 - 4.0 * a * c
-    if disc < 0.0:
-        return 1e9, 1e9
+    if disc < 0.0: return 1e9, 1e9
     sqrt_disc = math.sqrt(disc)
     return (-b - sqrt_disc) / (2.0 * a), (-b + sqrt_disc) / (2.0 * a)
 
@@ -624,12 +584,12 @@ def ray_trace_kernel_cpu(args, start_idx, end_idx):
             if bounces > 0: args[28][row, col] += final_flux
             else: args[29][row, col] += final_flux
 
-def execute_tracers(is_gpu, kernel, total_threads, args):
-    """Manages the execution flow of the ray tracing kernels. 
+def execute_tracers(is_gpu, kernel, total_threads, args, log_callback=None, progress_callback=None):
+    """Manages execution flow. Divides workload into chunks so the GUI thread can intercept progress updates.
     
     Runs a warmup batch to trigger JIT compilation, followed by a small 
     calibration batch to estimate remaining run time, then pushes the 
-    remainder of the workload queue. 
+    remainder of the workload queue.
     
     Args: 
         is_gpu: Boolean flag indicating if CUDA should be used. 
@@ -639,7 +599,9 @@ def execute_tracers(is_gpu, kernel, total_threads, args):
     """
     cal_size = min(max(int(total_threads * 0.02), 250_000), total_threads - 1)
     
-    print(f"[{'CUDA' if is_gpu else 'CPU'} FEA Engine] Compiling & Calibrating...", end="", flush=True)
+    msg = f"[{'CUDA' if is_gpu else 'CPU'} FEA Engine] Compiling & Calibrating..."
+    if log_callback: log_callback(msg)
+    
     t0 = time.time()
     
     if is_gpu:
@@ -654,18 +616,32 @@ def execute_tracers(is_gpu, kernel, total_threads, args):
     cal_time = t1 - t0
     rays_per_sec = cal_size / cal_time if cal_time > 0 else 1
     rem = total_threads - (1 + cal_size)
+    predicted_time = rem / rays_per_sec if rays_per_sec > 0 else 0
     
-    print(f" Done. ({rays_per_sec:,.0f} rays/sec)")
-    print(f"[{'CUDA' if is_gpu else 'CPU'} FEA Engine] Predicted remaining time: ~{rem / rays_per_sec:.2f} s")
+    msg2 = f"Done. ({rays_per_sec:,.0f} rays/sec) | Predicted completion: ~{predicted_time:.1f} s"
+    if log_callback: log_callback(msg2)
     
     if rem > 0:
-        if is_gpu:
-            kernel[(rem + 255) // 256, 256](args, 1 + cal_size, total_threads)
-            cuda.synchronize()
-        else:
-            kernel(args, 1 + cal_size, total_threads)
+        # Dynamically size the chunk so the progress bar updates roughly twice a second.
+        chunk_size = max(int(rays_per_sec * 0.5), 100_000)
+        
+        for start_idx in range(1 + cal_size, total_threads, chunk_size):
+            end_idx = min(start_idx + chunk_size, total_threads)
+            
+            if is_gpu:
+                # Calculate required CUDA grid blocks for this specific chunk
+                blocks = ((end_idx - start_idx) + 255) // 256
+                kernel[blocks, 256](args, start_idx, end_idx)
+                cuda.synchronize()
+            else:
+                kernel(args, start_idx, end_idx)
+                
+            # Fire the hook to update the GUI Progress Bar
+            if progress_callback:
+                progress_percent = (end_idx / total_threads) * 100.0
+                progress_callback(progress_percent)
 
-def run_pure_fea_sim_vectorized(geom, emitter, current_amps, finish, config: SimulationConfig):
+def run_pure_fea_sim_vectorized(geom, emitter, current_amps, finish, config: SimulationConfig, log_callback=None, progress_callback=None):
     """Initializes and runs the core finite element analysis physics loop. 
     
     Calculates theoretical ray flux, prepares vector geometry boundaries, 
@@ -719,7 +695,7 @@ def run_pure_fea_sim_vectorized(geom, emitter, current_amps, finish, config: Sim
     spill_grid = np.zeros((config.sim_grid_res, config.sim_grid_res), dtype=np.float64)
 
     if has_gpu:
-        print(f"\n[CUDA FEA Engine] GPU Detected. Pushing {total_threads:,} rays to VRAM...")
+        if log_callback: log_callback(f"[CUDA FEA Engine] GPU Detected. Allocating {total_threads:,} rays in VRAM...")
         d_ex, d_ey = cuda.to_device(np.ascontiguousarray(ex_flat, dtype=np.float64)), cuda.to_device(np.ascontiguousarray(ey_flat, dtype=np.float64))
         d_vx, d_vy, d_vz = cuda.to_device(np.ascontiguousarray(vx, dtype=np.float64)), cuda.to_device(np.ascontiguousarray(vy, dtype=np.float64)), cuda.to_device(np.ascontiguousarray(vz, dtype=np.float64))
         d_flux = cuda.to_device(ray_flux)
@@ -731,11 +707,11 @@ def run_pure_fea_sim_vectorized(geom, emitter, current_amps, finish, config: Sim
                 float(geom['dome_radius']), float(geom['refractive_index']), int(config.max_multiple_reflections), float(geom['z_gasket_top']), float(geom['r_gasket']),
                 float(geom['gasket_x_half']), float(geom['gasket_y_half']), int(geom['is_cylindrical_gasket']), d_hotspot, d_spill)
         
-        execute_tracers(True, ray_trace_kernel_gpu, total_threads, args)
+        execute_tracers(True, ray_trace_kernel_gpu, total_threads, args, log_callback, progress_callback)
         hotspot_grid, spill_grid = d_hotspot.copy_to_host(), d_spill.copy_to_host()
         
     else:
-        print(f"\n[CPU FEA Engine] Using {os.cpu_count()} logical cores...")
+        if log_callback: log_callback(f"[CPU FEA Engine] Processing on logical cores...")
         args = (np.ascontiguousarray(ex_flat, dtype=np.float64), np.ascontiguousarray(ey_flat, dtype=np.float64),
                 np.ascontiguousarray(vx, dtype=np.float64), np.ascontiguousarray(vy, dtype=np.float64), np.ascontiguousarray(vz, dtype=np.float64), ray_flux,
                 float(geom['focal_length']), float(geom['ez_base']), float(geom['z_bottom']), float(geom['z_min_cut']), float(geom['z_hole_top']), 
@@ -744,10 +720,9 @@ def run_pure_fea_sim_vectorized(geom, emitter, current_amps, finish, config: Sim
                 int(config.max_multiple_reflections), float(geom['z_gasket_top']), float(geom['r_gasket']), float(geom['gasket_x_half']), float(geom['gasket_y_half']), 
                 int(geom['is_cylindrical_gasket']), hotspot_grid, spill_grid)
         
-        execute_tracers(False, ray_trace_kernel_cpu, total_threads, args)
+        execute_tracers(False, ray_trace_kernel_cpu, total_threads, args, log_callback, progress_callback)
 
-    print(f"[{'CUDA' if has_gpu else 'CPU'} FEA Engine] Ray tracing complete. Applying spatial blur...\n")
-    
+    if log_callback: log_callback("Applying spatial blur and generating final lux arrays...")
     scaled_blur = (config.default_op_blur_strength * geom["op_multiplier"] * (config.sim_grid_res / 1000.0)) if finish == "orange_peel" else 0.0
     processed_hotspot = gaussian_filter(hotspot_grid, sigma=scaled_blur) if scaled_blur > 0 else hotspot_grid
         
@@ -755,7 +730,7 @@ def run_pure_fea_sim_vectorized(geom, emitter, current_amps, finish, config: Sim
     return processed_hotspot_lux + spill_lux, processed_hotspot_lux, spill_lux, total_lumens
 
 # ==============================================================================
-# 4. PLOTTING & EXPORT MANAGER
+# 5. PLOTTING & EXPORT MANAGER
 # ==============================================================================
 
 def apply_camera_exposure_and_tonemap(wall_lux, config: SimulationConfig):
@@ -872,9 +847,8 @@ def render_intensity_profile(slice_lux, dist_array, suffix_name, title_str, save
         base, ext = os.path.splitext(save_path)
         out = f"{base}_{suffix_name}{ext}"
         plt.savefig(out, facecolor='black', edgecolor='none', dpi=150, bbox_inches='tight')
-        print(f"Saved intensity plot to: {out}")
 
-def generate_flashlight_plot(emitter_name, reflector_name, gasket_name, finish_type, config: SimulationConfig, library: HardwareLibrary, save_path=None):
+def generate_flashlight_plot(emitter_name, reflector_name, gasket_name, finish_type, config: SimulationConfig, library: HardwareLibrary, log_callback=None, progress_callback=None, save_path=None):
     """Orchestrates simulation execution, data extraction, and plot rendering. 
     
     Args: 
@@ -884,6 +858,8 @@ def generate_flashlight_plot(emitter_name, reflector_name, gasket_name, finish_t
         finish_type: String describing the reflector surface finish. 
         config: Loaded instance of SimulationConfig.
         library: Loaded instance of HardwareLibrary.
+        log_callback: Optional callable for GUI logging.
+        progress_callback: Optional callable for GUI progress bar updates.
         save_path: String optional path indicating where to save the generated image. 
         
     Returns: 
@@ -896,7 +872,7 @@ def generate_flashlight_plot(emitter_name, reflector_name, gasket_name, finish_t
     amps = selected_emitter["max_current_amps"]
     
     geom = get_sim_geometry(selected_reflector, selected_emitter, selected_gasket, finish_type, config)
-    wall_lux, hotspot_lux, spill_lux, total_flux = run_pure_fea_sim_vectorized(geom, selected_emitter, amps, finish_type, config)
+    wall_lux, hotspot_lux, spill_lux, total_flux = run_pure_fea_sim_vectorized(geom, selected_emitter, amps, finish_type, config, log_callback, progress_callback)
 
     max_cd = np.max(wall_lux) * (config.target_distance_m**2)
     throw_m = int(np.sqrt(max_cd / 0.25))
@@ -922,8 +898,10 @@ def generate_flashlight_plot(emitter_name, reflector_name, gasket_name, finish_t
     title_str = (f"Hardware: {emitter_name} | Reflector: {reflector_name} ({finish_type.upper()}) | Gasket: {gasket_name}\n"
                  f"Opening: {geom['effective_d_hole']:.1f}mm | Focus Delta: {geom['focus_delta']:+.2f}mm | Max Intensity: {int(max_cd):,} cd | Throw: {throw_m:,}m")
 
+    fig_wall = None
     # --- Plot Rendering ---
     if config.plot_wall_shot:
+        if log_callback: log_callback("Rendering final camera visualization...")
         fig_wall, ax_wall = plt.subplots(figsize=(10, 10), facecolor='black')
         ax_wall.set_facecolor('black')
         ax_wall.imshow(render_data, extent=[-config.wall_radius_m, config.wall_radius_m, -config.wall_radius_m, config.wall_radius_m], cmap='gray', origin='lower', vmin=0, vmax=1)
@@ -944,7 +922,6 @@ def generate_flashlight_plot(emitter_name, reflector_name, gasket_name, finish_t
 
         if save_path:
             plt.savefig(save_path, facecolor='black', edgecolor='none', dpi=150, bbox_inches='tight')
-            print(f"Saved wall plot to: {save_path}")
 
     # --- Structural 1D Profiles ---
     x_dist = np.linspace(-config.wall_radius_m, config.wall_radius_m, config.sim_grid_res)
@@ -954,10 +931,8 @@ def generate_flashlight_plot(emitter_name, reflector_name, gasket_name, finish_t
     if config.plot_intensity_y: render_intensity_profile(wall_lux[:, center], x_dist, "Y-Axis", title_str, save_path, config)
     if config.plot_intensity_45: render_intensity_profile(np.diagonal(wall_lux), np.linspace(-config.wall_radius_m * math.sqrt(2), config.wall_radius_m * math.sqrt(2), config.sim_grid_res), "45-Deg", title_str, save_path, config)
 
-    if not config.generate_all_plots: plt.show()
-    else: plt.close('all')
-
-    return {
+    # Return the Figure object to the GUI Thread for embedding instead of showing it detached
+    return fig_wall, {
         "Reflector": reflector_name, "Emitter": emitter_name, "Gasket": gasket_name, "Finish": finish_type.upper(),
         "Max Candela (cd)": int(max_cd), "Throw (m)": int(throw_m), "Total Lumens": int(total_flux),
         "Spill Angle (deg)": round(sp_ang, 1), "Corona Angle (deg)": round(cor_ang, 1),
@@ -965,13 +940,11 @@ def generate_flashlight_plot(emitter_name, reflector_name, gasket_name, finish_t
     }
 
 # ==============================================================================
-# 5. EXECUTION ROUTING
+# 6. API EXECUTION ENTRY POINT (Formerly EXECUTION ROUTING)
 # ==============================================================================
 
-if __name__ == '__main__':
-    # Initialize the core classes
-    config = SimulationConfig(filepath="simulation_settings.json", default_filepath="default_settings.json")
-    library = HardwareLibrary(filepath="hardware_library.json")
+def run_simulation_job(config: SimulationConfig, library: HardwareLibrary, log_callback=None, progress_callback=None):
+    """The central entry point called by the GUI's worker thread."""
     
     # Initialize the output directory to dump results.
     os.makedirs(config.batch_output_directory, exist_ok=True)
@@ -987,10 +960,14 @@ if __name__ == '__main__':
     if os.path.exists(csv_filepath):
         # Load historical metrics memory to support incremental generation.
         with open(csv_filepath, mode='r', newline='') as f:
-            for row in csv.DictReader(f): existing_data[(row["Reflector"], row["Emitter"], row["Gasket"], row["Finish"])] = row
+            for row in csv.DictReader(f):
+                gasket_val = row.get("Gasket", "None")
+                existing_data[(row["Reflector"], row["Emitter"], gasket_val, row["Finish"])] = row
 
     if config.generate_all_plots:
-        print(f"Batch generation enabled. Outputting to: {config.batch_output_directory}")
+        # GUI batch processing usually doesn't update the UI viewer per frame to save RAM.
+        if log_callback: log_callback(f"Batch generation enabled. Outputting to: {config.batch_output_directory}")
+        
         # Verify combinatorial bounds. Discard permutations that are physically impossible.
         valid_combos = []
         for r_name in library.list_reflectors():
@@ -1003,21 +980,35 @@ if __name__ == '__main__':
                             valid_combos.append((r_name, e_name, g_name, f))
         
         for i, (r_name, e_name, g_name, fin) in enumerate(valid_combos, 1):
-            print(f"\n[{i}/{len(valid_combos)}] Rendering {r_name} + {e_name} + {g_name} ({fin.upper()})...")
-            metrics = generate_flashlight_plot(e_name, r_name, g_name, fin, config, library, os.path.join(config.batch_output_directory, f"{r_name}_{e_name}_{g_name}_{'OP' if fin == 'orange_peel' else 'SMO'}.png"))
+            if log_callback: log_callback(f"[{i}/{len(valid_combos)}] Rendering {r_name} + {e_name} + {g_name} ({fin.upper()})...")
+            _, metrics = generate_flashlight_plot(e_name, r_name, g_name, fin, config, library, log_callback, progress_callback, os.path.join(config.batch_output_directory, f"{r_name}_{e_name}_{g_name}_{'OP' if fin == 'orange_peel' else 'SMO'}.png"))
             existing_data[(metrics["Reflector"], metrics["Emitter"], metrics["Gasket"], metrics["Finish"])] = metrics
-        print("\nBatch generation complete!")
+            
+        if log_callback: log_callback("Batch generation complete!")
+        returned_figure = None 
+        
     else:
         # Pass a single simulation workload through the system.
-        print(f"\nRendering {config.active_reflector_name} + {config.active_emitter_name} + {config.active_gasket_name} ({config.reflector_finish.upper()})...")
-        metrics = generate_flashlight_plot(config.active_emitter_name, config.active_reflector_name, config.active_gasket_name, config.reflector_finish, config, library, os.path.join(config.batch_output_directory, f"{config.active_reflector_name}_{config.active_emitter_name}_{config.active_gasket_name}_{'OP' if config.reflector_finish == 'orange_peel' else 'SMO'}.png"))
+        if log_callback: log_callback(f"Starting specific render: {config.active_reflector_name} + {config.active_emitter_name} + {config.active_gasket_name}")
+        returned_figure, metrics = generate_flashlight_plot(
+            config.active_emitter_name, 
+            config.active_reflector_name, 
+            config.active_gasket_name, 
+            config.reflector_finish, 
+            config, 
+            library, 
+            log_callback,
+            progress_callback,
+            os.path.join(config.batch_output_directory, f"{config.active_reflector_name}_{config.active_emitter_name}_{config.active_gasket_name}_{'OP' if config.reflector_finish == 'orange_peel' else 'SMO'}.png")
+        )
         existing_data[(metrics["Reflector"], metrics["Emitter"], metrics["Gasket"], metrics["Finish"])] = metrics
-        print("\nSingle generation complete!")
+        if log_callback: log_callback("Simulation complete.")
 
     # Serialize memory back to disk.
     with open(csv_filepath, mode='w', newline='') as f:
         writer = csv.DictWriter(f, fieldnames=csv_headers)
         writer.writeheader()
         for row in existing_data.values(): writer.writerow(row)
-            
-    print(f"Results successfully saved to: {csv_filepath}")
+
+    # Returning figure for GUI display if available
+    return returned_figure, existing_data
