@@ -37,56 +37,36 @@ def resource_path(relative_path):
 class SimulationConfig:
     """Encapsulates all simulation constraints, thresholds, and camera settings via external JSON."""
     
-    max_multiple_reflections: int
-    use_reflector_opening: bool
-    
-    target_distance_m: float
-    canvas_fov_deg: float
-    plot_fov_deg: float
-    
-    generate_all_plots: bool
-    show_human_silhouette: bool
-    plot_wall_shot: bool
-    plot_intensity_x: bool
-    plot_intensity_y: bool
-    plot_intensity_45: bool
-    batch_output_directory: str
-    
-    export_csv: bool
-    export_plots: bool
-    
-    use_auto_exposure: bool
-    auto_exposure_compensation_ev: float
-    cam_iso: int
-    cam_f_stop: float
-    cam_shutter_speed_s: float
-    
-    sim_grid_res: int
-    sim_emitter_elements: int
-    sim_theta_step_deg: float
-    sim_phi_step_deg: float
-    
-    sim_theta_min_deg: float
-    sim_theta_max_deg: float
-    sim_phi_min_deg: float
-    sim_phi_max_deg: float
-    lumen_calc_step_deg: float
-    
-    default_reflectivity_smooth: float
-    default_reflectivity_op: float
-    default_reflectivity_cylinder: float
-    default_op_blur_strength: float
-    
-    spill_visible_threshold_lux: float
-    corona_visible_threshold: float
-    hotspot_fwhm_threshold: float
-    
-    default_gasket_thickness_mm: float
-    default_gasket_total_height_mm: float
-    default_gasket_opening_mm: float
-    default_reflector_wall_thickness_mm: float
-    default_reflector_base_thickness_mm: float
-    default_focus_offset_mm: float
+    # Internal map to govern how variables are structured when saving to JSON
+    _CATEGORIES = {
+        "Output & Rendering": [
+            "generate_all_plots", "show_human_silhouette", "plot_wall_shot",
+            "plot_intensity_x", "plot_intensity_y", "plot_intensity_45",
+            "batch_output_directory", "export_csv", "export_plots"
+        ],
+        "Simulation Space & Constraints": [
+            "max_multiple_reflections", "use_reflector_opening",
+            "target_distance_m", "canvas_fov_deg", "plot_fov_deg"
+        ],
+        "Camera Settings": [
+            "use_auto_exposure", "auto_exposure_compensation_ev",
+            "cam_iso", "cam_f_stop", "cam_shutter_speed_s"
+        ],
+        "Resolution & Angular Density": [
+            "sim_grid_res", "sim_emitter_elements", "sim_theta_step_deg",
+            "sim_phi_step_deg", "sim_theta_min_deg", "sim_theta_max_deg",
+            "sim_phi_min_deg", "sim_phi_max_deg", "lumen_calc_step_deg"
+        ],
+        "Material Defaults & Thresholds": [
+            "default_reflectivity_smooth", "default_reflectivity_op",
+            "default_reflectivity_cylinder", "default_op_blur_strength",
+            "spill_visible_threshold_lux", "corona_visible_threshold",
+            "hotspot_fwhm_threshold", "default_gasket_thickness_mm",
+            "default_gasket_total_height_mm", "default_gasket_opening_mm",
+            "default_reflector_wall_thickness_mm", "default_reflector_base_thickness_mm",
+            "default_focus_offset_mm"
+        ]
+    }
 
     def __init__(self, filepath=None, default_filepath=None):
         self.filepath = filepath or resource_path("simulation_settings.json")
@@ -107,18 +87,38 @@ class SimulationConfig:
                 f"CRITICAL: Missing both '{self.filepath}' and '{self.default_filepath}'."
             )
             
-        if "export_csv" not in data: data["export_csv"] = True
-        if "export_plots" not in data: data["export_plots"] = True
-            
+        # Un-nest the categorized JSON to keep the variables flat in memory for the math engine
         for key, value in data.items():
-            setattr(self, key, value)
+            if isinstance(value, dict):
+                for sub_key, sub_val in value.items():
+                    setattr(self, sub_key, sub_val)
+            else:
+                setattr(self, key, value) # Fallback for old flat JSON files
+                
+        # Ensure backward compatibility keys exist
+        if not hasattr(self, 'export_csv'): self.export_csv = True
+        if not hasattr(self, 'export_plots'): self.export_plots = True
             
         self.save_settings()
 
     def save_settings(self):
-        data = {k: v for k, v in self.__dict__.items() if not k.startswith('_') and k not in ('filepath', 'default_filepath')}
+        # Gather all flat attributes
+        flat_data = {k: v for k, v in self.__dict__.items() if not k.startswith('_') and k not in ('filepath', 'default_filepath')}
+        nested_data = {}
+        
+        # Re-nest the variables into their logical categories before saving
+        for category, keys in self._CATEGORIES.items():
+            nested_data[category] = {}
+            for key in keys:
+                if key in flat_data:
+                    nested_data[category][key] = flat_data.pop(key)
+                    
+        # Catch any rogue variables that aren't mapped and leave them at the root
+        for key, value in flat_data.items():
+            nested_data[key] = value
+
         with open(self.filepath, 'w') as f:
-            json.dump(data, f, indent=4)
+            json.dump(nested_data, f, indent=4)
 
     @property
     def wall_radius_m(self) -> float:

@@ -4,7 +4,7 @@ import traceback
 import json
 from PyQt6.QtWidgets import (QApplication, QMainWindow, QMessageBox, QVBoxLayout, 
                              QDialog, QFormLayout, QLineEdit, QCheckBox, QPushButton, 
-                             QHBoxLayout, QScrollArea, QWidget, QInputDialog)
+                             QHBoxLayout, QScrollArea, QWidget, QInputDialog, QGroupBox)
 from PyQt6.QtCore import QThread, pyqtSignal
 from PyQt6 import uic
 
@@ -70,20 +70,75 @@ class SimulationWorker(QThread):
 class SettingsDialog(QDialog):
     """
     Dynamic dialog that parses the active SimulationConfig object and generates
-    text boxes and checkboxes for every available setting.
+    text boxes and checkboxes, visually grouped by category.
     """
     def __init__(self, config, parent=None):
         super().__init__(parent)
         self.setWindowTitle("Simulation Settings")
-        self.resize(500, 700)
+        self.resize(550, 750)
         self.config = config
         
+        # Categorized Mapping (Variable Name -> Human Readable Label)
+        self.categories = {
+            "Output & Rendering": {
+                "generate_all_plots": "Generate All Plots (Batch Mode)",
+                "plot_wall_shot": "Plot Wall Shot (2D Image)",
+                "plot_intensity_x": "Plot Intensity Profile (X-Axis)",
+                "plot_intensity_y": "Plot Intensity Profile (Y-Axis)",
+                "plot_intensity_45": "Plot Intensity Profile (45° Diagonal)",
+                "show_human_silhouette": "Show Human Silhouette Reference",
+                "export_csv": "Export Results to CSV",
+                "export_plots": "Export Plot Images",
+                "batch_output_directory": "Output Directory Path"
+            },
+            "Simulation Space & Constraints": {
+                "max_multiple_reflections": "Max Multiple Reflections (Bounces)",
+                "use_reflector_opening": "Force Reflector Opening Size",
+                "target_distance_m": "Target Distance (meters)",
+                "canvas_fov_deg": "Canvas Field of View (degrees)",
+                "plot_fov_deg": "Plot Field of View (degrees)"
+            },
+            "Camera Settings": {
+                "use_auto_exposure": "Use Auto Exposure",
+                "auto_exposure_compensation_ev": "Auto Exposure Compensation (EV)",
+                "cam_iso": "Camera ISO",
+                "cam_f_stop": "Camera f-stop",
+                "cam_shutter_speed_s": "Camera Shutter Speed (seconds)"
+            },
+            "Resolution & Angular Density": {
+                "sim_grid_res": "Simulation Grid Resolution (px)",
+                "sim_emitter_elements": "Emitter Subdivision Elements",
+                "sim_theta_step_deg": "Theta Step Size (degrees)",
+                "sim_phi_step_deg": "Phi Step Size (degrees)",
+                "sim_theta_min_deg": "Theta Minimum (degrees)",
+                "sim_theta_max_deg": "Theta Maximum (degrees)",
+                "sim_phi_min_deg": "Phi Minimum (degrees)",
+                "sim_phi_max_deg": "Phi Maximum (degrees)",
+                "lumen_calc_step_deg": "Lumen Calculation Step (degrees)"
+            },
+            "Material Defaults & Thresholds": {
+                "default_reflectivity_smooth": "Default Reflectivity (Smooth)",
+                "default_reflectivity_op": "Default Reflectivity (Orange Peel)",
+                "default_reflectivity_cylinder": "Default Reflectivity (Cylinder)",
+                "default_op_blur_strength": "Orange Peel Blur Strength",
+                "spill_visible_threshold_lux": "Spill Visible Threshold (Lux)",
+                "corona_visible_threshold": "Corona Visible Threshold",
+                "hotspot_fwhm_threshold": "Hotspot FWHM Threshold",
+                "default_gasket_thickness_mm": "Default Gasket Thickness (mm)",
+                "default_gasket_total_height_mm": "Default Gasket Total Height (mm)",
+                "default_gasket_opening_mm": "Default Gasket Opening (mm)",
+                "default_reflector_wall_thickness_mm": "Default Reflector Wall Thickness (mm)",
+                "default_reflector_base_thickness_mm": "Default Reflector Base Thickness (mm)",
+                "default_focus_offset_mm": "Default Focus Offset (mm)"
+            }
+        }
+
         self.main_layout = QVBoxLayout(self)
         
         self.scroll = QScrollArea()
         self.scroll.setWidgetResizable(True)
         self.scroll_widget = QWidget()
-        self.form_layout = QFormLayout(self.scroll_widget)
+        self.scroll_layout = QVBoxLayout(self.scroll_widget)
         
         self.input_widgets = {}
         self.populate_form()
@@ -103,25 +158,43 @@ class SettingsDialog(QDialog):
         self.btn_reset.clicked.connect(self.reset_to_defaults)
 
     def populate_form(self):
-        while self.form_layout.count():
-            item = self.form_layout.takeAt(0)
+        while self.scroll_layout.count():
+            item = self.scroll_layout.takeAt(0)
             if item.widget():
                 item.widget().deleteLater()
                 
         self.input_widgets.clear()
         
-        for key, value in self.config.__dict__.items():
-            if key.startswith('_') or key in ('filepath', 'default_filepath'):
-                continue
+        for category_name, settings_map in self.categories.items():
+            group_box = QGroupBox(category_name)
+            font = group_box.font()
+            font.setBold(True)
+            group_box.setFont(font)
             
-            if isinstance(value, bool):
-                widget = QCheckBox()
-                widget.setChecked(value)
-            else:
-                widget = QLineEdit(str(value))
+            group_layout = QFormLayout(group_box)
+            
+            for key, label_text in settings_map.items():
+                value = getattr(self.config, key, None)
+                if value is None and not isinstance(value, (bool, int, float, str)):
+                    continue
                 
-            self.form_layout.addRow(key, widget)
-            self.input_widgets[key] = widget
+                if isinstance(value, bool):
+                    widget = QCheckBox()
+                    widget.setChecked(value)
+                else:
+                    widget = QLineEdit(str(value))
+                
+                # Revert font to normal so text inputs aren't bold
+                normal_font = widget.font()
+                normal_font.setBold(False)
+                widget.setFont(normal_font)
+                
+                group_layout.addRow(label_text, widget)
+                self.input_widgets[key] = widget
+                
+            self.scroll_layout.addWidget(group_box)
+            
+        self.scroll_layout.addStretch()
 
     def save_settings(self):
         for key, widget in self.input_widgets.items():
@@ -276,7 +349,6 @@ class MainWindow(QMainWindow):
         if ok and new_name.strip():
             new_name = new_name.strip()
             
-            # Check for overwrite
             if new_name in list_method():
                 reply = QMessageBox.question(
                     self, "Overwrite Confirm", 
@@ -286,11 +358,9 @@ class MainWindow(QMainWindow):
                 if reply == QMessageBox.StandardButton.No:
                     return
                     
-            # Extract current data from the UI boxes
             data = self.extract_fields_to_dict(widget_map)
             save_method(new_name, data)
             
-            # Refresh combobox seamlessly
             combo_box.blockSignals(True)
             combo_box.clear()
             combo_box.addItems(list_method())
@@ -317,7 +387,7 @@ class MainWindow(QMainWindow):
             combo_box.addItems(list_method())
             combo_box.blockSignals(False)
             
-            reset_method()  # Refresh the UI text boxes to match whatever the combo box defaulted to
+            reset_method() 
             self.log_message(f"Deleted {hw_type}: {current_name}")
 
     # --- SAVE / DELETE BUTTON HANDLERS ---
