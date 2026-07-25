@@ -4,7 +4,7 @@ import traceback
 import json
 from PyQt6.QtWidgets import (QApplication, QMainWindow, QMessageBox, QVBoxLayout, 
                              QDialog, QFormLayout, QLineEdit, QCheckBox, QPushButton, 
-                             QHBoxLayout, QScrollArea, QWidget)
+                             QHBoxLayout, QScrollArea, QWidget, QInputDialog, QGroupBox)
 from PyQt6.QtCore import QThread, pyqtSignal
 from PyQt6 import uic
 
@@ -59,7 +59,6 @@ class SimulationWorker(QThread):
             
             if self._is_cancelled:
                 self.log_signal.emit("\n[!] Simulation stopped by user.")
-                # We return an empty completion signal if cancelled to unlock the UI
                 self.finished_signal.emit(None, {})
             else:
                 self.finished_signal.emit(fig, metrics)
@@ -71,20 +70,76 @@ class SimulationWorker(QThread):
 class SettingsDialog(QDialog):
     """
     Dynamic dialog that parses the active SimulationConfig object and generates
-    text boxes and checkboxes for every available setting.
+    text boxes and checkboxes, visually grouped by category.
     """
     def __init__(self, config, parent=None):
         super().__init__(parent)
         self.setWindowTitle("Simulation Settings")
-        self.resize(500, 700)
+        self.resize(550, 750)
         self.config = config
         
+        # Categorized Mapping (Variable Name -> Human Readable Label)
+        self.categories = {
+            "Output & Rendering": {
+                "generate_all_plots": "Generate All Plots (Batch Mode)",
+                "plot_wall_shot": "Plot Wall Shot (2D Image)",
+                "plot_intensity_x": "Plot Intensity Profile (X-Axis)",
+                "plot_intensity_y": "Plot Intensity Profile (Y-Axis)",
+                "plot_intensity_45": "Plot Intensity Profile (45° Diagonal)",
+                "show_human_silhouette": "Show Human Silhouette Reference",
+                "export_csv": "Export Results to CSV",
+                "export_plots": "Export Plot Images",
+                "batch_output_directory": "Output Directory Path"
+            },
+            "Simulation Space & Constraints": {
+                "use_gpu": "Use GPU Acceleration (CUDA)",
+                "max_multiple_reflections": "Max Multiple Reflections (Bounces)",
+                "use_reflector_opening": "Force Reflector Opening Size",
+                "target_distance_m": "Target Distance (meters)",
+                "canvas_fov_deg": "Canvas Field of View (degrees)",
+                "plot_fov_deg": "Plot Field of View (degrees)"
+            },
+            "Camera Settings": {
+                "use_auto_exposure": "Use Auto Exposure",
+                "auto_exposure_compensation_ev": "Auto Exposure Compensation (EV)",
+                "cam_iso": "Camera ISO",
+                "cam_f_stop": "Camera f-stop",
+                "cam_shutter_speed_s": "Camera Shutter Speed (seconds)"
+            },
+            "Resolution & Angular Density": {
+                "sim_grid_res": "Simulation Grid Resolution (px)",
+                "sim_emitter_elements": "Emitter Subdivision Elements",
+                "sim_theta_step_deg": "Theta Step Size (degrees)",
+                "sim_phi_step_deg": "Phi Step Size (degrees)",
+                "sim_theta_min_deg": "Theta Minimum (degrees)",
+                "sim_theta_max_deg": "Theta Maximum (degrees)",
+                "sim_phi_min_deg": "Phi Minimum (degrees)",
+                "sim_phi_max_deg": "Phi Maximum (degrees)",
+                "lumen_calc_step_deg": "Lumen Calculation Step (degrees)"
+            },
+            "Material Defaults & Thresholds": {
+                "default_reflectivity_smooth": "Default Reflectivity (Smooth)",
+                "default_reflectivity_op": "Default Reflectivity (Orange Peel)",
+                "default_reflectivity_cylinder": "Default Reflectivity (Cylinder)",
+                "default_op_blur_strength": "Orange Peel Blur Strength",
+                "spill_visible_threshold_lux": "Spill Visible Threshold (Lux)",
+                "corona_visible_threshold": "Corona Visible Threshold",
+                "hotspot_fwhm_threshold": "Hotspot FWHM Threshold",
+                "default_gasket_thickness_mm": "Default Gasket Thickness (mm)",
+                "default_gasket_total_height_mm": "Default Gasket Total Height (mm)",
+                "default_gasket_opening_mm": "Default Gasket Opening (mm)",
+                "default_reflector_wall_thickness_mm": "Default Reflector Wall Thickness (mm)",
+                "default_reflector_base_thickness_mm": "Default Reflector Base Thickness (mm)",
+                "default_focus_offset_mm": "Default Focus Offset (mm)"
+            }
+        }
+
         self.main_layout = QVBoxLayout(self)
         
         self.scroll = QScrollArea()
         self.scroll.setWidgetResizable(True)
         self.scroll_widget = QWidget()
-        self.form_layout = QFormLayout(self.scroll_widget)
+        self.scroll_layout = QVBoxLayout(self.scroll_widget)
         
         self.input_widgets = {}
         self.populate_form()
@@ -104,25 +159,43 @@ class SettingsDialog(QDialog):
         self.btn_reset.clicked.connect(self.reset_to_defaults)
 
     def populate_form(self):
-        while self.form_layout.count():
-            item = self.form_layout.takeAt(0)
+        while self.scroll_layout.count():
+            item = self.scroll_layout.takeAt(0)
             if item.widget():
                 item.widget().deleteLater()
                 
         self.input_widgets.clear()
         
-        for key, value in self.config.__dict__.items():
-            if key.startswith('_') or key in ('filepath', 'default_filepath'):
-                continue
+        for category_name, settings_map in self.categories.items():
+            group_box = QGroupBox(category_name)
+            font = group_box.font()
+            font.setBold(True)
+            group_box.setFont(font)
             
-            if isinstance(value, bool):
-                widget = QCheckBox()
-                widget.setChecked(value)
-            else:
-                widget = QLineEdit(str(value))
+            group_layout = QFormLayout(group_box)
+            
+            for key, label_text in settings_map.items():
+                value = getattr(self.config, key, None)
+                if value is None and not isinstance(value, (bool, int, float, str)):
+                    continue
                 
-            self.form_layout.addRow(key, widget)
-            self.input_widgets[key] = widget
+                if isinstance(value, bool):
+                    widget = QCheckBox()
+                    widget.setChecked(value)
+                else:
+                    widget = QLineEdit(str(value))
+                
+                # Revert font to normal so text inputs aren't bold
+                normal_font = widget.font()
+                normal_font.setBold(False)
+                widget.setFont(normal_font)
+                
+                group_layout.addRow(label_text, widget)
+                self.input_widgets[key] = widget
+                
+            self.scroll_layout.addWidget(group_box)
+            
+        self.scroll_layout.addStretch()
 
     def save_settings(self):
         for key, widget in self.input_widgets.items():
@@ -155,10 +228,15 @@ class SettingsDialog(QDialog):
                 with open(self.config.default_filepath, 'r') as f:
                     data = json.load(f)
                 
-                for key, value in data.items():
-                    if key in ('active_emitter_name', 'active_reflector_name', 'active_gasket_name', 'reflector_finish'):
-                        continue
-                    setattr(self.config, key, value)
+                # Unnest before setting attributes internally to prevent crashing
+                for category, settings in data.items():
+                    if isinstance(settings, dict):
+                        for key, value in settings.items():
+                            if key in ('active_emitter_name', 'active_reflector_name', 'active_gasket_name', 'reflector_finish'):
+                                continue
+                            setattr(self.config, key, value)
+                    else:
+                        setattr(self.config, category, settings)
                     
                 self.populate_form()
             else:
@@ -169,7 +247,6 @@ class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
         
-        # Load the UI file via the resource_path
         ui_path = resource_path('mainwindow.ui')
         if not os.path.exists(ui_path):
             QMessageBox.critical(self, "Error", f"Could not find UI file: {ui_path}")
@@ -249,13 +326,100 @@ class MainWindow(QMainWindow):
         self.cmbEmitter.currentIndexChanged.connect(self.on_emitter_changed)
         self.cmbGasket.currentIndexChanged.connect(self.on_gasket_changed)
 
+        # Reset Buttons
         self.btnResetReflector.clicked.connect(self.on_reflector_changed)
         self.btnResetEmitter.clicked.connect(self.on_emitter_changed)
         self.btnResetGasket.clicked.connect(self.on_gasket_changed)
+
+        # Save and Delete Buttons
+        self.btnSaveReflector.clicked.connect(self.save_reflector)
+        self.btnDeleteReflector.clicked.connect(self.delete_reflector)
+        self.btnSaveEmitter.clicked.connect(self.save_emitter)
+        self.btnDeleteEmitter.clicked.connect(self.delete_emitter)
+        self.btnSaveGasket.clicked.connect(self.save_gasket)
+        self.btnDeleteGasket.clicked.connect(self.delete_gasket)
         
+        # Bottom execution controls
         self.btnSettings.clicked.connect(self.open_settings)
         self.btnSimulate.clicked.connect(self.run_simulation)
         self.btnStop.clicked.connect(self.stop_simulation)
+
+    # --- SAVE AND DELETE ABSTRACTION LOGIC ---
+
+    def save_hardware_item(self, hw_type, current_name, widget_map, save_method, list_method, combo_box):
+        new_name, ok = QInputDialog.getText(
+            self, f"Save {hw_type}", f"Enter name for the {hw_type}:",
+            QLineEdit.EchoMode.Normal, current_name
+        )
+        
+        if ok and new_name.strip():
+            new_name = new_name.strip()
+            
+            if new_name in list_method():
+                reply = QMessageBox.question(
+                    self, "Overwrite Confirm", 
+                    f"A {hw_type} named '{new_name}' already exists. Overwrite it?",
+                    QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
+                )
+                if reply == QMessageBox.StandardButton.No:
+                    return
+                    
+            data = self.extract_fields_to_dict(widget_map)
+            save_method(new_name, data)
+            
+            combo_box.blockSignals(True)
+            combo_box.clear()
+            combo_box.addItems(list_method())
+            combo_box.setCurrentText(new_name)
+            combo_box.blockSignals(False)
+            
+            self.log_message(f"Successfully saved {hw_type}: {new_name}")
+
+    def delete_hardware_item(self, hw_type, current_name, delete_method, list_method, combo_box, reset_method):
+        if not current_name:
+            return
+            
+        reply = QMessageBox.question(
+            self, "Delete Confirm", 
+            f"Are you sure you want to permanently delete the {hw_type} '{current_name}'?",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
+        )
+        
+        if reply == QMessageBox.StandardButton.Yes:
+            delete_method(current_name)
+            
+            combo_box.blockSignals(True)
+            combo_box.clear()
+            combo_box.addItems(list_method())
+            combo_box.blockSignals(False)
+            
+            reset_method() 
+            self.log_message(f"Deleted {hw_type}: {current_name}")
+
+    # --- SAVE / DELETE BUTTON HANDLERS ---
+
+    def save_reflector(self):
+        self.save_hardware_item("Reflector", self.cmbReflector.currentText(), self.reflector_map, 
+                                self.library.add_or_update_reflector, self.library.list_reflectors, self.cmbReflector)
+    def delete_reflector(self):
+        self.delete_hardware_item("Reflector", self.cmbReflector.currentText(), 
+                                  self.library.remove_reflector, self.library.list_reflectors, self.cmbReflector, self.on_reflector_changed)
+
+    def save_emitter(self):
+        self.save_hardware_item("Emitter", self.cmbEmitter.currentText(), self.emitter_map, 
+                                self.library.add_or_update_emitter, self.library.list_emitters, self.cmbEmitter)
+    def delete_emitter(self):
+        self.delete_hardware_item("Emitter", self.cmbEmitter.currentText(), 
+                                  self.library.remove_emitter, self.library.list_emitters, self.cmbEmitter, self.on_emitter_changed)
+
+    def save_gasket(self):
+        self.save_hardware_item("Gasket", self.cmbGasket.currentText(), self.gasket_map, 
+                                self.library.add_or_update_gasket, self.library.list_gaskets, self.cmbGasket)
+    def delete_gasket(self):
+        self.delete_hardware_item("Gasket", self.cmbGasket.currentText(), 
+                                  self.library.remove_gasket, self.library.list_gaskets, self.cmbGasket, self.on_gasket_changed)
+
+    # --- ACTION LOGIC ---
 
     def open_settings(self):
         dialog = SettingsDialog(self.config, self)

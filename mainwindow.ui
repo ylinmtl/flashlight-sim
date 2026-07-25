@@ -16,7 +16,6 @@
   <widget class="QWidget" name="centralwidget">
    <layout class="QHBoxLayout" name="horizontalLayout_Main">
     
-    <!-- LEFT SIDE: HARDWARE CONTROLS (3 COLUMNS) -->
     <item>
      <widget class="QWidget" name="widgetControls" native="true">
       <property name="sizePolicy">
@@ -27,7 +26,6 @@
       </property>
       <layout class="QHBoxLayout" name="horizontalLayout_Columns">
        
-       <!-- COLUMN 1: REFLECTOR -->
        <item>
         <widget class="QGroupBox" name="grpReflector">
          <property name="minimumSize">
@@ -53,7 +51,6 @@
             <property name="widgetResizable"><bool>true</bool></property>
             <widget class="QWidget" name="scrollWidget_Reflector">
              <layout class="QFormLayout" name="formLayout_Reflector">
-              <!-- Using maximumSize to prevent fields from taking up too much room -->
               <item row="0" column="0"><widget class="QLabel"><property name="text"><string>Diameter (mm)</string></property></widget></item>
               <item row="0" column="1"><widget class="QLineEdit" name="txtRef_diameter_mm"><property name="maximumSize"><size><width>100</width><height>16777215</height></size></property></widget></item>
               <item row="1" column="0"><widget class="QLabel"><property name="text"><string>Height (mm)</string></property></widget></item>
@@ -64,11 +61,11 @@
               <item row="3" column="1"><widget class="QLineEdit" name="txtRef_focus_offset_mm"><property name="maximumSize"><size><width>100</width><height>16777215</height></size></property></widget></item>
               <item row="4" column="0"><widget class="QLabel"><property name="text"><string>Base Thickness (mm)</string></property></widget></item>
               <item row="4" column="1"><widget class="QLineEdit" name="txtRef_thickness_height_mm"><property name="maximumSize"><size><width>100</width><height>16777215</height></size></property></widget></item>
-              <item row="5" column="0"><widget class="QLabel"><property name="text"><string>Reflectivity Smooth</string></property></widget></item>
+              <item row="5" column="0"><widget class="QLabel"><property name="text"><string>Smooth Reflectivity</string></property></widget></item>
               <item row="5" column="1"><widget class="QLineEdit" name="txtRef_reflectivity_smooth"><property name="maximumSize"><size><width>100</width><height>16777215</height></size></property></widget></item>
-              <item row="6" column="0"><widget class="QLabel"><property name="text"><string>Reflectivity OP</string></property></widget></item>
+              <item row="6" column="0"><widget class="QLabel"><property name="text"><string>OP Reflectivity</string></property></widget></item>
               <item row="6" column="1"><widget class="QLineEdit" name="txtRef_reflectivity_op"><property name="maximumSize"><size><width>100</width><height>16777215</height></size></property></widget></item>
-              <item row="7" column="0"><widget class="QLabel"><property name="text"><string>Reflectivity Cylinder</string></property></widget></item>
+              <item row="7" column="0"><widget class="QLabel"><property name="text"><string>Hole Reflectivity</string></property></widget></item>
               <item row="7" column="1"><widget class="QLineEdit" name="txtRef_reflectivity_cylinder"><property name="maximumSize"><size><width>100</width><height>16777215</height></size></property></widget></item>
               <item row="8" column="0"><widget class="QLabel"><property name="text"><string>Gasket Reflectivity</string></property></widget></item>
               <item row="8" column="1"><widget class="QLineEdit" name="txtRef_gasket_reflectivity"><property name="maximumSize"><size><width>100</width><height>16777215</height></size></property></widget></item>
@@ -83,11 +80,24 @@
             <property name="text"><string>Reset Reflector to Defaults</string></property>
            </widget>
           </item>
+          <item>
+           <layout class="QHBoxLayout" name="horizontalLayout_ReflectorButtons">
+            <item>
+             <widget class="QPushButton" name="btnSaveReflector">
+              <property name="text"><string>Save</string></property>
+             </widget>
+            </item>
+            <item>
+             <widget class="QPushButton" name="btnDeleteReflector">
+              <property name="text"><string>Delete</string></property>
+             </widget>
+            </item>
+           </layout>
+          </item>
          </layout>
         </widget>
        </item>
 
-       <!-- COLUMN 2: EMITTER -->
        <item>
         <widget class="QGroupBox" name="grpEmitter">
          <property name="minimumSize">
@@ -138,11 +148,24 @@
             <property name="text"><string>Reset Emitter to Defaults</string></property>
            </widget>
           </item>
+          <item>
+           <layout class="QHBoxLayout" name="horizontalLayout_EmitterButtons">
+            <item>
+             <widget class="QPushButton" name="btnSaveEmitter">
+              <property name="text"><string>Save</string></property>
+             </widget>
+            </item>
+            <item>
+             <widget class="QPushButton" name="btnDeleteEmitter">
+              <property name="text"><string>Delete</string></property>
+             </widget>
+            </item>
+           </layout>
+          </item>
          </layout>
         </widget>
        </item>
 
-       <!-- COLUMN 3: GASKET -->
        <item>
         <widget class="QGroupBox" name="grpGasket">
          <property name="minimumSize">
@@ -173,6 +196,20 @@
             <property name="text"><string>Reset Gasket to Defaults</string></property>
            </widget>
           </item>
+          <item>
+           <layout class="QHBoxLayout" name="horizontalLayout_GasketButtons">
+            <item>
+             <widget class="QPushButton" name="btnSaveGasket">
+              <property name="text"><string>Save</string></property>
+             </widget>
+            </item>
+            <item>
+             <widget class="QPushButton" name="btnDeleteGasket">
+              <property name="text"><string>Delete</string></property>
+             </widget>
+            </item>
+           </layout>
+          </item>
          </layout>
         </widget>
        </item>
@@ -180,7 +217,6 @@
      </widget>
     </item>
 
-    <!-- RIGHT SIDE: RESULTS VIEWER & EXECUTION -->
     <item>
      <widget class="QWidget" name="widgetResults" native="true">
       <property name="sizePolicy">
