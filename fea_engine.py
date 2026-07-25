@@ -14,6 +14,19 @@ import time
 import json
 import numpy as np
 
+def resource_path(relative_path):
+    """Get absolute path to resource, works for dev and for PyInstaller"""
+    if hasattr(sys, '_MEIPASS'):
+        return os.path.join(sys._MEIPASS, relative_path)
+    return os.path.join(os.path.dirname(os.path.abspath(__file__)), relative_path)
+
+# --- CRITICAL PYINSTALLER CUDA FIX ---
+# Force Numba to look for the bundled CUDA tools inside the compiled executable folder
+if hasattr(sys, '_MEIPASS'):
+    os.environ['NUMBA_NVVM'] = resource_path('nvvm.dll')
+    os.environ['NUMBA_LIBDEVICE'] = resource_path('libdevice.10.bc')
+# -------------------------------------
+
 # REQUIRED for thread-safe GUI rendering. Prevents Matplotlib from opening detached windows.
 import matplotlib
 matplotlib.use('Agg') 
@@ -23,12 +36,6 @@ import matplotlib.colors as mcolors
 import matplotlib.patches as patches
 from scipy.ndimage import gaussian_filter
 from numba import cuda, njit
-
-def resource_path(relative_path):
-    """Get absolute path to resource, works for dev and for PyInstaller"""
-    if hasattr(sys, '_MEIPASS'):
-        return os.path.join(sys._MEIPASS, relative_path)
-    return os.path.join(os.path.dirname(os.path.abspath(__file__)), relative_path)
 
 # ==============================================================================
 # 1. CONFIGURATION & DATA MANAGEMENT
@@ -45,7 +52,7 @@ class SimulationConfig:
             "batch_output_directory", "export_csv", "export_plots"
         ],
         "Simulation Space & Constraints": [
-            "max_multiple_reflections", "use_reflector_opening",
+            "use_gpu", "max_multiple_reflections", "use_reflector_opening",
             "target_distance_m", "canvas_fov_deg", "plot_fov_deg"
         ],
         "Camera Settings": [
@@ -98,6 +105,7 @@ class SimulationConfig:
         # Ensure backward compatibility keys exist
         if not hasattr(self, 'export_csv'): self.export_csv = True
         if not hasattr(self, 'export_plots'): self.export_plots = True
+        if not hasattr(self, 'use_gpu'): self.use_gpu = True
             
         self.save_settings()
 
@@ -555,13 +563,15 @@ def run_pure_fea_sim_vectorized(geom, emitter, current_amps, finish, config: Sim
 
     target_z_mm = config.target_distance_m * 1000.0
     total_threads = actual_elements * len(vx)
-    has_gpu = cuda.is_available()
+    
+    # NEW: Check both the hardware capability and the user toggle flag
+    has_gpu = cuda.is_available() and config.use_gpu
 
     hotspot_grid = np.zeros((config.sim_grid_res, config.sim_grid_res), dtype=np.float64)
     spill_grid = np.zeros((config.sim_grid_res, config.sim_grid_res), dtype=np.float64)
 
     if has_gpu:
-        if log_callback: log_callback(f"[CUDA FEA Engine] GPU Detected. Allocating {total_threads:,} rays in VRAM...")
+        if log_callback: log_callback(f"[CUDA FEA Engine] GPU Detected and Enabled. Allocating {total_threads:,} rays in VRAM...")
         d_ex, d_ey = cuda.to_device(np.ascontiguousarray(ex_flat, dtype=np.float64)), cuda.to_device(np.ascontiguousarray(ey_flat, dtype=np.float64))
         d_vx, d_vy, d_vz = cuda.to_device(np.ascontiguousarray(vx, dtype=np.float64)), cuda.to_device(np.ascontiguousarray(vy, dtype=np.float64)), cuda.to_device(np.ascontiguousarray(vz, dtype=np.float64))
         d_flux = cuda.to_device(ray_flux)

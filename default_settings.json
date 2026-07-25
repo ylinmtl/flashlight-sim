@@ -11,6 +11,7 @@
         "export_plots": false
     },
     "Simulation Space & Constraints": {
+        "use_gpu": true,
         "max_multiple_reflections": 5,
         "use_reflector_opening": true,
         "target_distance_m": 5.0,

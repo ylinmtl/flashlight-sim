@@ -92,6 +92,7 @@ class SettingsDialog(QDialog):
                 "batch_output_directory": "Output Directory Path"
             },
             "Simulation Space & Constraints": {
+                "use_gpu": "Use GPU Acceleration (CUDA)",
                 "max_multiple_reflections": "Max Multiple Reflections (Bounces)",
                 "use_reflector_opening": "Force Reflector Opening Size",
                 "target_distance_m": "Target Distance (meters)",
@@ -227,10 +228,15 @@ class SettingsDialog(QDialog):
                 with open(self.config.default_filepath, 'r') as f:
                     data = json.load(f)
                 
-                for key, value in data.items():
-                    if key in ('active_emitter_name', 'active_reflector_name', 'active_gasket_name', 'reflector_finish'):
-                        continue
-                    setattr(self.config, key, value)
+                # Unnest before setting attributes internally to prevent crashing
+                for category, settings in data.items():
+                    if isinstance(settings, dict):
+                        for key, value in settings.items():
+                            if key in ('active_emitter_name', 'active_reflector_name', 'active_gasket_name', 'reflector_finish'):
+                                continue
+                            setattr(self.config, key, value)
+                    else:
+                        setattr(self.config, category, settings)
                     
                 self.populate_form()
             else:
