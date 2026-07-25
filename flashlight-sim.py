@@ -4,7 +4,7 @@ import traceback
 import json
 from PyQt6.QtWidgets import (QApplication, QMainWindow, QMessageBox, QVBoxLayout, 
                              QDialog, QFormLayout, QLineEdit, QCheckBox, QPushButton, 
-                             QHBoxLayout, QScrollArea, QWidget)
+                             QHBoxLayout, QScrollArea, QWidget, QInputDialog)
 from PyQt6.QtCore import QThread, pyqtSignal
 from PyQt6 import uic
 
@@ -59,7 +59,6 @@ class SimulationWorker(QThread):
             
             if self._is_cancelled:
                 self.log_signal.emit("\n[!] Simulation stopped by user.")
-                # We return an empty completion signal if cancelled to unlock the UI
                 self.finished_signal.emit(None, {})
             else:
                 self.finished_signal.emit(fig, metrics)
@@ -169,7 +168,6 @@ class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
         
-        # Load the UI file via the resource_path
         ui_path = resource_path('mainwindow.ui')
         if not os.path.exists(ui_path):
             QMessageBox.critical(self, "Error", f"Could not find UI file: {ui_path}")
@@ -249,13 +247,103 @@ class MainWindow(QMainWindow):
         self.cmbEmitter.currentIndexChanged.connect(self.on_emitter_changed)
         self.cmbGasket.currentIndexChanged.connect(self.on_gasket_changed)
 
+        # Reset Buttons
         self.btnResetReflector.clicked.connect(self.on_reflector_changed)
         self.btnResetEmitter.clicked.connect(self.on_emitter_changed)
         self.btnResetGasket.clicked.connect(self.on_gasket_changed)
+
+        # Save and Delete Buttons
+        self.btnSaveReflector.clicked.connect(self.save_reflector)
+        self.btnDeleteReflector.clicked.connect(self.delete_reflector)
+        self.btnSaveEmitter.clicked.connect(self.save_emitter)
+        self.btnDeleteEmitter.clicked.connect(self.delete_emitter)
+        self.btnSaveGasket.clicked.connect(self.save_gasket)
+        self.btnDeleteGasket.clicked.connect(self.delete_gasket)
         
+        # Bottom execution controls
         self.btnSettings.clicked.connect(self.open_settings)
         self.btnSimulate.clicked.connect(self.run_simulation)
         self.btnStop.clicked.connect(self.stop_simulation)
+
+    # --- SAVE AND DELETE ABSTRACTION LOGIC ---
+
+    def save_hardware_item(self, hw_type, current_name, widget_map, save_method, list_method, combo_box):
+        new_name, ok = QInputDialog.getText(
+            self, f"Save {hw_type}", f"Enter name for the {hw_type}:",
+            QLineEdit.EchoMode.Normal, current_name
+        )
+        
+        if ok and new_name.strip():
+            new_name = new_name.strip()
+            
+            # Check for overwrite
+            if new_name in list_method():
+                reply = QMessageBox.question(
+                    self, "Overwrite Confirm", 
+                    f"A {hw_type} named '{new_name}' already exists. Overwrite it?",
+                    QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
+                )
+                if reply == QMessageBox.StandardButton.No:
+                    return
+                    
+            # Extract current data from the UI boxes
+            data = self.extract_fields_to_dict(widget_map)
+            save_method(new_name, data)
+            
+            # Refresh combobox seamlessly
+            combo_box.blockSignals(True)
+            combo_box.clear()
+            combo_box.addItems(list_method())
+            combo_box.setCurrentText(new_name)
+            combo_box.blockSignals(False)
+            
+            self.log_message(f"Successfully saved {hw_type}: {new_name}")
+
+    def delete_hardware_item(self, hw_type, current_name, delete_method, list_method, combo_box, reset_method):
+        if not current_name:
+            return
+            
+        reply = QMessageBox.question(
+            self, "Delete Confirm", 
+            f"Are you sure you want to permanently delete the {hw_type} '{current_name}'?",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
+        )
+        
+        if reply == QMessageBox.StandardButton.Yes:
+            delete_method(current_name)
+            
+            combo_box.blockSignals(True)
+            combo_box.clear()
+            combo_box.addItems(list_method())
+            combo_box.blockSignals(False)
+            
+            reset_method()  # Refresh the UI text boxes to match whatever the combo box defaulted to
+            self.log_message(f"Deleted {hw_type}: {current_name}")
+
+    # --- SAVE / DELETE BUTTON HANDLERS ---
+
+    def save_reflector(self):
+        self.save_hardware_item("Reflector", self.cmbReflector.currentText(), self.reflector_map, 
+                                self.library.add_or_update_reflector, self.library.list_reflectors, self.cmbReflector)
+    def delete_reflector(self):
+        self.delete_hardware_item("Reflector", self.cmbReflector.currentText(), 
+                                  self.library.remove_reflector, self.library.list_reflectors, self.cmbReflector, self.on_reflector_changed)
+
+    def save_emitter(self):
+        self.save_hardware_item("Emitter", self.cmbEmitter.currentText(), self.emitter_map, 
+                                self.library.add_or_update_emitter, self.library.list_emitters, self.cmbEmitter)
+    def delete_emitter(self):
+        self.delete_hardware_item("Emitter", self.cmbEmitter.currentText(), 
+                                  self.library.remove_emitter, self.library.list_emitters, self.cmbEmitter, self.on_emitter_changed)
+
+    def save_gasket(self):
+        self.save_hardware_item("Gasket", self.cmbGasket.currentText(), self.gasket_map, 
+                                self.library.add_or_update_gasket, self.library.list_gaskets, self.cmbGasket)
+    def delete_gasket(self):
+        self.delete_hardware_item("Gasket", self.cmbGasket.currentText(), 
+                                  self.library.remove_gasket, self.library.list_gaskets, self.cmbGasket, self.on_gasket_changed)
+
+    # --- ACTION LOGIC ---
 
     def open_settings(self):
         dialog = SettingsDialog(self.config, self)

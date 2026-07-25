@@ -52,7 +52,6 @@ class SimulationConfig:
     plot_intensity_45: bool
     batch_output_directory: str
     
-    # --- OUTPUT TOGGLES ---
     export_csv: bool
     export_plots: bool
     
@@ -108,14 +107,12 @@ class SimulationConfig:
                 f"CRITICAL: Missing both '{self.filepath}' and '{self.default_filepath}'."
             )
             
-        # Ensure backward compatibility with older JSON files that lack the output toggles
         if "export_csv" not in data: data["export_csv"] = True
         if "export_plots" not in data: data["export_plots"] = True
             
         for key, value in data.items():
             setattr(self, key, value)
             
-        # Save immediately to append the missing keys to the active JSON file
         self.save_settings()
 
     def save_settings(self):
@@ -158,14 +155,50 @@ class HardwareLibrary:
         with open(self.filepath, 'w') as f:
             json.dump(data, f, indent=4)
 
+    # --- Emitter Management ---
     def get_emitter(self, name: str) -> dict: return self._emitters[name]
-    def list_emitters(self) -> list: return list(self._emitters.keys())
+    
+    def list_emitters(self) -> list: 
+        return sorted(list(self._emitters.keys()), key=str.casefold)
+        
+    def add_or_update_emitter(self, name: str, specs: dict):
+        self._emitters[name] = specs
+        self.save_database()
+        
+    def remove_emitter(self, name: str):
+        if name in self._emitters:
+            del self._emitters[name]
+            self.save_database()
 
+    # --- Reflector Management ---
     def get_reflector(self, name: str) -> dict: return self._reflectors[name]
-    def list_reflectors(self) -> list: return list(self._reflectors.keys())
+    
+    def list_reflectors(self) -> list: 
+        return sorted(list(self._reflectors.keys()), key=str.casefold)
+        
+    def add_or_update_reflector(self, name: str, specs: dict):
+        self._reflectors[name] = specs
+        self.save_database()
+        
+    def remove_reflector(self, name: str):
+        if name in self._reflectors:
+            del self._reflectors[name]
+            self.save_database()
 
+    # --- Gasket Management ---
     def get_gasket(self, name: str) -> dict: return self._gaskets[name]
-    def list_gaskets(self) -> list: return list(self._gaskets.keys())
+    
+    def list_gaskets(self) -> list: 
+        return sorted(list(self._gaskets.keys()), key=str.casefold)
+        
+    def add_or_update_gasket(self, name: str, specs: dict):
+        self._gaskets[name] = specs
+        self.save_database()
+        
+    def remove_gasket(self, name: str):
+        if name in self._gaskets:
+            del self._gaskets[name]
+            self.save_database()
 
 # ==============================================================================
 # 3. HELPERS & HARDWARE INTERPOLATION
@@ -632,7 +665,6 @@ def render_intensity_profile(slice_lux, dist_array, suffix_name, title_str, save
     plt.title(f"{title_str}\n[Intensity Profile: {suffix_name}]", color='#CCCCCC', pad=15)
     plt.tight_layout()
     
-    # Save the 1D line plot only if both conditions are met
     if save_path and config.export_plots:
         base, ext = os.path.splitext(save_path)
         out = f"{base}_{suffix_name}{ext}"
@@ -694,7 +726,6 @@ def generate_flashlight_plot(emitter_name, reflector_name, gasket_name, finish_t
         plt.title(title_str, color='#CCCCCC', pad=15)
         plt.tight_layout(rect=[0, 0.05, 1, 1])
 
-        # Save the wall shot only if both conditions are met
         if save_path and config.export_plots:
             plt.savefig(save_path, facecolor='black', edgecolor='none', dpi=150, bbox_inches='tight')
 
@@ -728,7 +759,6 @@ def run_simulation_job(config: SimulationConfig, library: HardwareLibrary,
 
     existing_data = {}
     
-    # Read the historical data ONLY if CSV exporting is enabled
     if config.export_csv and os.path.exists(csv_filepath):
         with open(csv_filepath, mode='r', newline='') as f:
             for row in csv.DictReader(f):
@@ -774,7 +804,6 @@ def run_simulation_job(config: SimulationConfig, library: HardwareLibrary,
             existing_data[(metrics["Reflector"], metrics["Emitter"], metrics["Gasket"], metrics["Finish"])] = metrics
             if log_callback: log_callback("Simulation complete.")
 
-    # Write the CSV file ONLY if exporting is enabled
     if config.export_csv:
         with open(csv_filepath, mode='w', newline='') as f:
             writer = csv.DictWriter(f, fieldnames=csv_headers)
