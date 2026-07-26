@@ -20,8 +20,8 @@
     },
     "Camera Settings": {
         "use_auto_exposure": false,
-        "auto_exposure_compensation_ev": 0.0,
-        "cam_iso": 500,
+        "auto_exposure_compensation_ev": -5.0,
+        "cam_iso": 100,
         "cam_f_stop": 8.0,
         "cam_shutter_speed_s": 0.33333333333
     },
@@ -30,8 +30,8 @@
         "sim_emitter_elements": 16,
         "sim_theta_step_deg": 0.1,
         "sim_phi_step_deg": 0.1,
-        "sim_theta_min_deg": 0.1,
-        "sim_theta_max_deg": 89.9,
+        "sim_theta_min_deg": 0.01,
+        "sim_theta_max_deg": 89.99,
         "sim_phi_min_deg": 0.0,
         "sim_phi_max_deg": 360.0,
         "lumen_calc_step_deg": 0.1
