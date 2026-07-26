@@ -64,6 +64,10 @@ _HIT_GASKET = 4
 # nearest-hit comparisons always reject it.
 _NO_ROOT = 1e9
 
+# Characters Windows reserves for paths and wildcards. Hardware names are free
+# text and end up inside export filenames, so they have to be replaced first.
+_RESERVED_FILENAME_CHARS = '<>:"/\\|?*'
+
 # CUDA launch geometry. 256 threads per block suits every architecture the
 # simulator targets.
 _THREADS_PER_BLOCK = 256
@@ -1747,10 +1751,34 @@ def _list_valid_combinations(library: HardwareLibrary) -> list:
     return combinations
 
 
+def _sanitise_filename_part(name: str) -> str:
+    """Makes one hardware name safe to embed in a filename.
+
+    Catalogue names are free text and routinely contain characters Windows
+    reserves for paths, for example "Convoy M1/M21B 7mm". Left alone, the slash
+    is read as a directory separator and the save fails on a folder that does
+    not exist.
+
+    Args:
+        name: Hardware name as it appears in the catalogue.
+
+    Returns:
+        The name with reserved and control characters replaced by hyphens, and
+        with the trailing dots and spaces Windows refuses to store stripped off.
+    """
+    cleaned = "".join("-" if character in _RESERVED_FILENAME_CHARS or ord(character) < 32
+                      else character
+                      for character in name)
+    return cleaned.strip(" .") or "unnamed"
+
+
 def _plot_filename(reflector: str, emitter: str, gasket: str, finish: str) -> str:
     """Builds the PNG filename for one hardware combination."""
     finish_tag = "OP" if finish == "orange_peel" else "SMO"
-    return f"{reflector}_{emitter}_{gasket}_{finish_tag}.png"
+    return "_".join((_sanitise_filename_part(reflector),
+                     _sanitise_filename_part(emitter),
+                     _sanitise_filename_part(gasket),
+                     finish_tag)) + ".png"
 
 
 def run_simulation_job(config: SimulationConfig, library: HardwareLibrary,
