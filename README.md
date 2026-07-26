@@ -270,6 +270,8 @@ Resolution of the wall illumination grid.
 
 Higher values produce smoother output images but require additional processing.
 
+Default 512 x 512 pixels. Increase to 1024 or 2048 if you increase Emitter Subidivision Elements
+
 ---
 
 ## Emitter Subdivision Elements
@@ -280,6 +282,10 @@ Each element acts as an independent light source.
 
 Higher subdivision counts improve accuracy but increase simulation time.
 
+Default 16 by 16. This works on most CPUs.
+
+If you have an nVidia GPU, you can increase this. Should not need to go higher than 128.
+
 ---
 
 ## Theta Step
@@ -288,6 +294,10 @@ Angular spacing between emitted rays in elevation.
 
 Smaller values increase angular sampling density.
 
+Default 0.1. 
+
+Can decrease to 0.05 with GPU.
+
 ---
 
 ## Phi Step
@@ -295,6 +305,10 @@ Smaller values increase angular sampling density.
 Angular spacing around the LED.
 
 Smaller values produce smoother beam profiles.
+
+Default 0.1. 
+
+Can decrease to 0.05 with GPU.
 
 ---
 
@@ -423,9 +437,9 @@ CUDA Toolkit 11.8 is optional but recommended for GPU development.
 ## Clone the Repository
 
 ```bash
-git clone https://github.com/<username>/<repository>.git
+git clone ylinmtl/flashlight-sim.git
 
-cd flashlight-fea-raytracer
+cd flashlight-sim
 ```
 
 ---
@@ -433,13 +447,13 @@ cd flashlight-fea-raytracer
 ## Create a Conda Environment
 
 ```bash
-conda create -n flashlight python=3.11
+conda create -n flashlight-sim python=3.11
 ```
 
 Activate the environment:
 
 ```bash
-conda activate flashlight
+conda activate flashlight-sim
 ```
 
 ---
