@@ -713,8 +713,8 @@
         "Convoy L6": {
             "diameter_mm": 67.6,
             "height_mm": 47.8,
-            "opening_diameter_mm": 9.1,
-            "focus_offset_mm": 0.0,
+            "opening_diameter_mm": 11.1,
+            "focus_offset_mm": -0.5,
             "thickness_height_mm": 1.0,
             "reflectivity_smooth": 0.85,
             "reflectivity_op": 0.8,
