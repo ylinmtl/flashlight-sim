@@ -1,117 +1,219 @@
-"""Finite Element Analysis (FEA) engine for flashlight optical simulation.
+"""Finite element ray-tracing engine for flashlight beam simulation.
 
-This module simulates ray tracing from an LED emitter, calculating reflections
-off a parabolic housing and refraction through silicone domes to determine the
-resulting illuminance pattern on a target wall. It supports GPU acceleration
-via Numba (CUDA) with an automatic fallback to CPU processing.
+The engine fires rays from a subdivided LED die, refracts them through the
+silicone dome, bounces them off the parabolic reflector, the reflector's centre
+bore and the gasket, then accumulates the surviving flux on a virtual wall to
+produce an illuminance map and the usual beam figures (candela, throw, hotspot
+and spill angles).
+
+Rays are traced by a Numba kernel that runs on CUDA when a usable GPU toolchain
+is present and on the CPU otherwise. Importing this module also configures the
+CUDA toolkit bundled by PyInstaller, so it must be imported before Numba.
+
+Typical usage:
+
+    config = SimulationConfig()
+    library = HardwareLibrary()
+    figure, results = run_simulation_job(
+        config, library, "Convoy M3", "Luminus SFT40 6500K", "9mm 5050", "smooth")
 """
 
-import os
-import sys
-import math
 import csv
-import time
 import json
+import math
+import os
 import shutil
+import sys
+import time
+from typing import Callable, Dict, List, NamedTuple, Optional, Tuple
+
 import numpy as np
 
+# Callback aliases used throughout the public API.
+LogCallback = Optional[Callable[[str], None]]
+ProgressCallback = Optional[Callable[[float], None]]
+CancelCallback = Optional[Callable[[], bool]]
 
-def resource_path(relative_path):
-    """Absolute path to a READ-ONLY bundled asset. Works in dev and PyInstaller."""
-    if hasattr(sys, '_MEIPASS'):
+# The three interchangeable hardware categories, and the JSON section each one
+# is stored under in hardware_library.json.
+HARDWARE_KINDS = ("emitter", "reflector", "gasket")
+_JSON_SECTION_BY_KIND = {
+    "emitter": "emitters",
+    "reflector": "reflectors",
+    "gasket": "gaskets",
+}
+
+# Settings that record which hardware the operator last picked. They live in the
+# settings file for convenience but are never restored from the template.
+_SELECTION_KEYS = frozenset({
+    "active_emitter_name",
+    "active_reflector_name",
+    "active_gasket_name",
+    "reflector_finish",
+})
+
+# Surfaces a ray can land on. Numba freezes module level integers as compile
+# time constants, which is why these are plain ints rather than an Enum.
+_HIT_NONE = 0
+_HIT_PARABOLA = 1
+_HIT_CYLINDER = 2
+_HIT_ABSORBED = 3
+_HIT_GASKET = 4
+
+# Returned by solve_quadratic when no usable root exists. Large enough that the
+# nearest-hit comparisons always reject it.
+_NO_ROOT = 1e9
+
+# CUDA launch geometry. 256 threads per block suits every architecture the
+# simulator targets.
+_THREADS_PER_BLOCK = 256
+
+
+def resource_path(relative_path: str) -> str:
+    """Returns the absolute path of a read-only asset shipped with the app.
+
+    Args:
+        relative_path: Path of the asset relative to the application root.
+
+    Returns:
+        The path inside the PyInstaller bundle when frozen, otherwise the path
+        next to this source file.
+    """
+    if hasattr(sys, "_MEIPASS"):
         return os.path.join(sys._MEIPASS, relative_path)
     return os.path.join(os.path.dirname(os.path.abspath(__file__)), relative_path)
 
 
-def user_data_path(relative_path):
-    """Absolute path to a WRITABLE file that lives beside the executable.
+def user_data_path(relative_path: str) -> str:
+    """Returns the absolute path of a writable file that lives beside the app.
 
-    Anything the user edits (settings, hardware library, exported plots) must not
-    be written into the PyInstaller bundle: under --onefile the bundle is a temp
-    directory wiped on exit, and under --onedir it may sit on read-only media.
+    Anything the operator edits (settings, the hardware library, exported plots)
+    must not be written into the PyInstaller bundle: under --onefile the bundle
+    is a temporary directory wiped on exit, and under --onedir it may sit on
+    read-only media.
+
+    Args:
+        relative_path: Path of the file relative to the application folder.
+
+    Returns:
+        The path next to the executable when frozen, otherwise the path next to
+        this source file.
     """
-    if getattr(sys, 'frozen', False):
+    if getattr(sys, "frozen", False):
         base = os.path.dirname(sys.executable)
     else:
         base = os.path.dirname(os.path.abspath(__file__))
     return os.path.join(base, relative_path)
 
 
-# ==============================================================================
-# CUDA BOOTSTRAP FOR FROZEN (PyInstaller) BUILDS
-# ==============================================================================
-# This block MUST run before `from numba import cuda`: numba caches its toolkit
-# path lookup (get_cuda_paths is lru_cached) the first time it is asked.
-#
-# Numba resolves the toolkit through CUDA_HOME (with CUDA_PATH as the fallback).
-# NUMBA_CUDA_DIR is not a real numba setting. When the lookup fails, numba falls
-# back to the generic name 'nvvm.dll', PyInstaller's ctypes hook rewrites that to
-# <_MEIPASS>/nvvm.dll, and the load raises NvvmSupportError.
-#
-# Expected layout underneath CUDA_HOME on Windows:
-#   <CUDA_HOME>/nvvm/bin/nvvm64_*.dll
-#   <CUDA_HOME>/nvvm/libdevice/libdevice.*.bc
-#   <CUDA_HOME>/bin/cudart64_*.dll  (+ ptxas.exe, zlibwapi.dll)
+def _bootstrap_bundled_cuda() -> list:
+    """Points Numba at the CUDA toolkit bundled inside a frozen build.
 
-_DLL_DIR_COOKIES = []  # keep the handles alive for the lifetime of the process
+    Numba locates the toolkit through CUDA_HOME (falling back to CUDA_PATH) and
+    expects a genuine toolkit layout underneath it:
 
-if getattr(sys, 'frozen', False) and hasattr(sys, '_MEIPASS'):
-    _bundle = sys._MEIPASS
-    _cuda_bin = os.path.join(_bundle, 'bin')
-    _nvvm_bin = os.path.join(_bundle, 'nvvm', 'bin')
+        <CUDA_HOME>/nvvm/bin/nvvm64_*.dll
+        <CUDA_HOME>/nvvm/libdevice/libdevice.*.bc
+        <CUDA_HOME>/bin/cudart64_*.dll  (plus ptxas.exe and zlibwapi.dll)
 
-    if os.path.isdir(_nvvm_bin):
-        os.environ['CUDA_HOME'] = _bundle
-        os.environ['CUDA_PATH'] = _bundle
+    When that lookup fails Numba falls back to the bare name "nvvm.dll", which a
+    frozen build cannot resolve, and the first kernel launch dies with
+    NvvmSupportError. Python 3.8 and later ignore PATH when loading DLLs, so the
+    directories must also be registered with os.add_dll_directory.
 
-    # Python 3.8+ ignores PATH when resolving DLLs, so the directories have to be
-    # registered explicitly. PATH is still set for child processes (ptxas.exe).
-    for _d in (_cuda_bin, _nvvm_bin):
-        if os.path.isdir(_d):
-            os.environ['PATH'] = _d + os.pathsep + os.environ.get('PATH', '')
-            if os.name == 'nt' and hasattr(os, 'add_dll_directory'):
-                try:
-                    _DLL_DIR_COOKIES.append(os.add_dll_directory(_d))
-                except OSError:
-                    pass
-# ==============================================================================
+    Returns:
+        The directory handles returned by os.add_dll_directory. They are kept
+        alive for the lifetime of the process; dropping them un-registers the
+        directories.
+    """
+    handles = []
+    if not (getattr(sys, "frozen", False) and hasattr(sys, "_MEIPASS")):
+        return handles
 
-# REQUIRED for thread-safe GUI rendering. Prevents Matplotlib from opening detached windows.
-import matplotlib
-matplotlib.use('Agg')
-import matplotlib.pyplot as plt
+    bundle_dir = sys._MEIPASS
+    cuda_bin = os.path.join(bundle_dir, "bin")
+    nvvm_bin = os.path.join(bundle_dir, "nvvm", "bin")
 
-import matplotlib.colors as mcolors
-import matplotlib.patches as patches
-from scipy.ndimage import gaussian_filter
-from numba import cuda, njit
+    if os.path.isdir(nvvm_bin):
+        os.environ["CUDA_HOME"] = bundle_dir
+        os.environ["CUDA_PATH"] = bundle_dir
+
+    for directory in (cuda_bin, nvvm_bin):
+        if not os.path.isdir(directory):
+            continue
+        # PATH still matters for child processes such as ptxas.exe.
+        os.environ["PATH"] = directory + os.pathsep + os.environ.get("PATH", "")
+        if os.name == "nt" and hasattr(os, "add_dll_directory"):
+            try:
+                handles.append(os.add_dll_directory(directory))
+            except OSError:
+                pass
+    return handles
+
+
+# Must run before Numba is imported: Numba caches its toolkit path lookup the
+# first time it is asked for it.
+_CUDA_DLL_DIRECTORIES = _bootstrap_bundled_cuda()
+
+# Agg keeps Matplotlib off the GUI thread and stops it opening detached windows.
+import matplotlib  # noqa: E402  (import order is deliberate, see above)
+
+matplotlib.use("Agg")
+
+import matplotlib.patches as patches  # noqa: E402
+import matplotlib.pyplot as plt  # noqa: E402
+from numba import cuda, njit  # noqa: E402
+from scipy.ndimage import gaussian_filter  # noqa: E402
+
+
+def _read_json(path: str) -> dict:
+    """Reads and parses a UTF-8 JSON file."""
+    with open(path, "r", encoding="utf-8") as handle:
+        return json.load(handle)
+
+
+def _write_json(path: str, data: dict) -> None:
+    """Writes a dict to disk as indented UTF-8 JSON."""
+    with open(path, "w", encoding="utf-8") as handle:
+        json.dump(data, handle, indent=4)
+
 
 # ==============================================================================
 # 1. CONFIGURATION & DATA MANAGEMENT
 # ==============================================================================
 
-class SimulationConfig:
-    """Encapsulates all simulation constraints, thresholds, and camera settings via external JSON."""
 
-    # Internal map to govern how variables are structured when saving to JSON
+class SimulationConfig:
+    """Simulation constraints, thresholds and camera settings, backed by JSON.
+
+    Settings are grouped into categories on disk so the file stays readable, but
+    are exposed as flat attributes (``config.sim_grid_res``) because the math
+    engine reads them inside tight loops. _CATEGORIES maps between the two
+    layouts; any setting missing from it is kept at the root of the file.
+
+    Attributes:
+        filepath: Writable JSON file holding the live settings.
+        default_filepath: Read-only template shipped with the application.
+    """
+
     _CATEGORIES = {
         "Output & Rendering": [
             "generate_all_plots", "show_human_silhouette", "plot_wall_shot",
             "plot_intensity_x", "plot_intensity_y", "plot_intensity_45",
-            "batch_output_directory", "export_csv", "export_plots"
+            "batch_output_directory", "export_csv", "export_plots",
         ],
         "Simulation Space & Constraints": [
             "use_gpu", "max_multiple_reflections", "use_reflector_opening",
-            "target_distance_m", "canvas_fov_deg", "plot_fov_deg"
+            "target_distance_m", "canvas_fov_deg", "plot_fov_deg",
         ],
         "Camera Settings": [
             "use_auto_exposure", "auto_exposure_compensation_ev",
-            "cam_iso", "cam_f_stop", "cam_shutter_speed_s"
+            "cam_iso", "cam_f_stop", "cam_shutter_speed_s",
         ],
         "Resolution & Angular Density": [
             "sim_grid_res", "sim_emitter_elements", "sim_theta_step_deg",
             "sim_phi_step_deg", "sim_theta_min_deg", "sim_theta_max_deg",
-            "sim_phi_min_deg", "sim_phi_max_deg", "lumen_calc_step_deg"
+            "sim_phi_min_deg", "sim_phi_max_deg", "lumen_calc_step_deg",
         ],
         "Material Defaults & Thresholds": [
             "default_reflectivity_smooth", "default_reflectivity_op",
@@ -119,72 +221,100 @@ class SimulationConfig:
             "spill_visible_threshold_lux", "corona_visible_threshold",
             "hotspot_fwhm_threshold", "default_gasket_thickness_mm",
             "default_gasket_total_height_mm", "default_gasket_opening_mm",
-            "default_reflector_wall_thickness_mm", "default_reflector_base_thickness_mm",
-            "default_focus_offset_mm"
-        ]
+            "default_reflector_wall_thickness_mm",
+            "default_reflector_base_thickness_mm", "default_focus_offset_mm",
+        ],
     }
 
-    def __init__(self, filepath=None, default_filepath=None):
-        # Live settings are writable and sit beside the exe; the template is a
-        # read-only asset inside the bundle.
+    def __init__(self, filepath: str = None, default_filepath: str = None):
+        """Loads settings, seeding the user's file from the template if needed.
+
+        Args:
+            filepath: Override for the writable settings file.
+            default_filepath: Override for the read-only template.
+        """
         self.filepath = filepath or user_data_path("simulation_settings.json")
         self.default_filepath = default_filepath or resource_path("default_settings.json")
         self.load_settings()
 
-    def load_settings(self):
+    @staticmethod
+    def _flatten(data: dict):
+        """Yields (key, value) pairs from a category-nested settings dict.
+
+        Args:
+            data: Settings as stored on disk.
+
+        Yields:
+            One (key, value) pair per setting. Scalars stored at the root of
+            the file, such as the active hardware selection, are passed through
+            unchanged.
+        """
+        for key, value in data.items():
+            if isinstance(value, dict):
+                yield from value.items()
+            else:
+                yield key, value
+
+    def load_settings(self) -> None:
+        """Reads the settings file, falling back to the shipped template.
+
+        Raises:
+            FileNotFoundError: If neither the settings file nor the template
+                can be found.
+        """
         if os.path.exists(self.filepath):
-            with open(self.filepath, 'r') as f:
-                data = json.load(f)
+            data = _read_json(self.filepath)
         elif os.path.exists(self.default_filepath):
-            with open(self.default_filepath, 'r') as f:
-                data = json.load(f)
-            with open(self.filepath, 'w') as f:
-                json.dump(data, f, indent=4)
+            data = _read_json(self.default_filepath)
         else:
             raise FileNotFoundError(
                 f"CRITICAL: Missing both '{self.filepath}' and '{self.default_filepath}'."
             )
 
-        # Un-nest the categorized JSON to keep the variables flat in memory for the math engine
-        for key, value in data.items():
-            if isinstance(value, dict):
-                for sub_key, sub_val in value.items():
-                    setattr(self, sub_key, sub_val)
-            else:
-                setattr(self, key, value)  # Fallback for old flat JSON files
+        for key, value in self._flatten(data):
+            setattr(self, key, value)
 
-        # Ensure backward compatibility keys exist
-        if not hasattr(self, 'export_csv'): self.export_csv = True
-        if not hasattr(self, 'export_plots'): self.export_plots = True
-        if not hasattr(self, 'use_gpu'): self.use_gpu = True
-
+        # Write straight back so a first run materialises the user's own copy.
         self.save_settings()
 
-    def save_settings(self):
-        # Gather all flat attributes
-        flat_data = {k: v for k, v in self.__dict__.items() if not k.startswith('_') and k not in ('filepath', 'default_filepath')}
-        nested_data = {}
+    def save_settings(self) -> None:
+        """Writes the flat attributes back to disk in the category layout."""
+        pending = {
+            key: value for key, value in self.__dict__.items()
+            if not key.startswith("_") and key not in ("filepath", "default_filepath")
+        }
 
-        # Re-nest the variables into their logical categories before saving
+        nested = {}
         for category, keys in self._CATEGORIES.items():
-            nested_data[category] = {}
-            for key in keys:
-                if key in flat_data:
-                    nested_data[category][key] = flat_data.pop(key)
+            nested[category] = {key: pending.pop(key) for key in keys if key in pending}
+        nested.update(pending)  # Anything unmapped stays at the root of the file.
 
-        # Catch any rogue variables that aren't mapped and leave them at the root
-        for key, value in flat_data.items():
-            nested_data[key] = value
+        _write_json(self.filepath, nested)
 
-        with open(self.filepath, 'w') as f:
-            json.dump(nested_data, f, indent=4)
+    def reset_to_defaults(self) -> None:
+        """Restores every tunable from the shipped template, in memory only.
+
+        The active hardware selection is left untouched, and nothing is written
+        to disk until save_settings is called.
+
+        Raises:
+            FileNotFoundError: If the template is missing.
+        """
+        if not os.path.exists(self.default_filepath):
+            raise FileNotFoundError(f"Could not find '{self.default_filepath}'.")
+
+        for key, value in self._flatten(_read_json(self.default_filepath)):
+            if key not in _SELECTION_KEYS:
+                setattr(self, key, value)
 
     @property
     def wall_radius_m(self) -> float:
+        """Half-width of the simulated wall, from the canvas field of view."""
         return self.target_distance_m * math.tan(math.radians(self.canvas_fov_deg / 2.0))
 
     @property
     def plot_radius_m(self) -> float:
+        """Half-width of the visible plot area, from the plot field of view."""
         return self.target_distance_m * math.tan(math.radians(self.plot_fov_deg / 2.0))
 
     @property
@@ -192,205 +322,389 @@ class SimulationConfig:
         """batch_output_directory anchored to the app folder, never the CWD.
 
         A frozen app launched from a shortcut inherits an arbitrary working
-        directory, so a relative path here would scatter exports unpredictably.
+        directory, so a relative path would otherwise scatter exports.
         """
         out_dir = self.batch_output_directory
         return out_dir if os.path.isabs(out_dir) else user_data_path(out_dir)
+
 
 # ==============================================================================
 # 2. HARDWARE LIBRARIES
 # ==============================================================================
 
+
 class HardwareLibrary:
-    def __init__(self, filepath=None):
-        # Editable copy beside the exe, seeded once from the bundled master.
+    """The catalogue of emitters, reflectors and gaskets, backed by JSON.
+
+    Every method takes a ``kind`` from HARDWARE_KINDS, since the three
+    catalogues behave identically and differ only in which specs they hold.
+
+    Attributes:
+        filepath: Writable JSON file holding the catalogue.
+        default_filepath: Read-only catalogue shipped with the application.
+    """
+
+    def __init__(self, filepath: str = None):
+        """Loads the catalogue, seeding it from the shipped copy if needed.
+
+        Args:
+            filepath: Override for the writable catalogue file.
+        """
         self.filepath = filepath or user_data_path("hardware_library.json")
         self.default_filepath = resource_path("hardware_library.json")
-        self._emitters = {}
-        self._reflectors = {}
-        self._gaskets = {}
+        self._catalogues: Dict[str, dict] = {kind: {} for kind in HARDWARE_KINDS}
         self.load_database()
 
-    def load_database(self):
-        # First run of a frozen build: copy the read-only master out of the bundle.
+    def _catalogue(self, kind: str) -> dict:
+        """Returns the live dict for one hardware kind.
+
+        Args:
+            kind: One of HARDWARE_KINDS.
+
+        Returns:
+            The name -> specs mapping for that kind.
+
+        Raises:
+            ValueError: If kind is not a known hardware kind.
+        """
+        try:
+            return self._catalogues[kind]
+        except KeyError:
+            raise ValueError(
+                f"Unknown hardware kind '{kind}'; expected one of {HARDWARE_KINDS}."
+            ) from None
+
+    def load_database(self) -> None:
+        """Reads the catalogue from disk.
+
+        On the first run of a frozen build the read-only copy inside the bundle
+        is used to seed the writable copy beside the executable.
+
+        Raises:
+            FileNotFoundError: If no catalogue can be found.
+        """
         if (not os.path.exists(self.filepath)
                 and os.path.exists(self.default_filepath)
                 and os.path.abspath(self.filepath) != os.path.abspath(self.default_filepath)):
             shutil.copy2(self.default_filepath, self.filepath)
 
-        if os.path.exists(self.filepath):
-            with open(self.filepath, 'r') as f:
-                data = json.load(f)
-                self._emitters = data.get("emitters", {})
-                self._reflectors = data.get("reflectors", {})
-                self._gaskets = data.get("gaskets", {})
-        else:
+        if not os.path.exists(self.filepath):
             raise FileNotFoundError(f"Could not find {self.filepath}.")
 
-    def save_database(self):
-        data = {"emitters": self._emitters, "reflectors": self._reflectors, "gaskets": self._gaskets}
-        with open(self.filepath, 'w') as f:
-            json.dump(data, f, indent=4)
+        data = _read_json(self.filepath)
+        for kind in HARDWARE_KINDS:
+            self._catalogues[kind] = data.get(_JSON_SECTION_BY_KIND[kind], {})
 
-    # --- Emitter Management ---
-    def get_emitter(self, name: str) -> dict: return self._emitters[name]
+    def save_database(self) -> None:
+        """Writes all three catalogues back to disk."""
+        _write_json(self.filepath, {
+            _JSON_SECTION_BY_KIND[kind]: self._catalogues[kind] for kind in HARDWARE_KINDS
+        })
 
-    def list_emitters(self) -> list:
-        return sorted(list(self._emitters.keys()), key=str.casefold)
+    def names(self, kind: str) -> List[str]:
+        """Returns the names of every entry of one kind, case-insensitively sorted."""
+        return sorted(self._catalogue(kind).keys(), key=str.casefold)
 
-    def add_or_update_emitter(self, name: str, specs: dict):
-        self._emitters[name] = specs
+    def get(self, kind: str, name: str) -> dict:
+        """Returns the live specs dict for one entry.
+
+        The dict is not copied, so callers that mutate it change the in-memory
+        catalogue. Use save() to persist, or apply_overrides() to change the
+        specs for a single run.
+
+        Args:
+            kind: One of HARDWARE_KINDS.
+            name: Name of the entry.
+
+        Returns:
+            The specs mapping for that entry.
+
+        Raises:
+            KeyError: If no entry of that kind has that name.
+        """
+        return self._catalogue(kind)[name]
+
+    def save(self, kind: str, name: str, specs: dict) -> None:
+        """Adds or replaces one entry and writes the catalogue to disk."""
+        self._catalogue(kind)[name] = specs
         self.save_database()
 
-    def remove_emitter(self, name: str):
-        if name in self._emitters:
-            del self._emitters[name]
+    def delete(self, kind: str, name: str) -> None:
+        """Removes one entry, if present, and writes the catalogue to disk."""
+        catalogue = self._catalogue(kind)
+        if name in catalogue:
+            del catalogue[name]
             self.save_database()
 
-    # --- Reflector Management ---
-    def get_reflector(self, name: str) -> dict: return self._reflectors[name]
+    def apply_overrides(self, kind: str, name: str, specs: dict) -> None:
+        """Merges edited specs into one entry without writing to disk.
 
-    def list_reflectors(self) -> list:
-        return sorted(list(self._reflectors.keys()), key=str.casefold)
+        This is how the GUI lets an operator tweak a value for a single run
+        without permanently editing the catalogue.
 
-    def add_or_update_reflector(self, name: str, specs: dict):
-        self._reflectors[name] = specs
-        self.save_database()
+        Args:
+            kind: One of HARDWARE_KINDS.
+            name: Name of the entry to patch.
+            specs: Specs to merge over the stored ones.
+        """
+        self._catalogue(kind)[name].update(specs)
 
-    def remove_reflector(self, name: str):
-        if name in self._reflectors:
-            del self._reflectors[name]
-            self.save_database()
-
-    # --- Gasket Management ---
-    def get_gasket(self, name: str) -> dict: return self._gaskets[name]
-
-    def list_gaskets(self) -> list:
-        return sorted(list(self._gaskets.keys()), key=str.casefold)
-
-    def add_or_update_gasket(self, name: str, specs: dict):
-        self._gaskets[name] = specs
-        self.save_database()
-
-    def remove_gasket(self, name: str):
-        if name in self._gaskets:
-            del self._gaskets[name]
-            self.save_database()
 
 # ==============================================================================
 # 3. HELPERS & HARDWARE INTERPOLATION
 # ==============================================================================
 
-def get_standard_emitter_intensity_vec(theta_rad):
-    abs_angle = np.abs(np.degrees(theta_rad))
+
+def lambertian_intensity(theta_rad: np.ndarray) -> np.ndarray:
+    """Relative intensity of a Lambertian emitter at the given polar angles.
+
+    Args:
+        theta_rad: Polar angles measured from the optical axis, in radians.
+
+    Returns:
+        cos(theta) for angles within the forward hemisphere, 0 outside it.
+    """
     intensity = np.cos(theta_rad)
-    intensity[abs_angle > 90.0] = 0.0
+    intensity[np.abs(np.degrees(theta_rad)) > 90.0] = 0.0
     return intensity
 
-def calculate_lumens(emitter, current_amps):
+
+def calculate_lumens(emitter: dict, current_amps: float) -> float:
+    """Estimates total luminous flux for an emitter at a drive current.
+
+    Forward voltage is modelled logarithmically and efficacy decays
+    exponentially with current (droop).
+
+    Args:
+        emitter: Emitter specs.
+        current_amps: Drive current in amps.
+
+    Returns:
+        Total output in lumens.
+    """
     voltage = emitter["vf_turn_on_v"] + (emitter["vf_scale"] * np.log(current_amps + 1.0))
     power_watts = current_amps * voltage
-    efficiency = emitter["base_efficacy_lm_w"] * np.exp(-emitter["droop_factor"] * current_amps)
-    return power_watts * efficiency
+    efficacy = emitter["base_efficacy_lm_w"] * np.exp(-emitter["droop_factor"] * current_amps)
+    return power_watts * efficacy
 
-def get_sim_geometry(reflector, emitter, gasket, finish, config: SimulationConfig):
-    D = reflector["diameter_mm"] - reflector.get("thickness_diameter_mm", config.default_reflector_wall_thickness_mm)
-    H_total = reflector["height_mm"]
-    R = D / 2.0
 
-    d_hole_input = reflector.get("opening_diameter_mm", 0.0)
+def get_sim_geometry(reflector: dict, emitter: dict, gasket: dict, finish: str,
+                     config: SimulationConfig) -> dict:
+    """Derives the ray-tracing geometry from a hardware combination.
+
+    Everything is expressed in millimetres in a coordinate system whose origin
+    sits at the focus of the parabola, with +z pointing out of the flashlight.
+
+    Args:
+        reflector: Reflector specs.
+        emitter: Emitter specs.
+        gasket: Gasket specs.
+        finish: Either "smooth" or "orange_peel"; selects which reflectivity of
+            the reflector applies.
+        config: Active configuration, used for any spec the hardware omits.
+
+    Returns:
+        A dict of scalars consumed by the tracing kernels, plus three values
+        used for reporting: effective_d_hole, focus_delta and op_multiplier.
+    """
+    # Inner diameter of the reflector, i.e. the reflective surface itself.
+    inner_diameter = reflector["diameter_mm"] - reflector.get(
+        "thickness_diameter_mm", config.default_reflector_wall_thickness_mm)
+    radius_max = inner_diameter / 2.0
+    total_height = reflector["height_mm"]
+
+    bore_diameter = reflector.get("opening_diameter_mm", 0.0)
     focus_offset_mm = reflector.get("focus_offset_mm", config.default_focus_offset_mm)
-    thickness_height_mm = reflector.get("thickness_height_mm", config.default_reflector_base_thickness_mm)
+    base_thickness_mm = reflector.get(
+        "thickness_height_mm", config.default_reflector_base_thickness_mm)
 
-    gasket_thickness_mm = gasket.get("gasket_thickness_mm", config.default_gasket_thickness_mm)
-    gasket_total_height_mm = gasket.get("gasket_total_height_mm", config.default_gasket_total_height_mm)
-    gasket_opening_mm = gasket.get("gasket_opening_mm", config.default_gasket_opening_mm)
+    gasket_thickness_mm = gasket.get(
+        "gasket_thickness_mm", config.default_gasket_thickness_mm)
+    gasket_total_height_mm = gasket.get(
+        "gasket_total_height_mm", config.default_gasket_total_height_mm)
+    gasket_opening_mm = gasket.get(
+        "gasket_opening_mm", config.default_gasket_opening_mm)
 
-    footprint_diag = math.sqrt(emitter["footprint_x_mm"]**2 + emitter["footprint_y_mm"]**2)
-    effective_d_hole = d_hole_input if config.use_reflector_opening else max(d_hole_input, footprint_diag)
+    # Unless the operator forces the catalogue value, the bore has to be at
+    # least as wide as the diagonal of the emitter's footprint.
+    footprint_diagonal = math.sqrt(
+        emitter["footprint_x_mm"] ** 2 + emitter["footprint_y_mm"] ** 2)
+    effective_d_hole = (bore_diameter if config.use_reflector_opening
+                        else max(bore_diameter, footprint_diagonal))
     r_hole = effective_d_hole / 2.0
 
-    H_eff = H_total - focus_offset_mm
-    focal_length = (-H_eff + math.sqrt(H_eff**2 + R**2)) / 2.0
+    # Focal length of the parabola that is `total_height` deep and `radius_max`
+    # wide, shifted by the operator's focus offset.
+    effective_height = total_height - focus_offset_mm
+    focal_length = (-effective_height
+                    + math.sqrt(effective_height ** 2 + radius_max ** 2)) / 2.0
 
+    # Vertical cuts: the reflector floor, the top of the bore and the mouth.
     z_bottom = focal_length - focus_offset_mm
-    z_min_cut = z_bottom + thickness_height_mm
-    z_max_cut = z_bottom + H_total
+    z_min_cut = z_bottom + base_thickness_mm
+    z_max_cut = z_bottom + total_height
+    z_intersect = (r_hole ** 2) / (4.0 * focal_length)
+    z_hole_top = float(max(z_intersect, z_min_cut))
 
-    h_gasket_ext = max(0.0, gasket_total_height_mm - gasket_thickness_mm)
-    z_gasket_top = z_bottom + h_gasket_ext
+    # The gasket only protrudes above the floor by the part that is not
+    # compressed under the emitter board.
+    z_gasket_top = z_bottom + max(0.0, gasket_total_height_mm - gasket_thickness_mm)
 
     if gasket_opening_mm > 0.0:
+        # Round aperture: a single radius describes it.
         r_gasket = gasket_opening_mm / 2.0
         gasket_x_half, gasket_y_half = 0.0, 0.0
         is_cylindrical_gasket = 1
     else:
+        # Rectangular aperture: it hugs the emitter footprint.
         r_gasket = 0.0
         gasket_x_half = emitter["footprint_x_mm"] / 2.0
         gasket_y_half = emitter["footprint_y_mm"] / 2.0
         is_cylindrical_gasket = 0
 
-    z_intersect = (r_hole**2) / (4.0 * focal_length)
-    z_hole_top = float(max(z_intersect, z_min_cut))
+    # Height of the light emitting surface once the gasket is compressed.
     ez_base = z_bottom + (emitter["height_mm"] - gasket_thickness_mm)
 
+    # dome_size_mm of -1 means "as wide as the narrowest footprint edge".
     dome_input = emitter.get("dome_size_mm", 0.0)
-    dome_diameter = min(emitter["footprint_x_mm"], emitter["footprint_y_mm"]) if dome_input == -1 else max(0.0, dome_input)
+    dome_diameter = (min(emitter["footprint_x_mm"], emitter["footprint_y_mm"])
+                     if dome_input == -1 else max(0.0, dome_input))
 
-    refl_para = reflector.get("reflectivity_op", config.default_reflectivity_op) if finish == "orange_peel" else reflector.get("reflectivity_smooth", config.default_reflectivity_smooth)
-
-    physical_emitter_height = emitter["height_mm"] - gasket_thickness_mm
-    actual_ez = z_bottom + physical_emitter_height
+    reflectivity_parabola = (
+        reflector.get("reflectivity_op", config.default_reflectivity_op)
+        if finish == "orange_peel"
+        else reflector.get("reflectivity_smooth", config.default_reflectivity_smooth))
 
     return {
-        "focal_length": focal_length, "z_bottom": z_bottom, "z_min_cut": z_min_cut,
-        "z_hole_top": z_hole_top, "z_max_cut": z_max_cut, "radius_max": R, "r_hole": r_hole,
-        "z_gasket_top": z_gasket_top, "r_gasket": r_gasket, "gasket_x_half": gasket_x_half,
-        "gasket_y_half": gasket_y_half, "is_cylindrical_gasket": is_cylindrical_gasket,
-        "ez_base": ez_base, "dome_radius": dome_diameter / 2.0, "refractive_index": emitter.get("refractive_index", 1.0),
-        "refl_para": refl_para, "refl_cyl": reflector.get("reflectivity_cylinder", config.default_reflectivity_cylinder),
+        "focal_length": focal_length,
+        "z_bottom": z_bottom,
+        "z_min_cut": z_min_cut,
+        "z_hole_top": z_hole_top,
+        "z_max_cut": z_max_cut,
+        "radius_max": radius_max,
+        "r_hole": r_hole,
+        "z_gasket_top": z_gasket_top,
+        "r_gasket": r_gasket,
+        "gasket_x_half": gasket_x_half,
+        "gasket_y_half": gasket_y_half,
+        "is_cylindrical_gasket": is_cylindrical_gasket,
+        "ez_base": ez_base,
+        "dome_radius": dome_diameter / 2.0,
+        "refractive_index": emitter.get("refractive_index", 1.0),
+        "refl_para": reflectivity_parabola,
+        "refl_cyl": reflector.get(
+            "reflectivity_cylinder", config.default_reflectivity_cylinder),
         "refl_gask": reflector.get("gasket_reflectivity", 0.0),
-        "effective_d_hole": effective_d_hole, "focus_delta": actual_ez - focal_length,
-        "op_multiplier": reflector.get("OP_Factor", 1.0)
+        # Reported, not traced:
+        "effective_d_hole": effective_d_hole,
+        "focus_delta": ez_base - focal_length,
+        "op_multiplier": reflector.get("OP_Factor", 1.0),
     }
+
 
 # ==============================================================================
 # 4. MATH & FINITE ELEMENT ANALYSIS (FEA) ENGINE
 # ==============================================================================
 
+
 @njit
 def solve_quadratic(a, b, c):
-    if a < 1e-8: return 1e9, 1e9
-    disc = b**2 - 4.0 * a * c
-    if disc < 0.0: return 1e9, 1e9
-    sqrt_disc = math.sqrt(disc)
-    return (-b - sqrt_disc) / (2.0 * a), (-b + sqrt_disc) / (2.0 * a)
+    """Solves a*t^2 + b*t + c = 0 for ray/surface intersections.
+
+    Args:
+        a, b, c: Quadratic coefficients.
+
+    Returns:
+        The two roots, smallest first, or (_NO_ROOT, _NO_ROOT) when the ray runs
+        parallel to the surface or misses it entirely.
+    """
+    if a < 1e-8:
+        return _NO_ROOT, _NO_ROOT
+
+    discriminant = b ** 2 - 4.0 * a * c
+    if discriminant < 0.0:
+        return _NO_ROOT, _NO_ROOT
+
+    root = math.sqrt(discriminant)
+    return (-b - root) / (2.0 * a), (-b + root) / (2.0 * a)
+
 
 @njit
 def apply_dome_refraction(ex, ey, ez, vx, vy, vz, dome_radius, refractive_index):
-    P_sq = ex**2 + ey**2
-    c = P_sq - dome_radius**2
-    b = 2.0 * (ex * vx + ey * vy)
+    """Refracts a ray as it leaves the emitter's silicone dome.
 
-    discriminant = b**2 - 4.0 * c
-    if discriminant >= 0.0:
-        t = (-b + math.sqrt(discriminant)) / 2.0
-        if t > 0.0:
-            hx, hy, hz = ex + t * vx, ey + t * vy, t * vz
-            nx, ny, nz = hx / dome_radius, hy / dome_radius, hz / dome_radius
+    The dome is a hemisphere of radius dome_radius resting on the emitter
+    surface and centred on the middle of the die, so the plane the die elements
+    sit on is the hemisphere's flat base and ez is the height of its centre. A
+    ray leaves a die element inside the silicone, meets the curved surface from
+    within, and is bent in three dimensions by the vector form of Snell's law
+    about the surface normal at the exit point.
 
-            c1 = vx * nx + vy * ny + vz * nz
-            r = refractive_index
-            tir_check = 1.0 - r**2 * (1.0 - c1**2)
+    Args:
+        ex, ey, ez: Ray origin in millimetres. ez is the emitter surface, which
+            is also the height of the hemisphere's centre.
+        vx, vy, vz: Direction of the ray; expected to be a unit vector.
+        dome_radius: Hemisphere radius in millimetres.
+        refractive_index: Dome index divided by the index of air.
 
-            if tir_check >= 0.0:
-                c2 = math.sqrt(tir_check)
-                vx, vy, vz = r * vx - (r * c1 - c2) * nx, r * vy - (r * c1 - c2) * ny, r * vz - (r * c1 - c2) * nz
+    Returns:
+        (blocked, x, y, z, vx, vy, vz): the exit point on the dome and the
+        refracted direction. A ray that never meets the silicone is returned
+        unchanged and unblocked; a ray trapped by total internal reflection is
+        returned with blocked=True, and the caller drops it.
+    """
+    # Ray origin relative to the centre of the dome, which sits at (0, 0, ez).
+    # The die plane passes through that centre, so the local height is zero.
+    origin_x, origin_y, origin_z = ex, ey, 0.0
 
-                mag = math.sqrt(vx**2 + vy**2 + vz**2)
-                return False, hx, hy, ez + hz, vx / mag, vy / mag, vz / mag
+    # Intersect the ray with the sphere the hemisphere is part of.
+    _, t_exit = solve_quadratic(
+        vx ** 2 + vy ** 2 + vz ** 2,
+        2.0 * (origin_x * vx + origin_y * vy + origin_z * vz),
+        origin_x ** 2 + origin_y ** 2 + origin_z ** 2 - dome_radius ** 2)
 
-    return True, ex, ey, ez, vx, vy, vz
+    # A ray starting inside the silicone always leaves through the far root. No
+    # root, or only roots behind the origin, means the element sits outside the
+    # dome footprint and the ray never enters the silicone at all.
+    if t_exit >= _NO_ROOT or t_exit <= 0.0:
+        return False, ex, ey, ez, vx, vy, vz
+
+    hit_x = origin_x + t_exit * vx
+    hit_y = origin_y + t_exit * vy
+    hit_z = origin_z + t_exit * vz
+
+    # Below the flat base the ray is leaving through the die rather than the
+    # curved surface, so nothing is refracted; the reflector floor absorbs it.
+    if hit_z < 0.0:
+        return False, ex, ey, ez, vx, vy, vz
+
+    # Outward normal of a sphere is the radius through the hit point.
+    nx = hit_x / dome_radius
+    ny = hit_y / dome_radius
+    nz = hit_z / dome_radius
+
+    cos_in = vx * nx + vy * ny + vz * nz
+    ratio = refractive_index
+    cos_out_sq = 1.0 - ratio ** 2 * (1.0 - cos_in ** 2)
+
+    if cos_out_sq < 0.0:
+        # Past the critical angle: the ray is totally internally reflected and
+        # is treated as lost inside the package.
+        return True, ex, ey, ez, vx, vy, vz
+
+    # Snell's law in vector form: the refracted ray keeps the tangential part of
+    # the incoming direction, scaled by the index ratio, and is re-tilted along
+    # the normal by the difference in the two cosines.
+    cos_out = math.sqrt(cos_out_sq)
+    bend = ratio * cos_in - cos_out
+    vx = ratio * vx - bend * nx
+    vy = ratio * vy - bend * ny
+    vz = ratio * vz - bend * nz
+
+    magnitude = math.sqrt(vx ** 2 + vy ** 2 + vz ** 2)
+    return (False, hit_x, hit_y, ez + hit_z,
+            vx / magnitude, vy / magnitude, vz / magnitude)
+
 
 @njit
 def process_single_ray(ex, ey, ez_base, vx, vy, vz, flux,
@@ -398,221 +712,392 @@ def process_single_ray(ex, ey, ez_base, vx, vy, vz, flux,
                        radius_max, r_hole, target_z_mm, grid_res, wall_radius_m,
                        reflectivity_parabola, reflectivity_cylinder, reflectivity_gasket,
                        dome_radius, refractive_index, max_multiple_reflections,
-                       z_gasket_top, r_gasket, gasket_x_half, gasket_y_half, is_cylindrical_gasket):
+                       z_gasket_top, r_gasket, gasket_x_half, gasket_y_half,
+                       is_cylindrical_gasket):
+    """Traces one ray from the die until it lands on the wall or is absorbed.
+
+    Each pass through the loop finds the nearest surface along the ray, then
+    either reflects off it (losing flux to its reflectivity), stops there, or,
+    when nothing is hit, lets the ray escape towards the wall.
+
+    Args:
+        ex, ey, ez_base: Ray origin in millimetres.
+        vx, vy, vz: Unit direction of the ray.
+        flux: Luminous flux carried by the ray, in lumens.
+        focal_length: Focal length of the parabola.
+        z_bottom, z_min_cut, z_hole_top, z_max_cut: Vertical cuts of the
+            reflector: floor, top of the base, top of the bore, and mouth.
+        radius_max: Radius of the reflector mouth.
+        r_hole: Radius of the centre bore.
+        target_z_mm: Distance to the wall in millimetres.
+        grid_res: Width of the square accumulation grid in pixels.
+        wall_radius_m: Half-width of the simulated wall in metres.
+        reflectivity_parabola, reflectivity_cylinder, reflectivity_gasket:
+            Surviving fraction of flux per bounce off each surface.
+        dome_radius: Dome radius, or 0 for a dedomed emitter.
+        refractive_index: Dome refractive index.
+        max_multiple_reflections: Extra bounces allowed beyond the first.
+        z_gasket_top: Height of the exposed part of the gasket.
+        r_gasket: Aperture radius for a round gasket.
+        gasket_x_half, gasket_y_half: Half extents for a rectangular gasket.
+        is_cylindrical_gasket: 1 for a round aperture, 0 for a rectangular one.
+
+    Returns:
+        (flux, row, col, bounces) for a ray that reaches the wall, otherwise
+        (0.0, -1, -1, -1).
+    """
     blocked = False
     if dome_radius > 0.0:
-        blocked, ex, ey, ez_base, vx, vy, vz = apply_dome_refraction(ex, ey, ez_base, vx, vy, vz, dome_radius, refractive_index)
+        # A domed emitter fires into silicone, so the ray is refracted at the
+        # dome surface before it sees any of the reflector.
+        blocked, ex, ey, ez_base, vx, vy, vz = apply_dome_refraction(
+            ex, ey, ez_base, vx, vy, vz, dome_radius, refractive_index)
 
-    current_ex, current_ey, current_ez = ex, ey, ez_base
-    current_vx, current_vy, current_vz = vx, vy, vz
-    current_flux = flux
+    # Running ray state: position, direction and remaining flux.
+    px, py, pz = ex, ey, ez_base
+    dx, dy, dz = vx, vy, vz
+    remaining_flux = flux
 
-    bounce_count = 0
+    bounces = 0
     bin_size = (2.0 * wall_radius_m) / grid_res
 
     while not blocked:
-        hit_type, t_hit = 0, 1e9
+        hit_type, t_hit = _HIT_NONE, _NO_ROOT
 
-        a_cyl = current_vx**2 + current_vy**2
-        b_cyl = 2.0 * (current_ex * current_vx + current_ey * current_vy)
-        c_cyl = current_ex**2 + current_ey**2 - r_hole**2
-        t_c1, t_c2 = solve_quadratic(a_cyl, b_cyl, c_cyl)
+        # --- Centre bore wall (a cylinder of radius r_hole) ---
+        t_first, t_second = solve_quadratic(
+            dx ** 2 + dy ** 2,
+            2.0 * (px * dx + py * dy),
+            px ** 2 + py ** 2 - r_hole ** 2)
+        for t_bore in (t_first, t_second):
+            if 1e-4 < t_bore < t_hit and z_bottom <= (pz + t_bore * dz) <= z_hole_top:
+                t_hit, hit_type = t_bore, _HIT_CYLINDER
 
-        for t_c in (t_c1, t_c2):
-            if 1e-4 < t_c < t_hit and z_bottom <= (current_ez + t_c * current_vz) <= z_hole_top:
-                t_hit, hit_type = t_c, 2
+        # --- Downward facing planes ---
+        if dz < 0.0:
+            # Flat annulus around the bore, only present when the bore does not
+            # reach the parabola before the base thickness does.
+            if z_hole_top == z_min_cut and pz > z_min_cut:
+                t_plane = (z_min_cut - pz) / dz
+                if (1e-4 < t_plane < t_hit
+                        and (px + t_plane * dx) ** 2 + (py + t_plane * dy) ** 2 > r_hole ** 2):
+                    t_hit, hit_type = t_plane, _HIT_ABSORBED
 
-        if current_vz < 0.0:
-            if z_hole_top == z_min_cut and current_ez > z_min_cut:
-                t_plane = (z_min_cut - current_ez) / current_vz
-                if 1e-4 < t_plane < t_hit and (current_ex + t_plane * current_vx)**2 + (current_ey + t_plane * current_vy)**2 > r_hole**2:
-                    t_hit, hit_type = t_plane, 3
-
-            if z_gasket_top > z_bottom and current_ez > z_gasket_top:
-                t_plane = (z_gasket_top - current_ez) / current_vz
+            # Top face of the gasket, i.e. everything outside its aperture.
+            if z_gasket_top > z_bottom and pz > z_gasket_top:
+                t_plane = (z_gasket_top - pz) / dz
                 if 1e-4 < t_plane < t_hit:
-                    rx, ry = current_ex + t_plane * current_vx, current_ey + t_plane * current_vy
-                    if (is_cylindrical_gasket == 1 and rx**2 + ry**2 >= r_gasket**2) or \
-                       (is_cylindrical_gasket == 0 and (abs(rx) >= gasket_x_half or abs(ry) >= gasket_y_half)):
-                        t_hit, hit_type = t_plane, 4
+                    hit_x, hit_y = px + t_plane * dx, py + t_plane * dy
+                    if ((is_cylindrical_gasket == 1
+                         and hit_x ** 2 + hit_y ** 2 >= r_gasket ** 2)
+                            or (is_cylindrical_gasket == 0
+                                and (abs(hit_x) >= gasket_x_half
+                                     or abs(hit_y) >= gasket_y_half))):
+                        t_hit, hit_type = t_plane, _HIT_GASKET
 
-            if current_ez > z_bottom:
-                t_plane = (z_bottom - current_ez) / current_vz
+            # The reflector floor absorbs anything that gets this far.
+            if pz > z_bottom:
+                t_plane = (z_bottom - pz) / dz
                 if 1e-4 < t_plane < t_hit:
-                    t_hit, hit_type = t_plane, 3
+                    t_hit, hit_type = t_plane, _HIT_ABSORBED
 
-        elif current_vz > 0.0 and current_ez < z_bottom:
-            t_plane = (z_bottom - current_ez) / current_vz
-            if 1e-4 < t_plane < t_hit and (current_ex + t_plane * current_vx)**2 + (current_ey + t_plane * current_vy)**2 > r_hole**2:
-                t_hit, hit_type = t_plane, 3
+        # --- Upward through the floor from inside the bore ---
+        elif dz > 0.0 and pz < z_bottom:
+            t_plane = (z_bottom - pz) / dz
+            if (1e-4 < t_plane < t_hit
+                    and (px + t_plane * dx) ** 2 + (py + t_plane * dy) ** 2 > r_hole ** 2):
+                t_hit, hit_type = t_plane, _HIT_ABSORBED
 
-        a_par = current_vx**2 + current_vy**2
-        b_par = 2.0 * (current_ex * current_vx + current_ey * current_vy) - 4.0 * focal_length * current_vz
-        c_par = current_ex**2 + current_ey**2 - 4.0 * focal_length * current_ez
-        t_p1, t_p2 = solve_quadratic(a_par, b_par, c_par)
+        # --- Parabolic reflector (x^2 + y^2 = 4*f*z) ---
+        t_first, t_second = solve_quadratic(
+            dx ** 2 + dy ** 2,
+            2.0 * (px * dx + py * dy) - 4.0 * focal_length * dz,
+            px ** 2 + py ** 2 - 4.0 * focal_length * pz)
+        for t_para in (t_first, t_second):
+            if 1e-4 < t_para < t_hit and z_hole_top <= (pz + t_para * dz) <= z_max_cut:
+                t_hit, hit_type = t_para, _HIT_PARABOLA
 
-        for t_p in (t_p1, t_p2):
-            if 1e-4 < t_p < t_hit and z_hole_top <= (current_ez + t_p * current_vz) <= z_max_cut:
-                t_hit, hit_type = t_p, 1
-
+        # --- Inner wall of the gasket aperture ---
         if z_gasket_top > z_bottom:
             if is_cylindrical_gasket == 1:
-                b_g = 2.0 * (current_ex * current_vx + current_ey * current_vy)
-                c_g = current_ex**2 + current_ey**2 - r_gasket**2
-                t_g1, t_g2 = solve_quadratic(current_vx**2 + current_vy**2, b_g, c_g)
-                if 1e-4 < t_g2 < t_hit and (current_ez + t_g2 * current_vz) <= z_gasket_top:
-                    t_hit, hit_type = t_g2, 4
+                _, t_far = solve_quadratic(
+                    dx ** 2 + dy ** 2,
+                    2.0 * (px * dx + py * dy),
+                    px ** 2 + py ** 2 - r_gasket ** 2)
+                if 1e-4 < t_far < t_hit and (pz + t_far * dz) <= z_gasket_top:
+                    t_hit, hit_type = t_far, _HIT_GASKET
             else:
-                if abs(current_vx) > 1e-8:
-                    t_x = (gasket_x_half * (1.0 if current_vx > 0.0 else -1.0) - current_ex) / current_vx
-                    if 1e-4 < t_x < t_hit and (current_ez + t_x * current_vz) <= z_gasket_top and -gasket_y_half <= (current_ey + t_x * current_vy) <= gasket_y_half:
-                        t_hit, hit_type = t_x, 4
-                if abs(current_vy) > 1e-8:
-                    t_y = (gasket_y_half * (1.0 if current_vy > 0.0 else -1.0) - current_ey) / current_vy
-                    if 1e-4 < t_y < t_hit and (current_ez + t_y * current_vz) <= z_gasket_top and -gasket_x_half <= (current_ex + t_y * current_vx) <= gasket_x_half:
-                        t_hit, hit_type = t_y, 4
+                # Rectangular aperture: test the two facing side walls.
+                if abs(dx) > 1e-8:
+                    t_x = (gasket_x_half * (1.0 if dx > 0.0 else -1.0) - px) / dx
+                    if (1e-4 < t_x < t_hit and (pz + t_x * dz) <= z_gasket_top
+                            and -gasket_y_half <= (py + t_x * dy) <= gasket_y_half):
+                        t_hit, hit_type = t_x, _HIT_GASKET
+                if abs(dy) > 1e-8:
+                    t_y = (gasket_y_half * (1.0 if dy > 0.0 else -1.0) - py) / dy
+                    if (1e-4 < t_y < t_hit and (pz + t_y * dz) <= z_gasket_top
+                            and -gasket_x_half <= (px + t_y * dx) <= gasket_x_half):
+                        t_hit, hit_type = t_y, _HIT_GASKET
 
-        if hit_type in (1, 2, 4):
-            if bounce_count >= max_multiple_reflections + 1:
+        # --- Resolve the nearest hit ---
+        if hit_type == _HIT_PARABOLA or hit_type == _HIT_CYLINDER or hit_type == _HIT_GASKET:
+            if bounces >= max_multiple_reflections + 1:
                 return 0.0, -1, -1, -1
-            bounce_count += 1
+            bounces += 1
 
-            rx, ry, rz = current_ex + t_hit * current_vx, current_ey + t_hit * current_vy, current_ez + t_hit * current_vz
+            hit_x, hit_y, hit_z = px + t_hit * dx, py + t_hit * dy, pz + t_hit * dz
 
-            if hit_type == 1:
-                nx, ny, nz = -rx, -ry, 2.0 * focal_length
-                current_refl = reflectivity_parabola
-            elif hit_type == 2:
-                nx, ny, nz = -rx, -ry, 0.0
-                current_refl = reflectivity_cylinder
-            elif hit_type == 4:
-                if abs(rz - z_gasket_top) < 1e-4 and current_vz < 0.0:
-                    nx, ny, nz = 0.0, 0.0, 1.0
+            if hit_type == _HIT_PARABOLA:
+                # Surface normal of x^2 + y^2 - 4*f*z = 0, pointing inwards.
+                nx, ny, nz = -hit_x, -hit_y, 2.0 * focal_length
+                reflectivity = reflectivity_parabola
+            elif hit_type == _HIT_CYLINDER:
+                nx, ny, nz = -hit_x, -hit_y, 0.0
+                reflectivity = reflectivity_cylinder
+            else:
+                if abs(hit_z - z_gasket_top) < 1e-4 and dz < 0.0:
+                    nx, ny, nz = 0.0, 0.0, 1.0  # Landed on the gasket's top face.
+                elif is_cylindrical_gasket == 1:
+                    nx, ny, nz = -hit_x, -hit_y, 0.0
+                elif abs(abs(hit_x) - gasket_x_half) < 1e-4:
+                    nx, ny, nz = (-1.0 if hit_x > 0.0 else 1.0), 0.0, 0.0
                 else:
-                    if is_cylindrical_gasket == 1:
-                        nx, ny, nz = -rx, -ry, 0.0
-                    else:
-                        if abs(abs(rx) - gasket_x_half) < 1e-4:
-                            nx, ny, nz = (-1.0 if rx > 0.0 else 1.0), 0.0, 0.0
-                        else:
-                            nx, ny, nz = 0.0, (-1.0 if ry > 0.0 else 1.0), 0.0
-                current_refl = reflectivity_gasket
+                    nx, ny, nz = 0.0, (-1.0 if hit_y > 0.0 else 1.0), 0.0
+                reflectivity = reflectivity_gasket
 
-            mag = math.sqrt(nx**2 + ny**2 + nz**2)
-            nx, ny, nz = nx / mag, ny / mag, nz / mag
+            magnitude = math.sqrt(nx ** 2 + ny ** 2 + nz ** 2)
+            nx, ny, nz = nx / magnitude, ny / magnitude, nz / magnitude
 
-            dot = current_vx * nx + current_vy * ny + current_vz * nz
-            current_vx, current_vy, current_vz = current_vx - 2.0 * dot * nx, current_vy - 2.0 * dot * ny, current_vz - 2.0 * dot * nz
-            current_ex, current_ey, current_ez = rx, ry, rz
-            current_flux *= current_refl
+            # Mirror the direction about the surface normal.
+            projection = dx * nx + dy * ny + dz * nz
+            dx = dx - 2.0 * projection * nx
+            dy = dy - 2.0 * projection * ny
+            dz = dz - 2.0 * projection * nz
+            px, py, pz = hit_x, hit_y, hit_z
+            remaining_flux *= reflectivity
 
-        elif hit_type == 3:
+        elif hit_type == _HIT_ABSORBED:
             return 0.0, -1, -1, -1
 
         else:
-            if current_vz > 0.0:
-                esc_x = current_ex + ((z_max_cut - current_ez) / current_vz) * current_vx
-                esc_y = current_ey + ((z_max_cut - current_ez) / current_vz) * current_vy
+            # Nothing left to hit: the ray either clears the mouth or is
+            # clipped by the reflector wall on its way out.
+            if dz > 0.0:
+                t_mouth = (z_max_cut - pz) / dz
+                exit_x = px + t_mouth * dx
+                exit_y = py + t_mouth * dy
 
-                if math.sqrt(esc_x**2 + esc_y**2) <= radius_max + 1e-4:
-                    s = (target_z_mm - current_ez) / current_vz
-                    col = int((((current_ex + s * current_vx) / 1000.0) + wall_radius_m) / bin_size)
-                    row = int((((current_ey + s * current_vy) / 1000.0) + wall_radius_m) / bin_size)
+                if math.sqrt(exit_x ** 2 + exit_y ** 2) <= radius_max + 1e-4:
+                    t_wall = (target_z_mm - pz) / dz
+                    col = int((((px + t_wall * dx) / 1000.0) + wall_radius_m) / bin_size)
+                    row = int((((py + t_wall * dy) / 1000.0) + wall_radius_m) / bin_size)
 
                     if 0 <= col < grid_res and 0 <= row < grid_res:
-                        return current_flux, row, col, bounce_count
+                        return remaining_flux, row, col, bounces
             return 0.0, -1, -1, -1
 
     return 0.0, -1, -1, -1
 
-@cuda.jit
-def ray_trace_kernel_gpu(args, start_idx, end_idx):
-    idx = cuda.grid(1) + start_idx
-    if idx >= end_idx: return
 
-    total_rays = args[2].shape[0]
-    element_idx, ray_idx = idx // total_rays, idx % total_rays
+@cuda.jit
+def ray_trace_kernel_gpu(start_idx, end_idx, element_x, element_y,
+                         ray_vx, ray_vy, ray_vz, ray_flux,
+                         focal_length, ez_base, z_bottom, z_min_cut, z_hole_top,
+                         z_max_cut, radius_max, r_hole, target_z_mm, grid_res,
+                         wall_radius_m, reflectivity_parabola, reflectivity_cylinder,
+                         reflectivity_gasket, dome_radius, refractive_index,
+                         max_multiple_reflections, z_gasket_top, r_gasket,
+                         gasket_x_half, gasket_y_half, is_cylindrical_gasket,
+                         hotspot_grid, spill_grid):
+    """Traces one (die element, ray direction) pair per CUDA thread.
+
+    The work is a flat range of indices so it can be dispatched in chunks; see
+    _build_kernel_args for the argument order and execute_tracers for the
+    chunking. Reflected and direct light are accumulated separately so the two
+    can be blurred independently later.
+
+    Args:
+        start_idx: First flat work index this launch is responsible for.
+        end_idx: One past the last work index.
+        element_x, element_y: Die element coordinates in millimetres.
+        ray_vx, ray_vy, ray_vz: Unit ray directions.
+        ray_flux: Flux carried by each direction, in lumens.
+        hotspot_grid: Accumulator for rays that bounced at least once.
+        spill_grid: Accumulator for rays that reached the wall directly.
+        Remaining args: see process_single_ray.
+    """
+    index = cuda.grid(1) + start_idx
+    if index >= end_idx:
+        return
+
+    rays_per_element = ray_vx.shape[0]
+    element_idx = index // rays_per_element
+    ray_idx = index % rays_per_element
 
     final_flux, row, col, bounces = process_single_ray(
-        args[0][element_idx], args[1][element_idx], args[7], args[2][ray_idx], args[3][ray_idx], args[4][ray_idx], args[5][ray_idx],
-        args[6], args[8], args[9], args[10], args[11], args[12], args[13], args[14], args[15], args[16],
-        args[17], args[18], args[19], args[20], args[21], args[22], args[23], args[24], args[25], args[26], args[27]
-    )
+        element_x[element_idx], element_y[element_idx], ez_base,
+        ray_vx[ray_idx], ray_vy[ray_idx], ray_vz[ray_idx], ray_flux[ray_idx],
+        focal_length, z_bottom, z_min_cut, z_hole_top, z_max_cut,
+        radius_max, r_hole, target_z_mm, grid_res, wall_radius_m,
+        reflectivity_parabola, reflectivity_cylinder, reflectivity_gasket,
+        dome_radius, refractive_index, max_multiple_reflections,
+        z_gasket_top, r_gasket, gasket_x_half, gasket_y_half, is_cylindrical_gasket)
 
     if row != -1 and col != -1:
-        cuda.atomic.add(args[28] if bounces > 0 else args[29], (row, col), final_flux)
+        cuda.atomic.add(hotspot_grid if bounces > 0 else spill_grid, (row, col), final_flux)
+
 
 @njit
-def ray_trace_kernel_cpu(args, start_idx, end_idx):
-    total_rays = args[2].shape[0]
-    for idx in range(start_idx, end_idx):
-        element_idx, ray_idx = idx // total_rays, idx % total_rays
+def ray_trace_kernel_cpu(start_idx, end_idx, element_x, element_y,
+                         ray_vx, ray_vy, ray_vz, ray_flux,
+                         focal_length, ez_base, z_bottom, z_min_cut, z_hole_top,
+                         z_max_cut, radius_max, r_hole, target_z_mm, grid_res,
+                         wall_radius_m, reflectivity_parabola, reflectivity_cylinder,
+                         reflectivity_gasket, dome_radius, refractive_index,
+                         max_multiple_reflections, z_gasket_top, r_gasket,
+                         gasket_x_half, gasket_y_half, is_cylindrical_gasket,
+                         hotspot_grid, spill_grid):
+    """CPU twin of ray_trace_kernel_gpu; walks the index range in a loop.
+
+    Args:
+        Identical to ray_trace_kernel_gpu.
+    """
+    rays_per_element = ray_vx.shape[0]
+    for index in range(start_idx, end_idx):
+        element_idx = index // rays_per_element
+        ray_idx = index % rays_per_element
+
         final_flux, row, col, bounces = process_single_ray(
-            args[0][element_idx], args[1][element_idx], args[7], args[2][ray_idx], args[3][ray_idx], args[4][ray_idx], args[5][ray_idx],
-            args[6], args[8], args[9], args[10], args[11], args[12], args[13], args[14], args[15], args[16],
-            args[17], args[18], args[19], args[20], args[21], args[22], args[23], args[24], args[25], args[26], args[27]
-        )
+            element_x[element_idx], element_y[element_idx], ez_base,
+            ray_vx[ray_idx], ray_vy[ray_idx], ray_vz[ray_idx], ray_flux[ray_idx],
+            focal_length, z_bottom, z_min_cut, z_hole_top, z_max_cut,
+            radius_max, r_hole, target_z_mm, grid_res, wall_radius_m,
+            reflectivity_parabola, reflectivity_cylinder, reflectivity_gasket,
+            dome_radius, refractive_index, max_multiple_reflections,
+            z_gasket_top, r_gasket, gasket_x_half, gasket_y_half, is_cylindrical_gasket)
 
         if row != -1 and col != -1:
-            if bounces > 0: args[28][row, col] += final_flux
-            else: args[29][row, col] += final_flux
-
-def execute_tracers(is_gpu, kernel, total_threads, args, log_callback=None, progress_callback=None, is_cancelled_callback=None):
-    cal_size = min(max(int(total_threads * 0.02), 250_000), total_threads - 1)
-
-    if log_callback: log_callback(f"[{'CUDA' if is_gpu else 'CPU'} FEA Engine] Compiling & Calibrating...")
-
-    t0 = time.time()
-
-    if is_gpu:
-        kernel[1, 1](args, 0, 1); cuda.synchronize()
-        blocks = (cal_size + 255) // 256
-        kernel[blocks, 256](args, 1, 1 + cal_size); cuda.synchronize()
-    else:
-        kernel(args, 0, 1)
-        kernel(args, 1, 1 + cal_size)
-
-    t1 = time.time()
-    cal_time = t1 - t0
-    rays_per_sec = cal_size / cal_time if cal_time > 0 else 1
-    rem = total_threads - (1 + cal_size)
-    predicted_time = rem / rays_per_sec if rays_per_sec > 0 else 0
-
-    if log_callback: log_callback(f"Done. ({rays_per_sec:,.0f} rays/sec) | Predicted completion: ~{predicted_time:.1f} s")
-
-    if rem > 0:
-        chunk_size = max(int(rays_per_sec * 0.5), 100_000)
-
-        for start_idx in range(1 + cal_size, total_threads, chunk_size):
-            if is_cancelled_callback and is_cancelled_callback():
-                return
-
-            end_idx = min(start_idx + chunk_size, total_threads)
-
-            if is_gpu:
-                blocks = ((end_idx - start_idx) + 255) // 256
-                kernel[blocks, 256](args, start_idx, end_idx)
-                cuda.synchronize()
+            if bounces > 0:
+                hotspot_grid[row, col] += final_flux
             else:
-                kernel(args, start_idx, end_idx)
-
-            if progress_callback:
-                progress_percent = (end_idx / total_threads) * 100.0
-                progress_callback(progress_percent)
+                spill_grid[row, col] += final_flux
 
 
-_CUDA_STATUS = None
+def _build_kernel_args(element_x, element_y, ray_vx, ray_vy, ray_vz, ray_flux,
+                       geom: dict, config: SimulationConfig, target_z_mm: float,
+                       hotspot_grid, spill_grid) -> tuple:
+    """Packs every kernel argument into one tuple, in the kernels' parameter order.
 
-def probe_cuda_toolchain():
-    """Verify the ENTIRE GPU toolchain, not just that a device exists.
+    Both kernels are launched as ``kernel(start, end, *args)``, so this is the
+    single place where the order is defined. The explicit float()/int() casts
+    keep Numba from recompiling the kernel when a JSON setting happens to load
+    as an int rather than a float.
 
-    cuda.get_current_device() only touches nvcuda.dll, which ships with the
-    display driver and is always present. It says nothing about whether libNVVM
-    and libdevice are loadable, so a frozen build with a broken CUDA bundle used
-    to pass detection and then explode inside kernel compilation. Compiling and
-    running a throwaway kernel is the only check that exercises every piece.
+    Args:
+        element_x, element_y: Die element coordinates, C-contiguous float64.
+        ray_vx, ray_vy, ray_vz: Unit ray directions, C-contiguous float64.
+        ray_flux: Flux per ray direction, C-contiguous float64.
+        geom: Output of get_sim_geometry.
+        config: Active configuration.
+        target_z_mm: Distance to the wall in millimetres.
+        hotspot_grid, spill_grid: Accumulators, on the host or the device.
 
-    Returns (ok: bool, error_message: str). Cached for the process lifetime.
+    Returns:
+        The argument tuple to splat into a kernel launch.
+    """
+    return (
+        element_x, element_y, ray_vx, ray_vy, ray_vz, ray_flux,
+        float(geom["focal_length"]), float(geom["ez_base"]), float(geom["z_bottom"]),
+        float(geom["z_min_cut"]), float(geom["z_hole_top"]), float(geom["z_max_cut"]),
+        float(geom["radius_max"]), float(geom["r_hole"]), float(target_z_mm),
+        int(config.sim_grid_res), float(config.wall_radius_m),
+        float(geom["refl_para"]), float(geom["refl_cyl"]), float(geom["refl_gask"]),
+        float(geom["dome_radius"]), float(geom["refractive_index"]),
+        int(config.max_multiple_reflections),
+        float(geom["z_gasket_top"]), float(geom["r_gasket"]),
+        float(geom["gasket_x_half"]), float(geom["gasket_y_half"]),
+        int(geom["is_cylindrical_gasket"]),
+        hotspot_grid, spill_grid,
+    )
+
+
+def execute_tracers(is_gpu: bool, kernel, total_threads: int, args: tuple,
+                    log_callback: LogCallback = None,
+                    progress_callback: ProgressCallback = None,
+                    is_cancelled_callback: CancelCallback = None) -> None:
+    """Runs a tracing kernel over the whole workload in cancellable chunks.
+
+    A small calibration slice is traced first. It absorbs the JIT compile and
+    measures the throughput, which is then used to size the remaining chunks so
+    each one takes roughly half a second, keeping progress reporting smooth and
+    cancellation responsive.
+
+    Args:
+        is_gpu: True to launch as a CUDA kernel, False to call it directly.
+        kernel: ray_trace_kernel_gpu or ray_trace_kernel_cpu.
+        total_threads: Total number of (element, ray) pairs to trace.
+        args: Argument tuple from _build_kernel_args.
+        log_callback: Receives progress text.
+        progress_callback: Receives completion percentage.
+        is_cancelled_callback: Polled between chunks; returns True to stop.
+    """
+    def launch(start_idx, end_idx):
+        """Runs one slice of the workload."""
+        if is_gpu:
+            blocks = ((end_idx - start_idx) + _THREADS_PER_BLOCK - 1) // _THREADS_PER_BLOCK
+            kernel[blocks, _THREADS_PER_BLOCK](start_idx, end_idx, *args)
+            cuda.synchronize()
+        else:
+            kernel(start_idx, end_idx, *args)
+
+    calibration_size = min(max(int(total_threads * 0.02), 250_000), total_threads - 1)
+
+    if log_callback:
+        log_callback(f"[{'CUDA' if is_gpu else 'CPU'} FEA Engine] Compiling & Calibrating...")
+
+    started_at = time.time()
+    launch(0, 1)                                  # One ray on its own: JIT compile.
+    launch(1, 1 + calibration_size)               # Timed sample.
+    elapsed = time.time() - started_at
+
+    rays_per_sec = calibration_size / elapsed if elapsed > 0 else 1
+    remaining = total_threads - (1 + calibration_size)
+    predicted_time = remaining / rays_per_sec if rays_per_sec > 0 else 0
+
+    if log_callback:
+        log_callback(f"Done. ({rays_per_sec:,.0f} rays/sec) | "
+                     f"Predicted completion: ~{predicted_time:.1f} s")
+
+    if remaining <= 0:
+        return
+
+    chunk_size = max(int(rays_per_sec * 0.5), 100_000)
+    for start_idx in range(1 + calibration_size, total_threads, chunk_size):
+        if is_cancelled_callback and is_cancelled_callback():
+            return
+
+        end_idx = min(start_idx + chunk_size, total_threads)
+        launch(start_idx, end_idx)
+
+        if progress_callback:
+            progress_callback((end_idx / total_threads) * 100.0)
+
+
+_CUDA_STATUS: Optional[Tuple[bool, str]] = None
+
+
+def probe_cuda_toolchain() -> Tuple[bool, str]:
+    """Checks that the whole GPU toolchain works, not just that a device exists.
+
+    cuda.get_current_device() only touches the driver, which ships with the
+    display driver and is always present, so it says nothing about whether
+    libNVVM and libdevice can be loaded. Compiling and running a throwaway
+    kernel is the only check that exercises every piece, which matters most in a
+    frozen build where the CUDA toolkit is bundled by hand.
+
+    Returns:
+        (True, "") when the GPU is usable, otherwise (False, reason). The result
+        is cached for the lifetime of the process.
     """
     global _CUDA_STATUS
     if _CUDA_STATUS is not None:
@@ -623,336 +1108,740 @@ def probe_cuda_toolchain():
             raise RuntimeError("No CUDA-capable device is visible to the driver.")
 
         @cuda.jit
-        def _probe_kernel(arr):
-            i = cuda.grid(1)
-            if i < arr.size:
-                arr[i] += 1.0
+        def _probe_kernel(values):
+            index = cuda.grid(1)
+            if index < values.size:
+                values[index] += 1.0
 
-        d_probe = cuda.to_device(np.zeros(1, dtype=np.float64))
-        _probe_kernel[1, 1](d_probe)
+        device_values = cuda.to_device(np.zeros(1, dtype=np.float64))
+        _probe_kernel[1, 1](device_values)
         cuda.synchronize()
 
-        if d_probe.copy_to_host()[0] != 1.0:
+        if device_values.copy_to_host()[0] != 1.0:
             raise RuntimeError("Probe kernel returned an incorrect result.")
 
         _CUDA_STATUS = (True, "")
-    except Exception as err:
-        _CUDA_STATUS = (False, f"{type(err).__name__}: {err}")
+    except Exception as error:  # Any failure here simply means "use the CPU".
+        _CUDA_STATUS = (False, f"{type(error).__name__}: {error}")
 
     return _CUDA_STATUS
 
 
-def run_pure_fea_sim_vectorized(geom, emitter, current_amps, finish, config: SimulationConfig, log_callback=None, progress_callback=None, is_cancelled_callback=None):
+class WallIllumination(NamedTuple):
+    """Illuminance maps produced by a single trace, in lux."""
+
+    total_lux: np.ndarray
+    hotspot_lux: np.ndarray
+    spill_lux: np.ndarray
+    total_lumens: float
+
+
+def _build_emitter_elements(emitter: dict, elements_per_side: int):
+    """Subdivides the light emitting surface into point sources.
+
+    Args:
+        emitter: Emitter specs.
+        elements_per_side: Grid resolution across the die.
+
+    Returns:
+        (x, y) coordinate arrays in millimetres. Round dies are masked out of
+        the square grid, so the arrays are shorter than elements_per_side^2.
+    """
+    die_length = emitter["die_length_mm"]
+    die_width = die_length if emitter.get("shape") == "round" else emitter["die_width_mm"]
+
+    grid_x, grid_y = np.meshgrid(
+        np.linspace(-die_length / 2, die_length / 2, elements_per_side),
+        np.linspace(-die_width / 2, die_width / 2, elements_per_side))
+
+    if emitter.get("shape") == "round":
+        inside = (grid_x ** 2 + grid_y ** 2) <= (die_length / 2.0) ** 2
+        return grid_x[inside], grid_y[inside]
+    return grid_x.flatten(), grid_y.flatten()
+
+
+def _build_ray_directions(config: SimulationConfig):
+    """Builds the fan of ray directions and the solid angle each one carries.
+
+    Args:
+        config: Active configuration, for the angular ranges and step sizes.
+
+    Returns:
+        (vx, vy, vz, intensity, solid_angle): the unit direction of each ray,
+        its relative Lambertian intensity, and the solid angle it represents.
+    """
+    theta, phi = np.meshgrid(
+        np.radians(np.arange(config.sim_theta_min_deg,
+                             config.sim_theta_max_deg, config.sim_theta_step_deg)),
+        np.radians(np.arange(config.sim_phi_min_deg,
+                             config.sim_phi_max_deg, config.sim_phi_step_deg)))
+    theta, phi = theta.flatten(), phi.flatten()
+
+    solid_angle = (np.sin(theta)
+                   * np.radians(config.sim_theta_step_deg)
+                   * np.radians(config.sim_phi_step_deg))
+
+    return (np.sin(theta) * np.cos(phi),
+            np.sin(theta) * np.sin(phi),
+            np.cos(theta),
+            lambertian_intensity(theta),
+            solid_angle)
+
+
+def simulate_wall_illuminance(geom: dict, emitter: dict, current_amps: float, finish: str,
+                              config: SimulationConfig,
+                              log_callback: LogCallback = None,
+                              progress_callback: ProgressCallback = None,
+                              is_cancelled_callback: CancelCallback = None
+                              ) -> Optional[WallIllumination]:
+    """Traces the full ray budget and returns the illuminance on the wall.
+
+    Every die element fires every ray direction, so the workload is
+    ``elements * directions``. Reflected light is accumulated apart from direct
+    light so an orange peel finish can be blurred without smearing the spill.
+
+    Args:
+        geom: Output of get_sim_geometry.
+        emitter: Emitter specs.
+        current_amps: Drive current in amps.
+        finish: "smooth" or "orange_peel".
+        config: Active configuration.
+        log_callback: Receives progress text.
+        progress_callback: Receives completion percentage.
+        is_cancelled_callback: Polled between chunks; returns True to stop.
+
+    Returns:
+        A WallIllumination, or None if the run was cancelled.
+    """
     total_lumens = calculate_lumens(emitter, current_amps)
 
-    theta_int = np.radians(np.arange(0, 90, config.lumen_calc_step_deg))
-    N_integral = np.sum(get_standard_emitter_intensity_vec(theta_int) * np.sin(theta_int) * np.radians(config.lumen_calc_step_deg))
-    I_peak_base = total_lumens / (2 * np.pi * N_integral)
+    # Normalise the Lambertian profile so it integrates to the emitter's output.
+    theta_samples = np.radians(np.arange(0, 90, config.lumen_calc_step_deg))
+    hemisphere_integral = np.sum(lambertian_intensity(theta_samples)
+                                 * np.sin(theta_samples)
+                                 * np.radians(config.lumen_calc_step_deg))
+    peak_intensity = total_lumens / (2 * np.pi * hemisphere_integral)
 
-    pixel_area_m2 = (2.0 * config.wall_radius_m / config.sim_grid_res) ** 2
+    element_x, element_y = _build_emitter_elements(emitter, config.sim_emitter_elements)
+    element_count = len(element_x)
 
-    die_len = emitter["die_length_mm"]
-    die_wid = die_len if emitter.get("shape") == "round" else emitter["die_width_mm"]
+    ray_vx, ray_vy, ray_vz, ray_intensity, solid_angle = _build_ray_directions(config)
+    ray_flux = (peak_intensity * ray_intensity * solid_angle) / element_count
 
-    EX, EY = np.meshgrid(np.linspace(-die_len/2, die_len/2, config.sim_emitter_elements),
-                         np.linspace(-die_wid/2, die_wid/2, config.sim_emitter_elements))
-    if emitter.get("shape") == "round":
-        mask = (EX**2 + EY**2) <= (die_len / 2.0)**2
-        ex_flat, ey_flat = EX[mask], EY[mask]
-    else:
-        ex_flat, ey_flat = EX.flatten(), EY.flatten()
-
-    actual_elements = len(ex_flat)
-
-    THETA, PHI = np.meshgrid(np.radians(np.arange(config.sim_theta_min_deg, config.sim_theta_max_deg, config.sim_theta_step_deg)),
-                             np.radians(np.arange(config.sim_phi_min_deg, config.sim_phi_max_deg, config.sim_phi_step_deg)))
-    THETA_flat, PHI_flat = THETA.flatten(), PHI.flatten()
-
-    solid_angle = np.sin(THETA_flat) * np.radians(config.sim_theta_step_deg) * np.radians(config.sim_phi_step_deg)
-    ray_flux = np.ascontiguousarray((I_peak_base * get_standard_emitter_intensity_vec(THETA_flat) * solid_angle) / actual_elements, dtype=np.float64)
-    vx, vy, vz = np.sin(THETA_flat) * np.cos(PHI_flat), np.sin(THETA_flat) * np.sin(PHI_flat), np.cos(THETA_flat)
+    # One contiguous float64 copy of each array, shared by both back ends.
+    element_x = np.ascontiguousarray(element_x, dtype=np.float64)
+    element_y = np.ascontiguousarray(element_y, dtype=np.float64)
+    ray_vx = np.ascontiguousarray(ray_vx, dtype=np.float64)
+    ray_vy = np.ascontiguousarray(ray_vy, dtype=np.float64)
+    ray_vz = np.ascontiguousarray(ray_vz, dtype=np.float64)
+    ray_flux = np.ascontiguousarray(ray_flux, dtype=np.float64)
 
     target_z_mm = config.target_distance_m * 1000.0
-    total_threads = actual_elements * len(vx)
+    total_threads = element_count * len(ray_vx)
 
-    has_gpu = False
+    use_gpu = False
     if config.use_gpu:
-        has_gpu, gpu_error = probe_cuda_toolchain()
-        if not has_gpu and log_callback:
-            log_callback(f"[!] GPU toggled ON, but the CUDA toolchain is unusable:\n-> {gpu_error}\nFalling back to CPU.")
+        use_gpu, gpu_error = probe_cuda_toolchain()
+        if not use_gpu and log_callback:
+            log_callback(f"[!] GPU toggled ON, but the CUDA toolchain is unusable:\n"
+                         f"-> {gpu_error}\nFalling back to CPU.")
 
-    hotspot_grid = np.zeros((config.sim_grid_res, config.sim_grid_res), dtype=np.float64)
-    spill_grid = np.zeros((config.sim_grid_res, config.sim_grid_res), dtype=np.float64)
+    grid_shape = (config.sim_grid_res, config.sim_grid_res)
+    hotspot_grid = np.zeros(grid_shape, dtype=np.float64)
+    spill_grid = np.zeros(grid_shape, dtype=np.float64)
 
-    if has_gpu:
+    if use_gpu:
         try:
-            if log_callback: log_callback(f"[CUDA FEA Engine] GPU enabled. Dispatching {total_threads:,} ray-element pairs ({actual_elements:,} elements x {len(vx):,} rays)...")
-            d_ex, d_ey = cuda.to_device(np.ascontiguousarray(ex_flat, dtype=np.float64)), cuda.to_device(np.ascontiguousarray(ey_flat, dtype=np.float64))
-            d_vx, d_vy, d_vz = cuda.to_device(np.ascontiguousarray(vx, dtype=np.float64)), cuda.to_device(np.ascontiguousarray(vy, dtype=np.float64)), cuda.to_device(np.ascontiguousarray(vz, dtype=np.float64))
-            d_flux = cuda.to_device(ray_flux)
-            d_hotspot, d_spill = cuda.to_device(hotspot_grid), cuda.to_device(spill_grid)
+            if log_callback:
+                log_callback(f"[CUDA FEA Engine] GPU enabled. Dispatching "
+                             f"{total_threads:,} ray-element pairs "
+                             f"({element_count:,} elements x {len(ray_vx):,} rays)...")
 
-            args = (d_ex, d_ey, d_vx, d_vy, d_vz, d_flux, float(geom['focal_length']), float(geom['ez_base']), float(geom['z_bottom']),
-                    float(geom['z_min_cut']), float(geom['z_hole_top']), float(geom['z_max_cut']), float(geom['radius_max']), float(geom['r_hole']),
-                    float(target_z_mm), int(config.sim_grid_res), float(config.wall_radius_m), float(geom['refl_para']), float(geom['refl_cyl']), float(geom['refl_gask']),
-                    float(geom['dome_radius']), float(geom['refractive_index']), int(config.max_multiple_reflections), float(geom['z_gasket_top']), float(geom['r_gasket']),
-                    float(geom['gasket_x_half']), float(geom['gasket_y_half']), int(geom['is_cylindrical_gasket']), d_hotspot, d_spill)
+            device_hotspot = cuda.to_device(hotspot_grid)
+            device_spill = cuda.to_device(spill_grid)
+            args = _build_kernel_args(
+                cuda.to_device(element_x), cuda.to_device(element_y),
+                cuda.to_device(ray_vx), cuda.to_device(ray_vy), cuda.to_device(ray_vz),
+                cuda.to_device(ray_flux),
+                geom, config, target_z_mm, device_hotspot, device_spill)
 
-            execute_tracers(True, ray_trace_kernel_gpu, total_threads, args, log_callback, progress_callback, is_cancelled_callback)
-            if is_cancelled_callback and is_cancelled_callback(): return None, None, None, None
-            hotspot_grid, spill_grid = d_hotspot.copy_to_host(), d_spill.copy_to_host()
+            execute_tracers(True, ray_trace_kernel_gpu, total_threads, args,
+                            log_callback, progress_callback, is_cancelled_callback)
+            if is_cancelled_callback and is_cancelled_callback():
+                return None
+
+            hotspot_grid = device_hotspot.copy_to_host()
+            spill_grid = device_spill.copy_to_host()
 
         except Exception as gpu_error:
-            # Anything that survives the probe (VRAM exhaustion, driver reset,
-            # kernel launch failure) must not kill the run.
+            # Anything that survives the probe (VRAM exhaustion, a driver reset,
+            # a failed launch) costs time, not the whole job.
             if log_callback:
-                log_callback(f"[!] GPU execution failed, restarting the job on CPU:\n-> {type(gpu_error).__name__}: {gpu_error}")
-            has_gpu = False
-            hotspot_grid = np.zeros((config.sim_grid_res, config.sim_grid_res), dtype=np.float64)
-            spill_grid = np.zeros((config.sim_grid_res, config.sim_grid_res), dtype=np.float64)
-            if progress_callback: progress_callback(0.0)
+                log_callback(f"[!] GPU execution failed, restarting the job on CPU:\n"
+                             f"-> {type(gpu_error).__name__}: {gpu_error}")
+            use_gpu = False
+            hotspot_grid = np.zeros(grid_shape, dtype=np.float64)
+            spill_grid = np.zeros(grid_shape, dtype=np.float64)
+            if progress_callback:
+                progress_callback(0.0)
 
-    if not has_gpu:
-        if log_callback: log_callback(f"[CPU FEA Engine] Processing {total_threads:,} ray-element pairs on logical cores...")
-        args = (np.ascontiguousarray(ex_flat, dtype=np.float64), np.ascontiguousarray(ey_flat, dtype=np.float64),
-                np.ascontiguousarray(vx, dtype=np.float64), np.ascontiguousarray(vy, dtype=np.float64), np.ascontiguousarray(vz, dtype=np.float64), ray_flux,
-                float(geom['focal_length']), float(geom['ez_base']), float(geom['z_bottom']), float(geom['z_min_cut']), float(geom['z_hole_top']),
-                float(geom['z_max_cut']), float(geom['radius_max']), float(geom['r_hole']), float(target_z_mm), int(config.sim_grid_res), float(config.wall_radius_m),
-                float(geom['refl_para']), float(geom['refl_cyl']), float(geom['refl_gask']), float(geom['dome_radius']), float(geom['refractive_index']),
-                int(config.max_multiple_reflections), float(geom['z_gasket_top']), float(geom['r_gasket']), float(geom['gasket_x_half']), float(geom['gasket_y_half']),
-                int(geom['is_cylindrical_gasket']), hotspot_grid, spill_grid)
+    if not use_gpu:
+        if log_callback:
+            log_callback(f"[CPU FEA Engine] Processing {total_threads:,} "
+                         f"ray-element pairs on logical cores...")
 
-        execute_tracers(False, ray_trace_kernel_cpu, total_threads, args, log_callback, progress_callback, is_cancelled_callback)
-        if is_cancelled_callback and is_cancelled_callback(): return None, None, None, None
+        args = _build_kernel_args(element_x, element_y, ray_vx, ray_vy, ray_vz, ray_flux,
+                                  geom, config, target_z_mm, hotspot_grid, spill_grid)
 
-    if log_callback: log_callback("Applying spatial blur and generating final lux arrays...")
-    scaled_blur = (config.default_op_blur_strength * geom["op_multiplier"] * (config.sim_grid_res / 1000.0)) if finish == "orange_peel" else 0.0
-    processed_hotspot = gaussian_filter(hotspot_grid, sigma=scaled_blur) if scaled_blur > 0 else hotspot_grid
+        execute_tracers(False, ray_trace_kernel_cpu, total_threads, args,
+                        log_callback, progress_callback, is_cancelled_callback)
+        if is_cancelled_callback and is_cancelled_callback():
+            return None
 
-    processed_hotspot_lux, spill_lux = processed_hotspot / pixel_area_m2, spill_grid / pixel_area_m2
-    return processed_hotspot_lux + spill_lux, processed_hotspot_lux, spill_lux, total_lumens
+    if log_callback:
+        log_callback("Applying spatial blur and generating final lux arrays...")
+
+    # An orange peel finish scatters the reflected light; the blur radius scales
+    # with the grid so the result is resolution independent.
+    blur_sigma = 0.0
+    if finish == "orange_peel":
+        blur_sigma = (config.default_op_blur_strength * geom["op_multiplier"]
+                      * (config.sim_grid_res / 1000.0))
+    if blur_sigma > 0:
+        hotspot_grid = gaussian_filter(hotspot_grid, sigma=blur_sigma)
+
+    # Flux per pixel becomes illuminance once divided by the pixel's area.
+    pixel_area_m2 = (2.0 * config.wall_radius_m / config.sim_grid_res) ** 2
+    hotspot_lux = hotspot_grid / pixel_area_m2
+    spill_lux = spill_grid / pixel_area_m2
+
+    return WallIllumination(hotspot_lux + spill_lux, hotspot_lux, spill_lux, total_lumens)
+
 
 # ==============================================================================
 # 5. PLOTTING & EXPORT MANAGER
 # ==============================================================================
 
-def apply_camera_exposure_and_tonemap(wall_lux, config: SimulationConfig):
+
+class BeamMetrics(NamedTuple):
+    """Angular size and physical size of each region of the beam."""
+
+    spill_angle_deg: float
+    spill_diameter_m: float
+    corona_angle_deg: float
+    corona_diameter_m: float
+    hotspot_angle_deg: float
+    hotspot_diameter_m: float
+    candela_per_lumen: float
+
+
+def apply_camera_exposure_and_tonemap(wall_lux: np.ndarray,
+                                      config: SimulationConfig) -> np.ndarray:
+    """Converts an illuminance map into a displayable 0-1 image.
+
+    Auto exposure pins the 99.5th percentile to mid grey; manual exposure uses
+    the ISO/aperture/shutter triangle. The result is tone mapped with the ACES
+    filmic curve and gamma corrected, so a bright hotspot rolls off instead of
+    clipping flat.
+
+    Args:
+        wall_lux: Illuminance on the wall, in lux.
+        config: Active configuration, for the camera settings.
+
+    Returns:
+        Display values in the range 0-1, same shape as wall_lux.
+    """
     if config.use_auto_exposure:
-        auto_target = np.percentile(wall_lux, 99.5) or 1.0
-        exposed_lux = wall_lux * (1.0 / auto_target) * (2 ** config.auto_exposure_compensation_ev)
+        reference_lux = np.percentile(wall_lux, 99.5) or 1.0
+        exposed = wall_lux * (1.0 / reference_lux) * (2 ** config.auto_exposure_compensation_ev)
     else:
-        lux_for_exposure = (250.0 * (2 ** np.log2((config.cam_f_stop**2) / config.cam_shutter_speed_s))) / config.cam_iso
-        exposed_lux = (wall_lux / lux_for_exposure) * 0.18
+        exposure_value = 2 ** np.log2((config.cam_f_stop ** 2) / config.cam_shutter_speed_s)
+        saturation_lux = (250.0 * exposure_value) / config.cam_iso
+        exposed = (wall_lux / saturation_lux) * 0.18
 
-    mapped = (exposed_lux * (2.51 * exposed_lux + 0.03)) / (exposed_lux * (2.43 * exposed_lux + 0.59) + 0.14)
-    return np.power(np.clip(mapped, 0.0, 1.0), 1.0 / 2.2)
+    tone_mapped = ((exposed * (2.51 * exposed + 0.03))
+                   / (exposed * (2.43 * exposed + 0.59) + 0.14))
+    return np.power(np.clip(tone_mapped, 0.0, 1.0), 1.0 / 2.2)
 
-def get_beam_metrics(wall_lux, hotspot_lux, spill_lux, max_cd, total_flux, config: SimulationConfig):
+
+def get_beam_metrics(wall_lux: np.ndarray, hotspot_lux: np.ndarray, spill_lux: np.ndarray,
+                     max_cd: float, total_flux: float,
+                     config: SimulationConfig) -> BeamMetrics:
+    """Measures the spill, corona and hotspot of a simulated beam.
+
+    Each region is sized by the furthest pixel from the centre that passes its
+    threshold, which is then converted to an angle at the target distance.
+
+    Args:
+        wall_lux: Combined illuminance map.
+        hotspot_lux: Reflected component only.
+        spill_lux: Direct component only.
+        max_cd: Peak intensity in candela.
+        total_flux: Total emitter output in lumens.
+        config: Active configuration, for the thresholds and distance.
+
+    Returns:
+        The measured BeamMetrics.
+    """
     pixel_size_m = (2.0 * config.wall_radius_m) / config.sim_grid_res
-    center_idx = (config.sim_grid_res - 1) / 2.0
+    centre_idx = (config.sim_grid_res - 1) / 2.0
 
-    def get_max_radius(mask):
-        if not np.any(mask): return 0.0
-        y_idx, x_idx = np.nonzero(mask)
-        return np.max(np.sqrt((x_idx - center_idx)**2 + (y_idx - center_idx)**2)) * pixel_size_m
+    def max_radius(mask: np.ndarray) -> float:
+        """Distance in metres from the centre to the furthest lit pixel."""
+        if not np.any(mask):
+            return 0.0
+        rows, cols = np.nonzero(mask)
+        return np.max(np.sqrt((cols - centre_idx) ** 2
+                              + (rows - centre_idx) ** 2)) * pixel_size_m
 
-    spill_rad = get_max_radius(spill_lux > config.spill_visible_threshold_lux)
-    corona_rad = get_max_radius(hotspot_lux > (np.max(hotspot_lux) * config.corona_visible_threshold))
-    hotspot_rad = get_max_radius(wall_lux >= (np.max(wall_lux) * config.hotspot_fwhm_threshold))
+    def full_angle_deg(radius_m: float) -> float:
+        """Full cone angle subtended by a radius at the target distance."""
+        return 2 * np.degrees(np.arctan(radius_m / config.target_distance_m))
 
-    return (
-        2 * np.degrees(np.arctan(spill_rad / config.target_distance_m)), 2 * spill_rad,
-        2 * np.degrees(np.arctan(corona_rad / config.target_distance_m)), 2 * corona_rad,
-        2 * np.degrees(np.arctan(hotspot_rad / config.target_distance_m)), 2 * hotspot_rad,
-        max_cd / total_flux
+    spill_radius = max_radius(spill_lux > config.spill_visible_threshold_lux)
+    corona_radius = max_radius(
+        hotspot_lux > (np.max(hotspot_lux) * config.corona_visible_threshold))
+    hotspot_radius = max_radius(
+        wall_lux >= (np.max(wall_lux) * config.hotspot_fwhm_threshold))
+
+    return BeamMetrics(
+        spill_angle_deg=full_angle_deg(spill_radius),
+        spill_diameter_m=2 * spill_radius,
+        corona_angle_deg=full_angle_deg(corona_radius),
+        corona_diameter_m=2 * corona_radius,
+        hotspot_angle_deg=full_angle_deg(hotspot_radius),
+        hotspot_diameter_m=2 * hotspot_radius,
+        candela_per_lumen=max_cd / total_flux,
     )
 
-def draw_human_silhouette(ax, person_x, person_y_bottom, person_height_m):
-    h_rad, t_w, t_h, l_w, l_h, a_w, a_h = (person_height_m * v for v in (0.08, 0.25, 0.35, 0.08, 0.45, 0.06, 0.40))
-    opts = dict(ec='#FFFF00', fc='none', alpha=0.4, lw=1.0, ls='--')
 
-    ax.add_patch(patches.Circle((person_x, person_y_bottom + l_h + t_h + h_rad), h_rad, **opts))
-    ax.add_patch(patches.Rectangle((person_x - t_w/2, person_y_bottom + l_h), t_w, t_h, **opts))
-    ax.add_patch(patches.Rectangle((person_x - t_w/2, person_y_bottom), l_w, l_h, **opts))
-    ax.add_patch(patches.Rectangle((person_x + t_w/2 - l_w, person_y_bottom), l_w, l_h, **opts))
-    ax.add_patch(patches.Rectangle((person_x - t_w/2 - a_w, person_y_bottom + l_h + t_h - a_h), a_w, a_h, **opts))
-    ax.add_patch(patches.Rectangle((person_x + t_w/2, person_y_bottom + l_h + t_h - a_h), a_w, a_h, **opts))
+def draw_human_silhouette(ax, person_x: float, person_y_bottom: float,
+                          person_height_m: float) -> None:
+    """Draws a dashed stick figure on the wall plot for scale.
 
-def render_intensity_profile(slice_lux, dist_array, suffix_name, title_str, save_path, config: SimulationConfig):
-    slice_cd = slice_lux * (config.target_distance_m**2)
+    Args:
+        ax: Axes to draw on.
+        person_x: Horizontal centre of the figure, in metres.
+        person_y_bottom: Height of the figure's feet, in metres.
+        person_height_m: Overall height, in metres.
+    """
+    # Proportions of the head, torso, legs and arms relative to full height.
+    head_r, torso_w, torso_h, leg_w, leg_h, arm_w, arm_h = (
+        person_height_m * ratio for ratio in (0.08, 0.25, 0.35, 0.08, 0.45, 0.06, 0.40))
+    style = dict(ec="#FFFF00", fc="none", alpha=0.4, lw=1.0, ls="--")
+
+    shoulder_y = person_y_bottom + leg_h + torso_h
+    ax.add_patch(patches.Circle((person_x, shoulder_y + head_r), head_r, **style))
+    ax.add_patch(patches.Rectangle(
+        (person_x - torso_w / 2, person_y_bottom + leg_h), torso_w, torso_h, **style))
+    ax.add_patch(patches.Rectangle(
+        (person_x - torso_w / 2, person_y_bottom), leg_w, leg_h, **style))
+    ax.add_patch(patches.Rectangle(
+        (person_x + torso_w / 2 - leg_w, person_y_bottom), leg_w, leg_h, **style))
+    ax.add_patch(patches.Rectangle(
+        (person_x - torso_w / 2 - arm_w, shoulder_y - arm_h), arm_w, arm_h, **style))
+    ax.add_patch(patches.Rectangle(
+        (person_x + torso_w / 2, shoulder_y - arm_h), arm_w, arm_h, **style))
+
+
+def _style_dark_axes(ax) -> None:
+    """Applies the shared dark plot styling to one Axes."""
+    ax.set_facecolor("black")
+    ax.tick_params(colors="#CCCCCC", labelsize=10)
+    for spine in ax.spines.values():
+        spine.set_color("#555555")
+
+
+def render_intensity_profile(slice_lux: np.ndarray, dist_array: np.ndarray,
+                             suffix_name: str, title_str: str, save_path: Optional[str],
+                             config: SimulationConfig) -> None:
+    """Renders and optionally saves one intensity profile through the beam.
+
+    Args:
+        slice_lux: Illuminance along the slice, in lux.
+        dist_array: Distance from the beam centre for each sample, in metres.
+        suffix_name: Label for the slice, e.g. "X-Axis"; also the filename suffix.
+        title_str: Title block shared with the wall shot.
+        save_path: Wall shot path the profile filename is derived from, or None.
+        config: Active configuration.
+    """
+    slice_cd = slice_lux * (config.target_distance_m ** 2)
     angles = np.degrees(np.arctan(dist_array / config.target_distance_m))
 
-    fig, ax = plt.subplots(figsize=(10, 5), facecolor='black')
-    ax.set_facecolor('black')
+    figure, ax = plt.subplots(figsize=(10, 5), facecolor="black")
+    _style_dark_axes(ax)
 
-    ax.plot(angles, slice_cd, color='#FFFF00', linewidth=1.5)
-    ax.fill_between(angles, slice_cd, color='#FFFF00', alpha=0.1)
+    ax.plot(angles, slice_cd, color="#FFFF00", linewidth=1.5)
+    ax.fill_between(angles, slice_cd, color="#FFFF00", alpha=0.1)
 
-    ax.set_xlim(-config.plot_fov_deg/2.0, config.plot_fov_deg/2.0)
+    ax.set_xlim(-config.plot_fov_deg / 2.0, config.plot_fov_deg / 2.0)
     ax.set_ylim(0, max(np.max(slice_cd) * 1.05, 1))
+    ax.set_xlabel("Angle (Degrees)", color="#CCCCCC", fontsize=11, labelpad=10)
+    ax.set_ylabel("Intensity (Candela)", color="#CCCCCC", fontsize=11, labelpad=10)
+    ax.grid(True, color="#333333", linestyle="--", alpha=0.5)
 
-    ax.set_xlabel("Angle (Degrees)", color='#CCCCCC', fontsize=11, labelpad=10)
-    ax.set_ylabel("Intensity (Candela)", color='#CCCCCC', fontsize=11, labelpad=10)
-    ax.tick_params(colors='#CCCCCC', labelsize=10)
-    ax.grid(True, color='#333333', linestyle='--', alpha=0.5)
-    for spine in ax.spines.values(): spine.set_color('#555555')
-
-    plt.title(f"{title_str}\n[Intensity Profile: {suffix_name}]", color='#CCCCCC', pad=15)
+    plt.title(f"{title_str}\n[Intensity Profile: {suffix_name}]", color="#CCCCCC", pad=15)
     plt.tight_layout()
 
     if save_path and config.export_plots:
-        base, ext = os.path.splitext(save_path)
-        out = f"{base}_{suffix_name}{ext}"
-        plt.savefig(out, facecolor='black', edgecolor='none', dpi=150, bbox_inches='tight')
+        base, extension = os.path.splitext(save_path)
+        plt.savefig(f"{base}_{suffix_name}{extension}", facecolor="black",
+                    edgecolor="none", dpi=150, bbox_inches="tight")
 
     # This figure is never handed back to the GUI, so release it or the Agg
     # backend accumulates one per profile for the life of the process.
-    plt.close(fig)
+    plt.close(figure)
 
-def generate_flashlight_plot(emitter_name, reflector_name, gasket_name, finish_type, config: SimulationConfig, library: HardwareLibrary, log_callback=None, progress_callback=None, is_cancelled_callback=None, save_path=None):
-    selected_reflector = library.get_reflector(reflector_name)
-    selected_emitter = library.get_emitter(emitter_name)
-    selected_gasket = library.get_gasket(gasket_name)
-    amps = selected_emitter["max_current_amps"]
 
-    geom = get_sim_geometry(selected_reflector, selected_emitter, selected_gasket, finish_type, config)
-    wall_lux, hotspot_lux, spill_lux, total_flux = run_pure_fea_sim_vectorized(geom, selected_emitter, amps, finish_type, config, log_callback, progress_callback, is_cancelled_callback)
+def _format_exposure_caption(config: SimulationConfig) -> str:
+    """Describes the active camera exposure in one line."""
+    if config.use_auto_exposure:
+        return f"Exposure: Auto (EV {config.auto_exposure_compensation_ev:+.1f})"
 
-    if wall_lux is None: return None, None  # Cancelled
+    if config.cam_shutter_speed_s < 1.0:
+        shutter = "1/" + str(int(1.0 / config.cam_shutter_speed_s))
+    else:
+        shutter = config.cam_shutter_speed_s
+    return f"Exposure: ISO {config.cam_iso} | f/{config.cam_f_stop} | {shutter}s"
 
-    max_cd = np.max(wall_lux) * (config.target_distance_m**2)
+
+def _format_beam_geometry(metrics: BeamMetrics, config: SimulationConfig) -> str:
+    """Formats the beam measurements shown in the corner of the wall shot."""
+    distance = config.target_distance_m
+    return (f"Spill Angle: {metrics.spill_angle_deg:.1f}°\n"
+            f"Spill Ø @ {distance}m: {metrics.spill_diameter_m:.2f}m\n"
+            f"Corona Angle: {metrics.corona_angle_deg:.1f}°\n"
+            f"Corona Ø @ {distance}m: {metrics.corona_diameter_m:.2f}m\n"
+            f"Hotspot Angle: {metrics.hotspot_angle_deg:.1f}°\n"
+            f"Hotspot Ø @ {distance}m: {metrics.hotspot_diameter_m:.2f}m\n"
+            f"Cd/Lm Ratio: {metrics.candela_per_lumen:.1f} cd/lm\n")
+
+
+def _format_output_modes(emitter: dict, max_amps: float, max_cd: float,
+                         total_flux: float) -> str:
+    """Builds the output table for the usual 1/10/35/100 percent drive levels.
+
+    Intensity is scaled from the simulated maximum by the lumen ratio, since the
+    beam shape does not change with drive current.
+    """
+    table = " Mode | Amps | Lumens |  Candela | Throw \n" + "-" * 46 + "\n"
+    for fraction in (0.01, 0.10, 0.35, 1.0):
+        amps = max_amps * fraction
+        lumens = calculate_lumens(emitter, amps)
+        candela = max_cd * (lumens / total_flux)
+        table += (f"{int(fraction * 100):>4}% | {amps:>4.1f} | {int(lumens):>6,} | "
+                  f"{int(candela):>8,} | {int(np.sqrt(candela * 4)):>4,}m\n")
+    return table
+
+
+def _render_wall_shot(render_data: np.ndarray, title_str: str, geometry_text: str,
+                      modes_text: str, config: SimulationConfig,
+                      save_path: Optional[str]):
+    """Renders the simulated photograph of the beam on the wall.
+
+    Args:
+        render_data: Tone mapped image in the range 0-1.
+        title_str: Two-line hardware and results header.
+        geometry_text: Beam measurements for the bottom left overlay.
+        modes_text: Output table for the bottom right overlay.
+        config: Active configuration.
+        save_path: Where to write the PNG, or None to only return the figure.
+
+    Returns:
+        The Matplotlib figure, which the GUI embeds in its canvas.
+    """
+    figure, ax = plt.subplots(figsize=(10, 10), facecolor="black")
+    _style_dark_axes(ax)
+
+    ax.imshow(render_data,
+              extent=[-config.wall_radius_m, config.wall_radius_m,
+                      -config.wall_radius_m, config.wall_radius_m],
+              cmap="gray", origin="lower", vmin=0, vmax=1)
+    ax.set(xlim=(-config.plot_radius_m, config.plot_radius_m),
+           ylim=(-config.plot_radius_m, config.plot_radius_m))
+    ax.set_xlabel("Horizontal Distance (m)", color="#CCCCCC", fontsize=11, labelpad=10)
+    ax.set_ylabel("Vertical Distance (m)", color="#CCCCCC", fontsize=11, labelpad=10)
+
+    if config.show_human_silhouette:
+        # Feet at 65% of the figure's height below the beam axis.
+        draw_human_silhouette(ax, 0.0, -1.75 * 0.65, 1.75)
+
+    overlay = dict(facecolor="black", alpha=0.7, edgecolor="none", pad=6)
+    ax.text(0.02, 0.02, geometry_text.strip(), transform=ax.transAxes,
+            color="#CCCCCC", fontsize=10, va="bottom", bbox=overlay)
+    ax.text(0.98, 0.02, modes_text.strip(), transform=ax.transAxes, color="#CCCCCC",
+            fontsize=10, family="monospace", ha="right", va="bottom", bbox=overlay)
+
+    mm_per_pixel = ((2.0 * config.wall_radius_m) / config.sim_grid_res) * 1000.0
+    plt.figtext(0.5, 0.015,
+                f"Canvas FOV: {config.canvas_fov_deg}° | Plot FOV: {config.plot_fov_deg}° | "
+                f"Grid Res: {mm_per_pixel:.1f} mm/px | [{_format_exposure_caption(config)}]",
+                color="#CCCCCC", fontsize=10, ha="center", va="bottom",
+                bbox=dict(facecolor="black", alpha=0.7, edgecolor="none", pad=4))
+    plt.title(title_str, color="#CCCCCC", pad=15)
+    plt.tight_layout(rect=[0, 0.05, 1, 1])
+
+    if save_path and config.export_plots:
+        plt.savefig(save_path, facecolor="black", edgecolor="none",
+                    dpi=150, bbox_inches="tight")
+
+    return figure
+
+
+def generate_flashlight_plot(emitter_name: str, reflector_name: str, gasket_name: str,
+                             finish_type: str, config: SimulationConfig,
+                             library: HardwareLibrary,
+                             log_callback: LogCallback = None,
+                             progress_callback: ProgressCallback = None,
+                             is_cancelled_callback: CancelCallback = None,
+                             save_path: str = None):
+    """Simulates one hardware combination and renders the requested plots.
+
+    Args:
+        emitter_name: Emitter to simulate.
+        reflector_name: Reflector to simulate.
+        gasket_name: Gasket to simulate.
+        finish_type: "smooth" or "orange_peel".
+        config: Active configuration.
+        library: Hardware catalogue the three names are looked up in.
+        log_callback: Receives progress text.
+        progress_callback: Receives completion percentage.
+        is_cancelled_callback: Polled during tracing; returns True to stop.
+        save_path: PNG path for the wall shot. Intensity profiles derive their
+            filenames from it. None renders without saving.
+
+    Returns:
+        (figure, results): the wall shot figure (None when plot_wall_shot is
+        off) and a dict of headline results, or (None, None) if cancelled.
+    """
+    reflector = library.get("reflector", reflector_name)
+    emitter = library.get("emitter", emitter_name)
+    gasket = library.get("gasket", gasket_name)
+    max_amps = emitter["max_current_amps"]
+
+    geom = get_sim_geometry(reflector, emitter, gasket, finish_type, config)
+    illumination = simulate_wall_illuminance(
+        geom, emitter, max_amps, finish_type, config,
+        log_callback, progress_callback, is_cancelled_callback)
+
+    if illumination is None:
+        return None, None  # Cancelled.
+
+    # Peak intensity, and the ANSI throw distance where it falls to 0.25 lux.
+    max_cd = np.max(illumination.total_lux) * (config.target_distance_m ** 2)
     throw_m = int(np.sqrt(max_cd / 0.25))
-    render_data = apply_camera_exposure_and_tonemap(wall_lux, config)
 
-    sp_ang, sp_sz, cor_ang, cor_sz, hot_ang, hot_sz, cd_lm = get_beam_metrics(wall_lux, hotspot_lux, spill_lux, max_cd, total_flux, config)
+    metrics = get_beam_metrics(illumination.total_lux, illumination.hotspot_lux,
+                               illumination.spill_lux, max_cd,
+                               illumination.total_lumens, config)
 
-    cam_text = f"Exposure: Auto (EV {config.auto_exposure_compensation_ev:+.1f})" if config.use_auto_exposure else \
-               f"Exposure: ISO {config.cam_iso} | f/{config.cam_f_stop} | {'1/'+str(int(1.0/config.cam_shutter_speed_s)) if config.cam_shutter_speed_s < 1.0 else config.cam_shutter_speed_s}s"
+    title_str = (
+        f"Hardware: {emitter_name} | Reflector: {reflector_name} "
+        f"({finish_type.upper()}) | Gasket: {gasket_name}\n"
+        f"Distance to Wall: {config.target_distance_m}m | "
+        f"Bore: {geom['effective_d_hole']:.1f}mm | "
+        f"Focus Delta: {geom['focus_delta']:+.2f}mm | "
+        f"Max Intensity: {int(max_cd):,} cd | Throw: {throw_m:,}m")
 
-    geo_text = (f"Spill Angle: {sp_ang:.1f}°\nSpill Ø @ {config.target_distance_m}m: {sp_sz:.2f}m\n"
-                f"Corona Angle: {cor_ang:.1f}°\nCorona Ø @ {config.target_distance_m}m: {cor_sz:.2f}m\n"
-                f"Hotspot Angle: {hot_ang:.1f}°\nHotspot Ø @ {config.target_distance_m}m: {hot_sz:.2f}m\n"
-                f"Cd/Lm Ratio: {cd_lm:.1f} cd/lm\n")
-
-    table_str = " Mode | Amps | Lumens |  Candela | Throw \n" + "-"*46 + "\n"
-    for pct in [0.01, 0.10, 0.35, 1.0]:
-        amp_val = amps * pct
-        lm_mode = calculate_lumens(selected_emitter, amp_val)
-        cd_mode = max_cd * (lm_mode / total_flux)
-        table_str += f"{int(pct*100):>4}% | {amp_val:>4.1f} | {int(lm_mode):>6,} | {int(cd_mode):>8,} | {int(np.sqrt(cd_mode * 4)):>4,}m\n"
-
-    title_str = (f"Hardware: {emitter_name} | Reflector: {reflector_name} ({finish_type.upper()}) | Gasket: {gasket_name}\n"
-                 f"Opening: {geom['effective_d_hole']:.1f}mm | Focus Delta: {geom['focus_delta']:+.2f}mm | Max Intensity: {int(max_cd):,} cd | Throw: {throw_m:,}m")
-
-    fig_wall = None
+    figure = None
     if config.plot_wall_shot:
-        if log_callback: log_callback("Rendering final camera visualization...")
-        fig_wall, ax_wall = plt.subplots(figsize=(10, 10), facecolor='black')
-        ax_wall.set_facecolor('black')
-        ax_wall.imshow(render_data, extent=[-config.wall_radius_m, config.wall_radius_m, -config.wall_radius_m, config.wall_radius_m], cmap='gray', origin='lower', vmin=0, vmax=1)
-        ax_wall.set(xlim=(-config.plot_radius_m, config.plot_radius_m), ylim=(-config.plot_radius_m, config.plot_radius_m))
-        ax_wall.set_xlabel("Horizontal Distance (m)", color='#CCCCCC', fontsize=11, labelpad=10)
-        ax_wall.set_ylabel("Vertical Distance (m)", color='#CCCCCC', fontsize=11, labelpad=10)
-        ax_wall.tick_params(colors='#CCCCCC', labelsize=10)
-        for spine in ax_wall.spines.values(): spine.set_color('#555555')
+        if log_callback:
+            log_callback("Rendering final camera visualization...")
+        figure = _render_wall_shot(
+            apply_camera_exposure_and_tonemap(illumination.total_lux, config),
+            title_str,
+            _format_beam_geometry(metrics, config),
+            _format_output_modes(emitter, max_amps, max_cd, illumination.total_lumens),
+            config, save_path)
 
-        if config.show_human_silhouette: draw_human_silhouette(ax_wall, 0.0, -1.75 * 0.65, 1.75)
+    # Slices through the centre of the wall, in metres from the beam axis.
+    axis_distance = np.linspace(-config.wall_radius_m, config.wall_radius_m,
+                                config.sim_grid_res)
+    centre = int((config.sim_grid_res - 1) / 2.0)
 
-        ax_wall.text(0.02, 0.02, geo_text.strip(), transform=ax_wall.transAxes, color='#CCCCCC', fontsize=10, va='bottom', bbox=dict(facecolor='black', alpha=0.7, edgecolor='none', pad=6))
-        ax_wall.text(0.98, 0.02, table_str.strip(), transform=ax_wall.transAxes, color='#CCCCCC', fontsize=10, family='monospace', ha='right', va='bottom', bbox=dict(facecolor='black', alpha=0.7, edgecolor='none', pad=6))
+    if config.plot_intensity_x:
+        render_intensity_profile(illumination.total_lux[centre, :], axis_distance,
+                                 "X-Axis", title_str, save_path, config)
+    if config.plot_intensity_y:
+        render_intensity_profile(illumination.total_lux[:, centre], axis_distance,
+                                 "Y-Axis", title_str, save_path, config)
+    if config.plot_intensity_45:
+        diagonal_distance = np.linspace(-config.wall_radius_m * math.sqrt(2),
+                                        config.wall_radius_m * math.sqrt(2),
+                                        config.sim_grid_res)
+        render_intensity_profile(np.diagonal(illumination.total_lux), diagonal_distance,
+                                 "45-Deg", title_str, save_path, config)
 
-        plt.figtext(0.5, 0.015, f"Canvas FOV: {config.canvas_fov_deg}° | Plot FOV: {config.plot_fov_deg}° | Grid Res: {((2.0 * config.wall_radius_m) / config.sim_grid_res)*1000.0:.1f} mm/px | [{cam_text}]", color='#CCCCCC', fontsize=10, ha='center', va='bottom', bbox=dict(facecolor='black', alpha=0.7, edgecolor='none', pad=4))
-        plt.title(title_str, color='#CCCCCC', pad=15)
-        plt.tight_layout(rect=[0, 0.05, 1, 1])
-
-        if save_path and config.export_plots:
-            plt.savefig(save_path, facecolor='black', edgecolor='none', dpi=150, bbox_inches='tight')
-
-    x_dist = np.linspace(-config.wall_radius_m, config.wall_radius_m, config.sim_grid_res)
-    center = int((config.sim_grid_res - 1) / 2.0)
-
-    if config.plot_intensity_x: render_intensity_profile(wall_lux[center, :], x_dist, "X-Axis", title_str, save_path, config)
-    if config.plot_intensity_y: render_intensity_profile(wall_lux[:, center], x_dist, "Y-Axis", title_str, save_path, config)
-    if config.plot_intensity_45: render_intensity_profile(np.diagonal(wall_lux), np.linspace(-config.wall_radius_m * math.sqrt(2), config.wall_radius_m * math.sqrt(2), config.sim_grid_res), "45-Deg", title_str, save_path, config)
-
-    return fig_wall, {
-        "Reflector": reflector_name, "Emitter": emitter_name, "Gasket": gasket_name, "Finish": finish_type.upper(),
-        "Max Candela (cd)": int(max_cd), "Throw (m)": int(throw_m), "Total Lumens": int(total_flux),
-        "Spill Angle (deg)": round(sp_ang, 1), "Corona Angle (deg)": round(cor_ang, 1),
-        "Hotspot Angle (deg)": round(hot_ang, 1), "Cd/Lm Ratio": round(cd_lm, 1)
+    return figure, {
+        "Reflector": reflector_name,
+        "Emitter": emitter_name,
+        "Gasket": gasket_name,
+        "Finish": finish_type.upper(),
+        "Max Candela (cd)": int(max_cd),
+        "Throw (m)": int(throw_m),
+        "Total Lumens": int(illumination.total_lumens),
+        "Spill Angle (deg)": round(metrics.spill_angle_deg, 1),
+        "Corona Angle (deg)": round(metrics.corona_angle_deg, 1),
+        "Hotspot Angle (deg)": round(metrics.hotspot_angle_deg, 1),
+        "Cd/Lm Ratio": round(metrics.candela_per_lumen, 1),
     }
+
 
 # ==============================================================================
 # 6. API EXECUTION ENTRY POINT
 # ==============================================================================
 
+CSV_HEADERS = [
+    "Reflector", "Emitter", "Gasket", "Finish", "Max Candela (cd)", "Throw (m)",
+    "Total Lumens", "Spill Angle (deg)", "Corona Angle (deg)",
+    "Hotspot Angle (deg)", "Cd/Lm Ratio",
+]
+
+
+def _results_key(row: dict) -> tuple:
+    """Identity of one result row: the hardware combination it describes."""
+    return (row["Reflector"], row["Emitter"], row.get("Gasket", "None"), row["Finish"])
+
+
+def _read_existing_results(csv_filepath: str) -> dict:
+    """Loads previously exported results so a new run tops them up.
+
+    Args:
+        csv_filepath: CSV written by an earlier run, which need not exist.
+
+    Returns:
+        Result rows keyed by hardware combination; empty if there is no file.
+    """
+    if not os.path.exists(csv_filepath):
+        return {}
+    with open(csv_filepath, mode="r", newline="") as handle:
+        return {_results_key(row): row for row in csv.DictReader(handle)}
+
+
+def _list_valid_combinations(library: HardwareLibrary) -> list:
+    """Enumerates every hardware combination worth simulating in batch mode.
+
+    Combinations where the emitter is too large for the reflector are skipped:
+    a footprint wider than a third of the reflector diameter cannot produce a
+    meaningful beam.
+
+    Args:
+        library: Hardware catalogue to enumerate.
+
+    Returns:
+        (reflector, emitter, gasket, finish) tuples.
+    """
+    combinations = []
+    for reflector_name in library.names("reflector"):
+        reflector = library.get("reflector", reflector_name)
+        for emitter_name in library.names("emitter"):
+            emitter = library.get("emitter", emitter_name)
+            footprint_diagonal = np.sqrt(emitter["footprint_x_mm"] ** 2
+                                         + emitter["footprint_y_mm"] ** 2)
+            if footprint_diagonal > (reflector["diameter_mm"] / 3.0):
+                continue
+            for gasket_name in library.names("gasket"):
+                for finish in ("smooth", "orange_peel"):
+                    combinations.append(
+                        (reflector_name, emitter_name, gasket_name, finish))
+    return combinations
+
+
+def _plot_filename(reflector: str, emitter: str, gasket: str, finish: str) -> str:
+    """Builds the PNG filename for one hardware combination."""
+    finish_tag = "OP" if finish == "orange_peel" else "SMO"
+    return f"{reflector}_{emitter}_{gasket}_{finish_tag}.png"
+
+
 def run_simulation_job(config: SimulationConfig, library: HardwareLibrary,
-                       active_reflector: str, active_emitter: str, active_gasket: str, finish: str,
-                       log_callback=None, progress_callback=None, is_cancelled_callback=None):
+                       active_reflector: str, active_emitter: str, active_gasket: str,
+                       finish: str,
+                       log_callback: LogCallback = None,
+                       progress_callback: ProgressCallback = None,
+                       is_cancelled_callback: CancelCallback = None):
+    """Runs the simulator: one hardware combination, or the whole batch.
 
-    # Anchored to the app folder so a frozen build never writes into whatever
-    # working directory the shortcut happened to hand it.
-    out_dir = config.resolved_output_directory
-    os.makedirs(out_dir, exist_ok=True)
+    config.generate_all_plots selects between rendering the given combination
+    and sweeping every valid combination in the library. Results are merged into
+    the CSV for the current distance and exposure, so repeated runs accumulate.
 
-    exposure_id = f"Auto_EV_{config.auto_exposure_compensation_ev:+.1f}" if config.use_auto_exposure else f"ISO{config.cam_iso}_f{config.cam_f_stop}_{'1_'+str(int(1.0/config.cam_shutter_speed_s)) if config.cam_shutter_speed_s < 1.0 else config.cam_shutter_speed_s}s"
-    csv_filepath = os.path.join(out_dir, f"sim_results_{config.target_distance_m}m_{exposure_id}.csv")
-    csv_headers = ["Reflector", "Emitter", "Gasket", "Finish", "Max Candela (cd)", "Throw (m)", "Total Lumens", "Spill Angle (deg)", "Corona Angle (deg)", "Hotspot Angle (deg)", "Cd/Lm Ratio"]
+    Args:
+        config: Active configuration.
+        library: Hardware catalogue.
+        active_reflector: Reflector for a single render.
+        active_emitter: Emitter for a single render.
+        active_gasket: Gasket for a single render.
+        finish: "smooth" or "orange_peel" for a single render.
+        log_callback: Receives progress text.
+        progress_callback: Receives completion percentage.
+        is_cancelled_callback: Polled during tracing; returns True to stop.
 
-    existing_data = {}
+    Returns:
+        (figure, results): the wall shot figure for a single render (None in
+        batch mode), and every result row keyed by hardware combination.
+        (None, None) if the batch was cancelled.
+    """
+    output_dir = config.resolved_output_directory
+    os.makedirs(output_dir, exist_ok=True)
 
-    if config.export_csv and os.path.exists(csv_filepath):
-        with open(csv_filepath, mode='r', newline='') as f:
-            for row in csv.DictReader(f):
-                gasket_val = row.get("Gasket", "None")
-                existing_data[(row["Reflector"], row["Emitter"], gasket_val, row["Finish"])] = row
+    if config.use_auto_exposure:
+        exposure_id = f"Auto_EV_{config.auto_exposure_compensation_ev:+.1f}"
+    else:
+        shutter = ("1_" + str(int(1.0 / config.cam_shutter_speed_s))
+                   if config.cam_shutter_speed_s < 1.0 else config.cam_shutter_speed_s)
+        exposure_id = f"ISO{config.cam_iso}_f{config.cam_f_stop}_{shutter}s"
+
+    csv_filepath = os.path.join(
+        output_dir, f"sim_results_{config.target_distance_m}m_{exposure_id}.csv")
+    results = _read_existing_results(csv_filepath) if config.export_csv else {}
 
     if config.generate_all_plots:
-        if log_callback: log_callback(f"Batch generation enabled. Outputting to: {out_dir}")
-        valid_combos = []
-        for r_name in library.list_reflectors():
-            rd = library.get_reflector(r_name)
-            for e_name in library.list_emitters():
-                ed = library.get_emitter(e_name)
-                for g_name in library.list_gaskets():
-                    for f in ["smooth", "orange_peel"]:
-                        if np.sqrt(ed["footprint_x_mm"]**2 + ed["footprint_y_mm"]**2) <= (rd["diameter_mm"] / 3.0):
-                            valid_combos.append((r_name, e_name, g_name, f))
+        if log_callback:
+            log_callback(f"Batch generation enabled. Outputting to: {output_dir}")
 
-        for i, (r_name, e_name, g_name, f) in enumerate(valid_combos, 1):
-            if is_cancelled_callback and is_cancelled_callback(): return None, None
-            if log_callback: log_callback(f"[{i}/{len(valid_combos)}] Rendering {r_name} + {e_name} + {g_name} ({f.upper()})...")
-            _, metrics = generate_flashlight_plot(e_name, r_name, g_name, f, config, library, log_callback, progress_callback, is_cancelled_callback, os.path.join(out_dir, f"{r_name}_{e_name}_{g_name}_{'OP' if f == 'orange_peel' else 'SMO'}.png"))
-            if metrics: existing_data[(metrics["Reflector"], metrics["Emitter"], metrics["Gasket"], metrics["Finish"])] = metrics
-            # Batch figures are never displayed; drop them so a long run does not
-            # climb through memory one 10x10in canvas at a time.
-            plt.close('all')
+        combinations = _list_valid_combinations(library)
+        for position, (reflector, emitter, gasket, combo_finish) in enumerate(combinations, 1):
+            if is_cancelled_callback and is_cancelled_callback():
+                return None, None
+            if log_callback:
+                log_callback(f"[{position}/{len(combinations)}] Rendering {reflector} + "
+                             f"{emitter} + {gasket} ({combo_finish.upper()})...")
 
-        if log_callback: log_callback("Batch generation complete!")
-        returned_figure = None
+            _, metrics = generate_flashlight_plot(
+                emitter, reflector, gasket, combo_finish, config, library,
+                log_callback, progress_callback, is_cancelled_callback,
+                os.path.join(output_dir,
+                             _plot_filename(reflector, emitter, gasket, combo_finish)))
+            if metrics:
+                results[_results_key(metrics)] = metrics
+
+            # Batch figures are never displayed, so drop them instead of
+            # climbing through memory one 10x10 inch canvas at a time.
+            plt.close("all")
+
+        if log_callback:
+            log_callback("Batch generation complete!")
+        figure = None
 
     else:
-        if log_callback: log_callback(f"Starting specific render: {active_reflector} + {active_emitter} + {active_gasket}")
-        returned_figure, metrics = generate_flashlight_plot(
-            active_emitter,
-            active_reflector,
-            active_gasket,
-            finish,
-            config,
-            library,
-            log_callback,
-            progress_callback,
-            is_cancelled_callback,
-            os.path.join(out_dir, f"{active_reflector}_{active_emitter}_{active_gasket}_{'OP' if finish == 'orange_peel' else 'SMO'}.png")
-        )
+        if log_callback:
+            log_callback(f"Starting specific render: {active_reflector} + "
+                         f"{active_emitter} + {active_gasket}")
+
+        figure, metrics = generate_flashlight_plot(
+            active_emitter, active_reflector, active_gasket, finish, config, library,
+            log_callback, progress_callback, is_cancelled_callback,
+            os.path.join(output_dir, _plot_filename(
+                active_reflector, active_emitter, active_gasket, finish)))
         if metrics:
-            existing_data[(metrics["Reflector"], metrics["Emitter"], metrics["Gasket"], metrics["Finish"])] = metrics
-            if log_callback: log_callback("Simulation complete.")
+            results[_results_key(metrics)] = metrics
+            if log_callback:
+                log_callback("Simulation complete.")
 
     if config.export_csv:
-        with open(csv_filepath, mode='w', newline='') as f:
-            writer = csv.DictWriter(f, fieldnames=csv_headers)
+        with open(csv_filepath, mode="w", newline="") as handle:
+            writer = csv.DictWriter(handle, fieldnames=CSV_HEADERS)
             writer.writeheader()
-            for row in existing_data.values(): writer.writerow(row)
+            writer.writerows(results.values())
 
-    return returned_figure, existing_data
+    return figure, results
