@@ -157,7 +157,9 @@
               <item row="11" column="0"><widget class="QLabel"><property name="text"><string>Die Width (mm)</string></property></widget></item>
               <item row="11" column="1"><widget class="QLineEdit" name="txtEmi_die_width_mm"><property name="maximumSize"><size><width>100</width><height>16777215</height></size></property></widget></item>
               <item row="12" column="0"><widget class="QLabel"><property name="text"><string>Shape</string></property></widget></item>
-              <item row="12" column="1"><widget class="QLineEdit" name="txtEmi_shape"><property name="maximumSize"><size><width>100</width><height>16777215</height></size></property></widget></item>
+              <item row="12" column="1"><widget class="QLineEdit" name="txtEmi_shape"><property name="toolTip"><string>square, round, or polygon. Use polygon for anything else and fill in the Die Outline.</string></property><property name="maximumSize"><size><width>100</width><height>16777215</height></size></property></widget></item>
+              <item row="13" column="0"><widget class="QLabel"><property name="text"><string>Die Outline</string></property></widget></item>
+              <item row="13" column="1"><widget class="QLineEdit" name="txtEmi_die_outline"><property name="toolTip"><string>Only used when Shape is polygon. A JSON list of [x,y] corners in mm, measured from the die centre, in order around the outline. Paste the output of emitter_shapes.py here. Leave blank for square or round dies.</string></property><property name="placeholderText"><string>[[-1,-1],[1,-1],[1,1],[-1,1]]</string></property><property name="maximumSize"><size><width>100</width><height>16777215</height></size></property></widget></item>
              </layout>
             </widget>
            </widget>

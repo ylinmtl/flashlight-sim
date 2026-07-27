@@ -258,7 +258,7 @@
         "Luminus SFT40 3000K": {
             "die_length_mm": 1.97,
             "die_width_mm": 1.97,
-            "shape": "square",
+            "shape": "polygon",
             "footprint_x_mm": 5.0,
             "footprint_y_mm": 5.0,
             "height_mm": 1.0,
@@ -268,12 +268,62 @@
             "base_efficacy_lm_w": 96.3,
             "droop_factor": 0.0842,
             "dome_size_mm": 0.0,
-            "refractive_index": 1.0
+            "refractive_index": 1.0,
+            "die_outline": [
+                [
+                    -0.69,
+                    -0.985
+                ],
+                [
+                    0.69,
+                    -0.985
+                ],
+                [
+                    0.69,
+                    -0.69
+                ],
+                [
+                    0.985,
+                    -0.69
+                ],
+                [
+                    0.985,
+                    0.69
+                ],
+                [
+                    0.69,
+                    0.69
+                ],
+                [
+                    0.69,
+                    0.985
+                ],
+                [
+                    -0.69,
+                    0.985
+                ],
+                [
+                    -0.69,
+                    0.69
+                ],
+                [
+                    -0.985,
+                    0.69
+                ],
+                [
+                    -0.985,
+                    -0.69
+                ],
+                [
+                    -0.69,
+                    -0.69
+                ]
+            ]
         },
         "Luminus SFT40 6500K": {
             "die_length_mm": 1.97,
             "die_width_mm": 1.97,
-            "shape": "square",
+            "shape": "polygon",
             "footprint_x_mm": 5.0,
             "footprint_y_mm": 5.0,
             "height_mm": 1.0,
@@ -283,7 +333,57 @@
             "base_efficacy_lm_w": 162.8,
             "droop_factor": 0.0738,
             "dome_size_mm": 0.0,
-            "refractive_index": 1.0
+            "refractive_index": 1.0,
+            "die_outline": [
+                [
+                    -0.69,
+                    -0.985
+                ],
+                [
+                    0.69,
+                    -0.985
+                ],
+                [
+                    0.69,
+                    -0.69
+                ],
+                [
+                    0.985,
+                    -0.69
+                ],
+                [
+                    0.985,
+                    0.69
+                ],
+                [
+                    0.69,
+                    0.69
+                ],
+                [
+                    0.69,
+                    0.985
+                ],
+                [
+                    -0.69,
+                    0.985
+                ],
+                [
+                    -0.69,
+                    0.69
+                ],
+                [
+                    -0.985,
+                    0.69
+                ],
+                [
+                    -0.985,
+                    -0.69
+                ],
+                [
+                    -0.69,
+                    -0.69
+                ]
+            ]
         },
         "Luminus SFT42R 6500K": {
             "max_current_amps": 8.0,
@@ -303,7 +403,7 @@
         "Luminus SFT60 6500K": {
             "die_length_mm": 2.25,
             "die_width_mm": 2.25,
-            "shape": "square",
+            "shape": "polygon",
             "footprint_x_mm": 5.0,
             "footprint_y_mm": 5.0,
             "height_mm": 0.7,
@@ -313,7 +413,41 @@
             "base_efficacy_lm_w": 149.7,
             "droop_factor": 0.039,
             "dome_size_mm": 0.0,
-            "refractive_index": 1.0
+            "refractive_index": 1.0,
+            "die_outline": [
+                [
+                    -0.788,
+                    -1.125
+                ],
+                [
+                    0.788,
+                    -1.125
+                ],
+                [
+                    1.125,
+                    -0.788
+                ],
+                [
+                    1.125,
+                    0.788
+                ],
+                [
+                    0.788,
+                    1.125
+                ],
+                [
+                    -0.788,
+                    1.125
+                ],
+                [
+                    -1.125,
+                    0.788
+                ],
+                [
+                    -1.125,
+                    -0.788
+                ]
+            ]
         },
         "Luminus SFT70 3000K": {
             "die_length_mm": 2.38,

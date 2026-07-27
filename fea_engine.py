@@ -395,6 +395,12 @@ class SimulationConfig:
 # real part, so the engine raises KeyError rather than inventing a number.
 # Specs the engine ignores entirely, such as a gasket's outer diameter, are
 # left alone and simply carried along.
+# Die outlines the tracer knows how to sample. "square" fills a plain
+# rectangle, "round" masks a circle out of it, and "polygon" masks an arbitrary
+# outline given by the die_outline spec, which is how anything else is modelled:
+# the chamfered corners of an SFT60, the corner notches of an SFT40, and so on.
+DIE_SHAPES = ("square", "round", "polygon")
+
 SPEC_DEFAULT_SETTINGS = {
     "reflector": {
         "opening_diameter_mm": "default_opening_diameter_mm",
@@ -450,7 +456,8 @@ class HardwareLibrary:
     catalogues behave identically and differ only in which specs they hold.
 
     Attributes:
-        filepath: Writable JSON file holding the catalogue.
+        filepath: Writable JSON file holding the catalogue, or None on a
+            detached copy from copy_for_run(), which is never written.
         default_filepath: Read-only catalogue shipped with the application.
     """
 
@@ -506,7 +513,17 @@ class HardwareLibrary:
             self._catalogues[kind] = data.get(_JSON_SECTION_BY_KIND[kind], {})
 
     def save_database(self) -> None:
-        """Writes all three catalogues back to disk."""
+        """Writes all three catalogues back to disk.
+
+        Raises:
+            RuntimeError: If this is a detached copy from copy_for_run(),
+                which exists only to be read by one simulation.
+        """
+        if self.filepath is None:
+            raise RuntimeError(
+                "This catalogue is a detached copy made for a single simulation "
+                "run and has no file to be written to.")
+
         _write_json(self.filepath, {
             _JSON_SECTION_BY_KIND[kind]: self._catalogues[kind] for kind in HARDWARE_KINDS
         })
@@ -629,17 +646,48 @@ class HardwareLibrary:
             self.save_database()
         return restored
 
+    def copy_for_run(self) -> "HardwareLibrary":
+        """Returns a detached copy of the catalogue for one simulation run.
+
+        Unsaved edits typed into the form apply to the run that is starting and
+        to nothing else. Patching the live catalogue would arm the next
+        save_database() to write them out, so a run works on its own deep copy
+        instead. The copy carries no file path, which makes it an error for
+        anything holding it to try to write it.
+
+        Returns:
+            A HardwareLibrary holding a deep copy of every entry, suitable for
+            apply_overrides and for reading, but not for saving.
+        """
+        detached = HardwareLibrary.__new__(HardwareLibrary)
+        detached.filepath = None
+        detached.default_filepath = None
+        detached._catalogues = copy.deepcopy(self._catalogues)
+        return detached
+
     def apply_overrides(self, kind: str, name: str, specs: dict) -> None:
-        """Merges edited specs into one entry without writing to disk.
+        """Merges edited specs into one entry of a detached run copy.
 
         This is how the GUI lets an operator tweak a value for a single run
-        without permanently editing the catalogue.
+        without editing the catalogue. It refuses to touch the live catalogue,
+        because an override left there is indistinguishable from a saved value
+        and would be written out by the next save of any entry, of any kind.
 
         Args:
             kind: One of HARDWARE_KINDS.
             name: Name of the entry to patch.
             specs: Specs to merge over the stored ones.
+
+        Raises:
+            RuntimeError: If called on the live catalogue rather than on a
+                detached copy from copy_for_run().
         """
+        if self.filepath is not None:
+            raise RuntimeError(
+                "apply_overrides() works only on a detached copy from "
+                "copy_for_run(); overriding the live catalogue would leak "
+                "unsaved edits into the next save.")
+
         self._catalogue(kind)[name].update(specs)
 
 
@@ -1403,19 +1451,134 @@ class WallIllumination(NamedTuple):
     total_lumens: float
 
 
-def _build_emitter_elements(emitter: dict, elements_per_side: int, shape: str):
+def _points_in_polygon(points_x: np.ndarray, points_y: np.ndarray,
+                       vertices: np.ndarray, tolerance: float) -> np.ndarray:
+    """Tests which points fall inside a polygon, counting the boundary as in.
+
+    An even-odd ray cast decides the interior, which handles concave outlines
+    such as a notched die correctly. A ray cast is undefined for a point lying
+    exactly on an edge, and the sampling grid puts points exactly on the edges
+    of an axis-aligned die, so those are detected separately and added back.
+
+    Args:
+        points_x: Flat array of x coordinates.
+        points_y: Flat array of y coordinates, same length as points_x.
+        vertices: (N, 2) array of polygon corners in order. The outline is
+            closed implicitly, so the first corner is not repeated.
+        tolerance: Distance within which a point counts as on the boundary.
+
+    Returns:
+        A boolean array, one entry per point.
+    """
+    px = points_x.reshape(-1, 1)
+    py = points_y.reshape(-1, 1)
+    x0, y0 = vertices[:, 0], vertices[:, 1]
+    x1, y1 = np.roll(x0, -1), np.roll(y0, -1)
+
+    # Even-odd ray cast along +x. Only edges straddling the ray can cross it,
+    # so horizontal edges, where the division would be degenerate, never count.
+    straddles = (y0 > py) != (y1 > py)
+    safe_dy = np.where(y1 != y0, y1 - y0, 1.0)
+    crossing_x = x0 + (py - y0) * (x1 - x0) / safe_dy
+    interior = np.sum(straddles & (px < crossing_x), axis=1) % 2 == 1
+
+    # Shortest distance to each edge, for the points sitting on the outline.
+    edge_dx, edge_dy = x1 - x0, y1 - y0
+    length_sq = edge_dx ** 2 + edge_dy ** 2
+    safe_length_sq = np.where(length_sq > 0.0, length_sq, 1.0)
+    along = np.clip(((px - x0) * edge_dx + (py - y0) * edge_dy) / safe_length_sq,
+                    0.0, 1.0)
+    on_edge = np.min(np.hypot(px - (x0 + along * edge_dx),
+                              py - (y0 + along * edge_dy)), axis=1) <= tolerance
+
+    return interior | on_edge
+
+
+def emitter_die_outline(emitter: dict, shape: str) -> Optional[np.ndarray]:
+    """Returns the validated die outline for a polygon emitter.
+
+    Args:
+        emitter: Emitter specs.
+        shape: Die shape, already resolved against the settings default.
+
+    Returns:
+        An (N, 2) array of vertices in millimetres relative to the die centre,
+        or None for a shape that does not need one.
+
+    Raises:
+        ValueError: If the shape is not one of DIE_SHAPES, or if a polygon die
+            has an outline that is missing, malformed or too small to enclose
+            an area.
+    """
+    if shape not in DIE_SHAPES:
+        raise ValueError(
+            f"Unknown emitter die shape {shape!r}. Use one of "
+            f"{', '.join(DIE_SHAPES)}. Anything that is not a plain rectangle "
+            f"or circle is modelled as 'polygon' with a die_outline.")
+
+    if shape != "polygon":
+        return None
+
+    outline = emitter.get("die_outline")
+    if isinstance(outline, str):
+        # Hand-edited catalogues, and the GUI's input box, hold pasted JSON.
+        try:
+            outline = json.loads(outline)
+        except json.JSONDecodeError as error:
+            raise ValueError(f"die_outline is not valid JSON: {error}") from error
+
+    vertices = np.asarray(outline if outline else [], dtype=np.float64)
+    if vertices.ndim != 2 or vertices.shape[0] < 3 or vertices.shape[1] != 2:
+        raise ValueError(
+            "A polygon die needs die_outline set to at least three [x, y] "
+            "vertex pairs, in millimetres relative to the die centre.")
+    return vertices
+
+
+def _build_emitter_elements(emitter: dict, elements_per_side: int, shape: str,
+                            outline: Optional[np.ndarray] = None):
     """Subdivides the light emitting surface into point sources.
+
+    Total flux is shared equally between the elements that survive, so the
+    outline sets the shape of the source without changing how many lumens it
+    produces.
 
     Args:
         emitter: Emitter specs.
         elements_per_side: Grid resolution across the die.
-        shape: Die outline, already resolved against the settings default.
-            "round" masks the grid to a circle; anything else is rectangular.
+        shape: Die shape, already resolved against the settings default.
+        outline: Vertices from emitter_die_outline, required for "polygon".
+            The outline is authoritative for a polygon die, so the grid spans
+            its bounding box and die_length_mm and die_width_mm are ignored.
 
     Returns:
-        (x, y) coordinate arrays in millimetres. Round dies are masked out of
-        the square grid, so the arrays are shorter than elements_per_side^2.
+        (x, y) coordinate arrays in millimetres. Masked shapes return fewer
+        than elements_per_side^2 points.
+
+    Raises:
+        ValueError: If a polygon outline masks out every grid point, which
+            means it is too thin to sample at this resolution.
     """
+    if shape == "polygon":
+        min_x, min_y = outline.min(axis=0)
+        max_x, max_y = outline.max(axis=0)
+        grid_x, grid_y = np.meshgrid(
+            np.linspace(min_x, max_x, elements_per_side),
+            np.linspace(min_y, max_y, elements_per_side))
+
+        # Scaled to the die so the same outline behaves identically whatever
+        # units of size it is drawn at.
+        tolerance = 1e-9 * max(max_x - min_x, max_y - min_y, 1.0)
+        inside = _points_in_polygon(grid_x.ravel(), grid_y.ravel(), outline,
+                                    tolerance)
+        if not inside.any():
+            raise ValueError(
+                f"die_outline encloses none of the {elements_per_side} x "
+                f"{elements_per_side} sample points. Raise "
+                f"sim_emitter_elements, or check the outline is in "
+                f"millimetres.")
+        return grid_x.ravel()[inside], grid_y.ravel()[inside]
+
     die_length = emitter["die_length_mm"]
     die_width = die_length if shape == "round" else emitter["die_width_mm"]
 
@@ -1491,9 +1654,10 @@ def simulate_wall_illuminance(geom: dict, emitter: dict, current_amps: float, fi
                                  * np.radians(config.lumen_calc_step_deg))
     peak_intensity = total_lumens / (2 * np.pi * hemisphere_integral)
 
+    die_shape = spec_or_default(emitter, "emitter", "shape", config)
     element_x, element_y = _build_emitter_elements(
-        emitter, config.sim_emitter_elements,
-        spec_or_default(emitter, "emitter", "shape", config))
+        emitter, config.sim_emitter_elements, die_shape,
+        emitter_die_outline(emitter, die_shape))
     element_count = len(element_x)
 
     ray_vx, ray_vy, ray_vz, ray_intensity, solid_angle = _build_ray_directions(config)

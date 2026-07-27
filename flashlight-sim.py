@@ -7,6 +7,7 @@ Matplotlib canvas for the rendered beam. Simulations run on a worker thread so
 the interface stays responsive and remains cancellable.
 """
 
+import json
 import os
 import sys
 import traceback
@@ -35,7 +36,7 @@ SPEC_FIELDS = {
     "emitter": ("max_current_amps", "vf_turn_on_v", "vf_scale", "base_efficacy_lm_w",
                 "droop_factor", "footprint_x_mm", "footprint_y_mm", "height_mm",
                 "dome_size_mm", "refractive_index", "die_length_mm", "die_width_mm",
-                "shape"),
+                "shape", "die_outline"),
     "gasket": ("gasket_thickness_mm", "gasket_total_height_mm", "gasket_opening_mm"),
 }
 
@@ -47,6 +48,10 @@ FIELD_WIDGET_PREFIX = {
 
 # Specs that stay strings; every other field is parsed as a float.
 TEXT_SPECS = frozenset({"shape"})
+
+# Specs held as a JSON array rather than a single value. The input box takes
+# the text an outline generator produces, so a die shape can be pasted in.
+LIST_SPECS = frozenset({"die_outline"})
 
 # Reflector inputs that describe the build being simulated rather than the
 # reflector itself, as (field, label). Each one is a QLineEdit in
@@ -145,7 +150,9 @@ class SimulationWorker(QThread):
 
         Args:
             config: Active SimulationConfig.
-            library: Active HardwareLibrary.
+            library: Detached HardwareLibrary copy for this run, already
+                carrying any unsaved edits from the form. It is never written,
+                so nothing the worker does can reach hardware_library.json.
             reflector_name: Reflector to simulate.
             emitter_name: Emitter to simulate.
             gasket_name: Gasket to simulate.
@@ -447,7 +454,12 @@ class MainWindow(QMainWindow):
 
         specs = self.library.get(kind, name)
         for field, widget in self.field_widgets[kind].items():
-            widget.setText(str(specs.get(field, "")))
+            value = specs.get(field, "")
+            if field in LIST_SPECS and value != "":
+                # Compact JSON, so the box holds exactly what a generator emits
+                # and can be copied back out again.
+                value = json.dumps(value, separators=(",", ":"))
+            widget.setText(str(value))
 
     def read_fields(self, kind):
         """Reads the spec inputs back into a specs dict.
@@ -469,6 +481,14 @@ class MainWindow(QMainWindow):
 
             if field in TEXT_SPECS:
                 specs[field] = text
+                continue
+
+            if field in LIST_SPECS:
+                try:
+                    specs[field] = json.loads(text)
+                except json.JSONDecodeError as error:
+                    self.log_message(f"Warning: Could not parse {field} as JSON "
+                                     f"({error}). Keeping the stored value.")
                 continue
 
             try:
@@ -599,13 +619,16 @@ class MainWindow(QMainWindow):
         finish = ("smooth" if self.cmbReflectorFinish.currentText() == "Smooth"
                   else "orange_peel")
 
-        # On-screen edits apply to this run only; the catalogue on disk is left
-        # alone unless the operator presses Save.
+        # The run works on a detached copy of the catalogue. On-screen edits are
+        # overlaid onto that copy, so they apply to this simulation and to
+        # nothing else: the live catalogue is untouched, and only the Save
+        # button ever changes hardware_library.json.
+        run_library = self.library.copy_for_run()
         for kind, name in names.items():
-            self.library.apply_overrides(kind, name, self.read_fields(kind))
+            run_library.apply_overrides(kind, name, self.read_fields(kind))
 
-        # The centring offset never touches the library, not even in memory, so
-        # it cannot be written out by a later save of any reflector.
+        # The centring offset never reaches the catalogue at all, not even the
+        # run copy; it is passed straight to the job.
         emitter_offset = self.read_emitter_offset()
 
         # The Run button always renders the current selection. Batch mode is
@@ -617,7 +640,7 @@ class MainWindow(QMainWindow):
         self.txtLogs.clear()
         self.log_message("--- INITIALIZING SIMULATION ---")
 
-        self.worker = SimulationWorker(self.config, self.library, names["reflector"],
+        self.worker = SimulationWorker(self.config, run_library, names["reflector"],
                                        names["emitter"], names["gasket"], finish,
                                        emitter_offset)
         self.worker.progress_signal.connect(self.update_progress)
