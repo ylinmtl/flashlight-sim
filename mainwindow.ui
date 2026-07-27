@@ -59,18 +59,37 @@
               <item row="2" column="1"><widget class="QLineEdit" name="txtRef_opening_diameter_mm"><property name="maximumSize"><size><width>100</width><height>16777215</height></size></property></widget></item>
               <item row="3" column="0"><widget class="QLabel"><property name="text"><string>Focus Offset (mm)</string></property></widget></item>
               <item row="3" column="1"><widget class="QLineEdit" name="txtRef_focus_offset_mm"><property name="maximumSize"><size><width>100</width><height>16777215</height></size></property></widget></item>
-              <item row="4" column="0"><widget class="QLabel"><property name="text"><string>Base Thickness (mm)</string></property></widget></item>
-              <item row="4" column="1"><widget class="QLineEdit" name="txtRef_thickness_height_mm"><property name="maximumSize"><size><width>100</width><height>16777215</height></size></property></widget></item>
-              <item row="5" column="0"><widget class="QLabel"><property name="text"><string>Smooth Reflectivity</string></property></widget></item>
-              <item row="5" column="1"><widget class="QLineEdit" name="txtRef_reflectivity_smooth"><property name="maximumSize"><size><width>100</width><height>16777215</height></size></property></widget></item>
-              <item row="6" column="0"><widget class="QLabel"><property name="text"><string>OP Reflectivity</string></property></widget></item>
-              <item row="6" column="1"><widget class="QLineEdit" name="txtRef_reflectivity_op"><property name="maximumSize"><size><width>100</width><height>16777215</height></size></property></widget></item>
-              <item row="7" column="0"><widget class="QLabel"><property name="text"><string>Hole Reflectivity</string></property></widget></item>
-              <item row="7" column="1"><widget class="QLineEdit" name="txtRef_reflectivity_cylinder"><property name="maximumSize"><size><width>100</width><height>16777215</height></size></property></widget></item>
-              <item row="8" column="0"><widget class="QLabel"><property name="text"><string>Gasket Reflectivity</string></property></widget></item>
-              <item row="8" column="1"><widget class="QLineEdit" name="txtRef_gasket_reflectivity"><property name="maximumSize"><size><width>100</width><height>16777215</height></size></property></widget></item>
-              <item row="9" column="0"><widget class="QLabel"><property name="text"><string>OP Factor Blur</string></property></widget></item>
-              <item row="9" column="1"><widget class="QLineEdit" name="txtRef_OP_Factor"><property name="maximumSize"><size><width>100</width><height>16777215</height></size></property></widget></item>
+              <item row="4" column="0"><widget class="QLabel"><property name="text"><string>Wall Thickness (mm)</string></property></widget></item>
+              <item row="4" column="1"><widget class="QLineEdit" name="txtRef_thickness_diameter_mm"><property name="toolTip"><string>Thickness of the reflector wall. Subtracted from the outer diameter to give the reflective surface.</string></property><property name="maximumSize"><size><width>100</width><height>16777215</height></size></property></widget></item>
+              <item row="5" column="0"><widget class="QLabel"><property name="text"><string>Base Thickness (mm)</string></property></widget></item>
+              <item row="5" column="1"><widget class="QLineEdit" name="txtRef_thickness_height_mm"><property name="maximumSize"><size><width>100</width><height>16777215</height></size></property></widget></item>
+              <item row="6" column="0"><widget class="QLabel"><property name="text"><string>Smooth Reflectivity</string></property></widget></item>
+              <item row="6" column="1"><widget class="QLineEdit" name="txtRef_reflectivity_smooth"><property name="maximumSize"><size><width>100</width><height>16777215</height></size></property></widget></item>
+              <item row="7" column="0"><widget class="QLabel"><property name="text"><string>OP Reflectivity</string></property></widget></item>
+              <item row="7" column="1"><widget class="QLineEdit" name="txtRef_reflectivity_op"><property name="maximumSize"><size><width>100</width><height>16777215</height></size></property></widget></item>
+              <item row="8" column="0"><widget class="QLabel"><property name="text"><string>Hole Reflectivity</string></property></widget></item>
+              <item row="8" column="1"><widget class="QLineEdit" name="txtRef_reflectivity_cylinder"><property name="maximumSize"><size><width>100</width><height>16777215</height></size></property></widget></item>
+              <item row="9" column="0"><widget class="QLabel"><property name="text"><string>Gasket Reflectivity</string></property></widget></item>
+              <item row="9" column="1"><widget class="QLineEdit" name="txtRef_gasket_reflectivity"><property name="maximumSize"><size><width>100</width><height>16777215</height></size></property></widget></item>
+              <item row="10" column="0"><widget class="QLabel"><property name="text"><string>OP Factor Blur</string></property></widget></item>
+              <item row="10" column="1"><widget class="QLineEdit" name="txtRef_OP_Factor"><property name="maximumSize"><size><width>100</width><height>16777215</height></size></property></widget></item>
+              <item row="11" column="0"><widget class="QLabel"><property name="text"><string>Lens Transmissivity</string></property></widget></item>
+              <item row="11" column="1"><widget class="QLineEdit" name="txtRef_transmissivity_lens"><property name="toolTip"><string>Fraction of flux surviving the lens, 0 to 1. Applied to spill and reflected rays alike.</string></property><property name="maximumSize"><size><width>100</width><height>16777215</height></size></property></widget></item>
+
+              <!-- Emitter centring describes the build being simulated, not the
+                   reflector. Saving a reflector discards it, and reloading the
+                   form resets it to zero. -->
+              <item row="12" column="0" colspan="2">
+               <widget class="QLabel" name="lblEmitterCentring">
+                <property name="text"><string>Emitter Centring (this run only)</string></property>
+                <property name="font"><font><bold>true</bold></font></property>
+                <property name="toolTip"><string>Never saved with the reflector. Resets to zero when the reflector selection changes or is reset.</string></property>
+               </widget>
+              </item>
+              <item row="13" column="0"><widget class="QLabel"><property name="text"><string>Offset Distance (mm)</string></property></widget></item>
+              <item row="13" column="1"><widget class="QLineEdit" name="txtRef_emitter_offset_distance_mm"><property name="text"><string>0.0</string></property><property name="toolTip"><string>How far the emitter sits off the reflector axis, in millimetres. 0 is centred.</string></property><property name="maximumSize"><size><width>100</width><height>16777215</height></size></property></widget></item>
+              <item row="14" column="0"><widget class="QLabel"><property name="text"><string>Offset Angle (°)</string></property></widget></item>
+              <item row="14" column="1"><widget class="QLineEdit" name="txtRef_emitter_offset_angle_deg"><property name="text"><string>0.0</string></property><property name="toolTip"><string>Direction of the offset: 0° is straight up, increasing clockwise, so 90° is to the right.</string></property><property name="maximumSize"><size><width>100</width><height>16777215</height></size></property></widget></item>
              </layout>
             </widget>
            </widget>

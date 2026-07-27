@@ -21,17 +21,17 @@ from PyQt6.QtWidgets import (QApplication, QCheckBox, QDialog, QFormLayout,
 # Matplotlib's Qt canvas, used to embed the engine's figure in the window.
 from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg as FigureCanvas
 
-from fea_engine import (HardwareLibrary, SimulationConfig, resource_path,
-                        run_simulation_job)
+from fea_engine import (EmitterOffset, HardwareLibrary, SimulationConfig,
+                        resource_path, run_simulation_job)
 
 # Specs shown for each hardware kind, in the order they appear in the form. Each
 # one maps to a QLineEdit in mainwindow.ui named <prefix><spec>, for example
 # reflector "diameter_mm" -> txtRef_diameter_mm.
 SPEC_FIELDS = {
     "reflector": ("diameter_mm", "height_mm", "opening_diameter_mm",
-                  "focus_offset_mm", "thickness_height_mm", "reflectivity_smooth",
-                  "reflectivity_op", "reflectivity_cylinder", "gasket_reflectivity",
-                  "OP_Factor"),
+                  "focus_offset_mm", "thickness_diameter_mm", "thickness_height_mm",
+                  "reflectivity_smooth", "reflectivity_op", "reflectivity_cylinder",
+                  "gasket_reflectivity", "OP_Factor", "transmissivity_lens"),
     "emitter": ("max_current_amps", "vf_turn_on_v", "vf_scale", "base_efficacy_lm_w",
                 "droop_factor", "footprint_x_mm", "footprint_y_mm", "height_mm",
                 "dome_size_mm", "refractive_index", "die_length_mm", "die_width_mm",
@@ -47,6 +47,16 @@ FIELD_WIDGET_PREFIX = {
 
 # Specs that stay strings; every other field is parsed as a float.
 TEXT_SPECS = frozenset({"shape"})
+
+# Reflector inputs that describe the build being simulated rather than the
+# reflector itself, as (field, label). Each one is a QLineEdit in
+# mainwindow.ui named <prefix><field>, exactly like a spec, but they are
+# deliberately absent from SPEC_FIELDS so that saving a reflector discards
+# them, and they reset to zero whenever the form is reloaded.
+RUN_ONLY_REFLECTOR_FIELDS = (
+    ("emitter_offset_distance_mm", "Emitter Offset Distance (mm)"),
+    ("emitter_offset_angle_deg", "Emitter Offset Angle (° CW from up)"),
+)
 
 # Settings offered by the settings dialog, grouped exactly as they are stored,
 # mapping each attribute of SimulationConfig to its human readable label.
@@ -92,7 +102,10 @@ SETTING_LABELS = {
         "default_reflectivity_smooth": "Default Reflectivity (Smooth)",
         "default_reflectivity_op": "Default Reflectivity (Orange Peel)",
         "default_reflectivity_cylinder": "Default Reflectivity (Cylinder)",
+        "default_gasket_reflectivity": "Default Reflectivity (Gasket)",
         "default_op_blur_strength": "Orange Peel Blur Strength",
+        "default_op_factor": "Default OP Factor",
+        "default_transmissivity_lens": "Default Lens Transmissivity",
         "spill_visible_threshold_lux": "Spill Visible Threshold (Lux)",
         "corona_visible_threshold": "Corona Visible Threshold",
         "hotspot_fwhm_threshold": "Hotspot FWHM Threshold",
@@ -102,6 +115,10 @@ SETTING_LABELS = {
         "default_reflector_wall_thickness_mm": "Default Reflector Wall Thickness (mm)",
         "default_reflector_base_thickness_mm": "Default Reflector Base Thickness (mm)",
         "default_focus_offset_mm": "Default Focus Offset (mm)",
+        "default_opening_diameter_mm": "Default Reflector Opening Diameter (mm)",
+        "default_dome_size_mm": "Default Emitter Dome Size (mm)",
+        "default_refractive_index": "Default Emitter Refractive Index",
+        "default_emitter_shape": "Default Emitter Die Shape",
     },
 }
 
@@ -122,7 +139,8 @@ class SimulationWorker(QThread):
     finished_signal = pyqtSignal(object, dict)
     error_signal = pyqtSignal(str)
 
-    def __init__(self, config, library, reflector_name, emitter_name, gasket_name, finish):
+    def __init__(self, config, library, reflector_name, emitter_name, gasket_name,
+                 finish, emitter_offset):
         """Captures everything the job needs; nothing is read from the GUI later.
 
         Args:
@@ -132,6 +150,8 @@ class SimulationWorker(QThread):
             emitter_name: Emitter to simulate.
             gasket_name: Gasket to simulate.
             finish: "smooth" or "orange_peel".
+            emitter_offset: EmitterOffset for this run. It is captured here
+                rather than stored anywhere, so it lasts exactly one job.
         """
         super().__init__()
         self.config = config
@@ -140,6 +160,7 @@ class SimulationWorker(QThread):
         self.emitter_name = emitter_name
         self.gasket_name = gasket_name
         self.finish = finish
+        self.emitter_offset = emitter_offset
         self._is_cancelled = False
 
     def cancel(self):
@@ -154,7 +175,8 @@ class SimulationWorker(QThread):
                 self.reflector_name, self.emitter_name, self.gasket_name, self.finish,
                 log_callback=self.log_signal.emit,
                 progress_callback=self.progress_signal.emit,
-                is_cancelled_callback=lambda: self._is_cancelled)
+                is_cancelled_callback=lambda: self._is_cancelled,
+                emitter_offset=self.emitter_offset)
 
             if self._is_cancelled:
                 self.log_signal.emit("\n[!] Simulation stopped by user.")
@@ -307,6 +329,11 @@ class MainWindow(QMainWindow):
         try:
             self.config = SimulationConfig()
             self.library = HardwareLibrary()
+            # A newer release may have added whole hardware entries, or added
+            # specs to entries the operator already has. Both are compared
+            # against the shipped copies and applied silently.
+            self.imported_entries = self.library.import_new_entries()
+            self.restored_specs = self.library.restore_missing_specs(self.config)
         except Exception as error:
             QMessageBox.critical(self, "Initialization Error", str(error))
             sys.exit(1)
@@ -320,6 +347,31 @@ class MainWindow(QMainWindow):
 
         for kind in SPEC_FIELDS:
             self.reload_fields(kind)
+
+        # Both files are upgraded silently on load; say so, because the
+        # operator is about to simulate with values they never chose.
+        if self.config.restored_settings:
+            self.log_message(
+                f"Settings file upgraded: {len(self.config.restored_settings)} new "
+                f"setting(s) taken from the template "
+                f"({', '.join(self.config.restored_settings)}).")
+
+        if self.imported_entries:
+            added_count = sum(len(names) for names in self.imported_entries.values())
+            self.log_message(
+                f"Hardware library upgraded: {added_count} new entrie(s) added "
+                f"from the shipped library.")
+            for kind, names in sorted(self.imported_entries.items()):
+                self.log_message(f"  {kind}: {', '.join(names)}")
+
+        if self.restored_specs:
+            restored_count = sum(len(specs) for specs in self.restored_specs.values())
+            self.log_message(
+                f"Hardware library upgraded: {restored_count} missing spec(s) "
+                f"filled in from the settings across "
+                f"{len(self.restored_specs)} entrie(s).")
+            for entry, specs in sorted(self.restored_specs.items()):
+                self.log_message(f"  {entry}: {', '.join(specs)}")
 
     # --- SETUP ---
 
@@ -340,6 +392,14 @@ class MainWindow(QMainWindow):
             kind: {field: getattr(self, FIELD_WIDGET_PREFIX[kind] + field)
                    for field in fields}
             for kind, fields in SPEC_FIELDS.items()
+        }
+        # Kept apart from field_widgets so that read_fields, and therefore
+        # saving, never sees them.
+        self.run_only_widgets = {
+            "reflector": {
+                field: getattr(self, FIELD_WIDGET_PREFIX["reflector"] + field)
+                for field, _ in RUN_ONLY_REFLECTOR_FIELDS
+            },
         }
         for kind, combo in self.combo_boxes.items():
             combo.addItems(self.library.names(kind))
@@ -370,9 +430,17 @@ class MainWindow(QMainWindow):
     def reload_fields(self, kind):
         """Fills the spec inputs from the catalogue entry now selected.
 
+        Every optional spec is filled in at start up, so nothing shows blank
+        unless the entry is genuinely missing a mandatory spec. The run-only
+        inputs go back to zero, since the catalogue holds no value for them to
+        be restored from.
+
         Args:
             kind: One of the keys of SPEC_FIELDS.
         """
+        for widget in self.run_only_widgets.get(kind, {}).values():
+            widget.setText("0.0")
+
         name = self.combo_boxes[kind].currentText()
         if not name:
             return
@@ -410,6 +478,27 @@ class MainWindow(QMainWindow):
                                  f"Defaulting to 0.0")
                 specs[field] = 0.0
         return specs
+
+    def read_emitter_offset(self):
+        """Reads the run-only emitter centring offset from the Reflector column.
+
+        Returns:
+            An EmitterOffset in polar form. A blank or unparseable box reads as
+            zero, so a typo simulates a centred emitter rather than stopping
+            the run, and is reported in the log.
+        """
+        values = {}
+        for field, widget in self.run_only_widgets["reflector"].items():
+            text = widget.text().strip()
+            try:
+                values[field] = float(text) if text else 0.0
+            except ValueError:
+                self.log_message(f"Warning: Could not parse '{text}' for {field}. "
+                                 f"Defaulting to 0.0")
+                values[field] = 0.0
+
+        return EmitterOffset(values["emitter_offset_distance_mm"],
+                             values["emitter_offset_angle_deg"])
 
     def refresh_dropdown(self, kind, select=None):
         """Reloads one dropdown from the library without firing its signals.
@@ -515,6 +604,10 @@ class MainWindow(QMainWindow):
         for kind, name in names.items():
             self.library.apply_overrides(kind, name, self.read_fields(kind))
 
+        # The centring offset never touches the library, not even in memory, so
+        # it cannot be written out by a later save of any reflector.
+        emitter_offset = self.read_emitter_offset()
+
         # The Run button always renders the current selection. Batch mode is
         # driven from the settings dialog instead.
         self.config.generate_all_plots = False
@@ -525,7 +618,8 @@ class MainWindow(QMainWindow):
         self.log_message("--- INITIALIZING SIMULATION ---")
 
         self.worker = SimulationWorker(self.config, self.library, names["reflector"],
-                                       names["emitter"], names["gasket"], finish)
+                                       names["emitter"], names["gasket"], finish,
+                                       emitter_offset)
         self.worker.progress_signal.connect(self.update_progress)
         self.worker.log_signal.connect(self.log_message)
         self.worker.error_signal.connect(self.handle_simulation_error)

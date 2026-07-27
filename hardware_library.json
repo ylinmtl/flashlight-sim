@@ -418,7 +418,8 @@
             "reflectivity_op": 0.8,
             "OP_Factor": 1.0,
             "gasket_reflectivity": 0.0,
-            "reflectivity_cylinder": 0.8
+            "reflectivity_cylinder": 0.8,
+            "transmissivity_lens": 0.95
         },
         "Convoy S2+/S3/T4": {
             "diameter_mm": 20.0,
@@ -431,7 +432,8 @@
             "reflectivity_op": 0.8,
             "OP_Factor": 1.0,
             "gasket_reflectivity": 0.0,
-            "reflectivity_cylinder": 0.8
+            "reflectivity_cylinder": 0.8,
+            "transmissivity_lens": 0.95
         },
         "Convoy S2/S6/S8/T6 5mm": {
             "diameter_mm": 21.0,
@@ -444,7 +446,8 @@
             "reflectivity_op": 0.8,
             "OP_Factor": 1.0,
             "gasket_reflectivity": 0.0,
-            "reflectivity_cylinder": 0.8
+            "reflectivity_cylinder": 0.8,
+            "transmissivity_lens": 0.95
         },
         "Convoy S2/S6/S8/T6 7mm": {
             "diameter_mm": 21.0,
@@ -457,7 +460,8 @@
             "reflectivity_op": 0.8,
             "OP_Factor": 1.0,
             "gasket_reflectivity": 0.0,
-            "reflectivity_cylinder": 0.8
+            "reflectivity_cylinder": 0.8,
+            "transmissivity_lens": 0.95
         },
         "Convoy S21A/S21B/S21E": {
             "diameter_mm": 23.1,
@@ -470,7 +474,8 @@
             "reflectivity_op": 0.8,
             "OP_Factor": 1.0,
             "gasket_reflectivity": 0.0,
-            "reflectivity_cylinder": 0.8
+            "reflectivity_cylinder": 0.8,
+            "transmissivity_lens": 0.95
         },
         "Convoy S16": {
             "diameter_mm": 28.0,
@@ -483,7 +488,8 @@
             "reflectivity_op": 0.8,
             "OP_Factor": 1.0,
             "gasket_reflectivity": 0.0,
-            "reflectivity_cylinder": 0.8
+            "reflectivity_cylinder": 0.8,
+            "transmissivity_lens": 0.95
         },
         "Convoy S11": {
             "diameter_mm": 28.5,
@@ -496,7 +502,8 @@
             "reflectivity_op": 0.8,
             "OP_Factor": 1.0,
             "gasket_reflectivity": 0.0,
-            "reflectivity_cylinder": 0.8
+            "reflectivity_cylinder": 0.8,
+            "transmissivity_lens": 0.95
         },
         "Convoy M2": {
             "diameter_mm": 28.9,
@@ -509,7 +516,8 @@
             "reflectivity_op": 0.8,
             "OP_Factor": 1.0,
             "gasket_reflectivity": 0.0,
-            "reflectivity_cylinder": 0.8
+            "reflectivity_cylinder": 0.8,
+            "transmissivity_lens": 0.95
         },
         "Wurkkos TS28": {
             "diameter_mm": 30.5,
@@ -522,7 +530,8 @@
             "reflectivity_op": 0.8,
             "OP_Factor": 1.0,
             "gasket_reflectivity": 0.0,
-            "reflectivity_cylinder": 0.8
+            "reflectivity_cylinder": 0.8,
+            "transmissivity_lens": 0.95
         },
         "Convoy M1/M21B 7mm": {
             "diameter_mm": 31.8,
@@ -535,7 +544,8 @@
             "reflectivity_op": 0.8,
             "OP_Factor": 1.0,
             "gasket_reflectivity": 0.0,
-            "reflectivity_cylinder": 0.8
+            "reflectivity_cylinder": 0.8,
+            "transmissivity_lens": 0.95
         },
         "Convoy M1/M21B 10mm": {
             "diameter_mm": 31.8,
@@ -548,7 +558,8 @@
             "reflectivity_op": 0.8,
             "OP_Factor": 1.0,
             "gasket_reflectivity": 0.0,
-            "reflectivity_cylinder": 0.8
+            "reflectivity_cylinder": 0.8,
+            "transmissivity_lens": 0.95
         },
         "Convoy M21F": {
             "diameter_mm": 33.1,
@@ -561,7 +572,8 @@
             "reflectivity_op": 0.8,
             "OP_Factor": 1.0,
             "gasket_reflectivity": 0.0,
-            "reflectivity_cylinder": 0.8
+            "reflectivity_cylinder": 0.8,
+            "transmissivity_lens": 0.95
         },
         "Wurkkos TS23": {
             "diameter_mm": 36.4,
@@ -573,7 +585,9 @@
             "reflectivity_op": 0.8,
             "reflectivity_cylinder": 0.8,
             "gasket_reflectivity": 0.0,
-            "OP_Factor": 1.0
+            "OP_Factor": 1.0,
+            "transmissivity_lens": 0.95,
+            "thickness_diameter_mm": 2.0
         },
         "Convoy M3": {
             "diameter_mm": 43.9,
@@ -586,7 +600,8 @@
             "reflectivity_op": 0.8,
             "OP_Factor": 1.0,
             "gasket_reflectivity": 0.0,
-            "reflectivity_cylinder": 0.8
+            "reflectivity_cylinder": 0.8,
+            "transmissivity_lens": 0.95
         },
         "Convoy M21C/M21D/M21G/M26C 9mm": {
             "diameter_mm": 45.9,
@@ -599,7 +614,8 @@
             "reflectivity_op": 0.8,
             "OP_Factor": 1.0,
             "gasket_reflectivity": 0.0,
-            "reflectivity_cylinder": 0.8
+            "reflectivity_cylinder": 0.8,
+            "transmissivity_lens": 0.95
         },
         "Convoy M21C/M21D/M21G/M26C 11mm": {
             "diameter_mm": 45.9,
@@ -612,7 +628,8 @@
             "reflectivity_op": 0.8,
             "OP_Factor": 1.0,
             "gasket_reflectivity": 0.0,
-            "reflectivity_cylinder": 0.8
+            "reflectivity_cylinder": 0.8,
+            "transmissivity_lens": 0.95
         },
         "Noctigon KR1/D1": {
             "diameter_mm": 30.5,
@@ -624,7 +641,9 @@
             "reflectivity_op": 0.8,
             "reflectivity_cylinder": 0.8,
             "gasket_reflectivity": 0.0,
-            "OP_Factor": 1.0
+            "OP_Factor": 1.0,
+            "transmissivity_lens": 0.95,
+            "thickness_diameter_mm": 2.0
         },
         "Convoy 3x21D": {
             "diameter_mm": 85.5,
@@ -636,7 +655,9 @@
             "reflectivity_op": 0.8,
             "reflectivity_cylinder": 0.8,
             "gasket_reflectivity": 0.0,
-            "OP_Factor": 1.0
+            "OP_Factor": 1.0,
+            "transmissivity_lens": 0.95,
+            "thickness_diameter_mm": 2.0
         },
         "Convoy 4x18": {
             "diameter_mm": 85.5,
@@ -648,7 +669,9 @@
             "reflectivity_op": 0.8,
             "reflectivity_cylinder": 0.8,
             "gasket_reflectivity": 0.0,
-            "OP_Factor": 1.0
+            "OP_Factor": 1.0,
+            "transmissivity_lens": 0.95,
+            "thickness_diameter_mm": 2.0
         },
         "Convoy C8/M21A/M21E": {
             "diameter_mm": 42.0,
@@ -660,7 +683,9 @@
             "reflectivity_op": 0.8,
             "reflectivity_cylinder": 0.8,
             "gasket_reflectivity": 0.0,
-            "OP_Factor": 1.0
+            "OP_Factor": 1.0,
+            "transmissivity_lens": 0.95,
+            "thickness_diameter_mm": 2.0
         },
         "Sofirn C8L": {
             "diameter_mm": 43.6,
@@ -672,7 +697,9 @@
             "reflectivity_op": 0.8,
             "reflectivity_cylinder": 0.8,
             "gasket_reflectivity": 0.0,
-            "OP_Factor": 1.0
+            "OP_Factor": 1.0,
+            "transmissivity_lens": 0.95,
+            "thickness_diameter_mm": 2.0
         },
         "Wurkkos FC11C": {
             "diameter_mm": 20.0,
@@ -684,7 +711,9 @@
             "reflectivity_op": 0.8,
             "reflectivity_cylinder": 0.8,
             "gasket_reflectivity": 0.0,
-            "OP_Factor": 1.0
+            "OP_Factor": 1.0,
+            "transmissivity_lens": 0.95,
+            "thickness_diameter_mm": 2.0
         },
         "Convoy L21A/L21B 11mm": {
             "diameter_mm": 58.0,
@@ -696,7 +725,9 @@
             "reflectivity_op": 0.8,
             "reflectivity_cylinder": 0.8,
             "gasket_reflectivity": 0.0,
-            "OP_Factor": 1.0
+            "OP_Factor": 1.0,
+            "transmissivity_lens": 0.95,
+            "thickness_diameter_mm": 2.0
         },
         "Convoy L21A/L21B 9mm": {
             "diameter_mm": 58.0,
@@ -708,7 +739,9 @@
             "reflectivity_op": 0.8,
             "reflectivity_cylinder": 0.8,
             "gasket_reflectivity": 0.0,
-            "OP_Factor": 1.0
+            "OP_Factor": 1.0,
+            "transmissivity_lens": 0.95,
+            "thickness_diameter_mm": 2.0
         },
         "Convoy L6": {
             "diameter_mm": 67.6,
@@ -720,7 +753,9 @@
             "reflectivity_op": 0.8,
             "reflectivity_cylinder": 0.8,
             "gasket_reflectivity": 0.0,
-            "OP_Factor": 1.1
+            "OP_Factor": 1.1,
+            "transmissivity_lens": 0.95,
+            "thickness_diameter_mm": 2.0
         },
         "Convoy L7": {
             "diameter_mm": 67.6,
@@ -732,7 +767,9 @@
             "reflectivity_op": 0.8,
             "reflectivity_cylinder": 0.8,
             "gasket_reflectivity": 0.0,
-            "OP_Factor": 1.1
+            "OP_Factor": 1.1,
+            "transmissivity_lens": 0.95,
+            "thickness_diameter_mm": 2.0
         },
         "Noctigon K1": {
             "diameter_mm": 64.9,
@@ -744,7 +781,9 @@
             "reflectivity_op": 0.8,
             "reflectivity_cylinder": 0.8,
             "gasket_reflectivity": 0.0,
-            "OP_Factor": 1.0
+            "OP_Factor": 1.0,
+            "transmissivity_lens": 0.95,
+            "thickness_diameter_mm": 2.0
         },
         "Sofirn SP60": {
             "diameter_mm": 65.7,
@@ -756,7 +795,9 @@
             "reflectivity_op": 0.8,
             "reflectivity_cylinder": 0.8,
             "gasket_reflectivity": 0.0,
-            "OP_Factor": 1.0
+            "OP_Factor": 1.0,
+            "transmissivity_lens": 0.95,
+            "thickness_diameter_mm": 2.0
         },
         "Sofirn SC33": {
             "diameter_mm": 28.8,
@@ -768,7 +809,9 @@
             "reflectivity_op": 0.8,
             "reflectivity_cylinder": 0.8,
             "gasket_reflectivity": 0.0,
-            "OP_Factor": 1.0
+            "OP_Factor": 1.0,
+            "transmissivity_lens": 0.95,
+            "thickness_diameter_mm": 2.0
         },
         "Skilhunt M200 V4": {
             "diameter_mm": 17.6,
@@ -780,7 +823,9 @@
             "reflectivity_op": 0.8,
             "reflectivity_cylinder": 0.8,
             "gasket_reflectivity": 0.0,
-            "OP_Factor": 1.0
+            "OP_Factor": 1.0,
+            "transmissivity_lens": 0.95,
+            "thickness_diameter_mm": 2.0
         },
         "Skilhunt M300 V2": {
             "diameter_mm": 24.0,
@@ -792,7 +837,9 @@
             "reflectivity_op": 0.8,
             "reflectivity_cylinder": 0.8,
             "gasket_reflectivity": 0.0,
-            "OP_Factor": 1.0
+            "OP_Factor": 1.0,
+            "transmissivity_lens": 0.95,
+            "thickness_diameter_mm": 2.0
         },
         "Olight Seeker 4": {
             "diameter_mm": 29.6,
@@ -804,7 +851,9 @@
             "reflectivity_op": 0.8,
             "reflectivity_cylinder": 0.8,
             "gasket_reflectivity": 0.0,
-            "OP_Factor": 1.0
+            "OP_Factor": 1.0,
+            "transmissivity_lens": 0.95,
+            "thickness_diameter_mm": 2.0
         },
         "Olight Baton Turbo": {
             "diameter_mm": 24.9,
@@ -816,7 +865,9 @@
             "reflectivity_op": 0.8,
             "reflectivity_cylinder": 0.8,
             "gasket_reflectivity": 0.0,
-            "OP_Factor": 1.0
+            "OP_Factor": 1.0,
+            "transmissivity_lens": 0.95,
+            "thickness_diameter_mm": 2.0
         },
         "Olight Javelot": {
             "diameter_mm": 34.5,
@@ -828,7 +879,9 @@
             "reflectivity_op": 0.8,
             "reflectivity_cylinder": 0.8,
             "gasket_reflectivity": 0.0,
-            "OP_Factor": 1.0
+            "OP_Factor": 1.0,
+            "transmissivity_lens": 0.95,
+            "thickness_diameter_mm": 2.0
         },
         "Olight Warrior X4": {
             "diameter_mm": 34.9,
@@ -840,7 +893,9 @@
             "reflectivity_op": 0.8,
             "reflectivity_cylinder": 0.8,
             "gasket_reflectivity": 0.0,
-            "OP_Factor": 1.0
+            "OP_Factor": 1.0,
+            "transmissivity_lens": 0.95,
+            "thickness_diameter_mm": 2.0
         },
         "Olight Warrior X3": {
             "diameter_mm": 33.0,
@@ -852,7 +907,9 @@
             "reflectivity_op": 0.8,
             "reflectivity_cylinder": 0.8,
             "gasket_reflectivity": 0.0,
-            "OP_Factor": 1.0
+            "OP_Factor": 1.0,
+            "transmissivity_lens": 0.95,
+            "thickness_diameter_mm": 2.0
         },
         "Armytek Prime C2 Pro Max": {
             "diameter_mm": 35.8,
@@ -864,7 +921,9 @@
             "reflectivity_op": 0.8,
             "reflectivity_cylinder": 0.8,
             "gasket_reflectivity": 0.0,
-            "OP_Factor": 1.0
+            "OP_Factor": 1.0,
+            "transmissivity_lens": 0.95,
+            "thickness_diameter_mm": 2.0
         },
         "Jetbeam M37 Pro": {
             "diameter_mm": 33.0,
@@ -876,7 +935,9 @@
             "reflectivity_op": 0.8,
             "reflectivity_cylinder": 0.8,
             "gasket_reflectivity": 0.0,
-            "OP_Factor": 1.0
+            "OP_Factor": 1.0,
+            "transmissivity_lens": 0.95,
+            "thickness_diameter_mm": 2.0
         },
         "Nitecore EDC33": {
             "diameter_mm": 22.7,
@@ -888,7 +949,9 @@
             "reflectivity_op": 0.8,
             "reflectivity_cylinder": 0.8,
             "gasket_reflectivity": 0.0,
-            "OP_Factor": 1.0
+            "OP_Factor": 1.0,
+            "transmissivity_lens": 0.95,
+            "thickness_diameter_mm": 2.0
         },
         "Nitecore EDC35": {
             "diameter_mm": 26.7,
@@ -900,7 +963,9 @@
             "reflectivity_op": 0.8,
             "reflectivity_cylinder": 0.8,
             "gasket_reflectivity": 0.0,
-            "OP_Factor": 1.0
+            "OP_Factor": 1.0,
+            "transmissivity_lens": 0.95,
+            "thickness_diameter_mm": 2.0
         },
         "Thrunite Catapult Pro": {
             "diameter_mm": 58.9,
@@ -912,7 +977,9 @@
             "reflectivity_op": 0.8,
             "reflectivity_cylinder": 0.8,
             "gasket_reflectivity": 0.0,
-            "OP_Factor": 1.0
+            "OP_Factor": 1.0,
+            "transmissivity_lens": 0.95,
+            "thickness_diameter_mm": 2.0
         },
         "Thrunite TC20 V2": {
             "diameter_mm": 35.1,
@@ -924,7 +991,9 @@
             "reflectivity_op": 0.8,
             "reflectivity_cylinder": 0.8,
             "gasket_reflectivity": 0.0,
-            "OP_Factor": 1.0
+            "OP_Factor": 1.0,
+            "transmissivity_lens": 0.95,
+            "thickness_diameter_mm": 2.0
         },
         "Wildtrail WT90": {
             "diameter_mm": 91.5,
@@ -936,7 +1005,9 @@
             "reflectivity_op": 0.8,
             "reflectivity_cylinder": 0.8,
             "gasket_reflectivity": 0.0,
-            "OP_Factor": 1.0
+            "OP_Factor": 1.0,
+            "transmissivity_lens": 0.95,
+            "thickness_diameter_mm": 2.0
         }
     },
     "gaskets": {
