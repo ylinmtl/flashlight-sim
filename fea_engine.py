@@ -226,7 +226,7 @@ class SimulationConfig:
             "default_reflectivity_smooth", "default_reflectivity_op",
             "default_reflectivity_cylinder", "default_gasket_reflectivity",
             "default_op_blur_strength", "default_op_factor",
-            "default_transmissivity_lens",
+            "default_transmissivity_lens", "default_surface_finish",
             "spill_visible_threshold_lux", "corona_visible_threshold",
             "hotspot_fwhm_threshold", "default_gasket_thickness_mm",
             "default_gasket_total_height_mm", "default_gasket_opening_mm",
@@ -401,11 +401,31 @@ class SimulationConfig:
 # the chamfered corners of an SFT60, the corner notches of an SFT40, and so on.
 DIE_SHAPES = ("square", "round", "polygon")
 
+# Reflector surface treatments. The finish selects which of the
+# reflector's two reflectivity figures applies to the parabola.
+SURFACE_FINISHES = ("smooth", "orange_peel")
+
+# Specs a later version renamed, as kind -> {old name: (new name, factor)}.
+# thickness_diameter_mm was the total reduction in diameter, both walls at
+# once. wall_thickness_mm is a single wall, so a catalogue written before the
+# change holds a number that has to be halved as it is carried across.
+# Without this the same figure would quietly model a wall twice as thick.
+RENAMED_SPECS = {
+    "reflector": {"thickness_diameter_mm": ("wall_thickness_mm", 0.5)},
+}
+
+# Probes per axis used to work out how much of a boundary cell lies on the die.
+# Eight gives sixty four probes per cell, which places the emitting area of a
+# circle or a chamfered die within about 0.2% of its true value. The cost is a
+# few milliseconds once per simulation, so accuracy is worth more than speed
+# here. Raising it further converges roughly in proportion to 1 / probes.
+DIE_SUBSAMPLES = 8
+
 SPEC_DEFAULT_SETTINGS = {
     "reflector": {
         "opening_diameter_mm": "default_opening_diameter_mm",
         "focus_offset_mm": "default_focus_offset_mm",
-        "thickness_diameter_mm": "default_reflector_wall_thickness_mm",
+        "wall_thickness_mm": "default_reflector_wall_thickness_mm",
         "thickness_height_mm": "default_reflector_base_thickness_mm",
         "reflectivity_smooth": "default_reflectivity_smooth",
         "reflectivity_op": "default_reflectivity_op",
@@ -413,6 +433,7 @@ SPEC_DEFAULT_SETTINGS = {
         "gasket_reflectivity": "default_gasket_reflectivity",
         "OP_Factor": "default_op_factor",
         "transmissivity_lens": "default_transmissivity_lens",
+        "surface_finish": "default_surface_finish",
     },
     "emitter": {
         "dome_size_mm": "default_dome_size_mm",
@@ -617,6 +638,43 @@ class HardwareLibrary:
             self.save_database()
         return added
 
+    def rename_legacy_specs(self) -> Dict[str, List[str]]:
+        """Carries specs a later version renamed across to their new names.
+
+        Run once at start up, before restore_missing_specs, because a spec that
+        has been carried across must not then be treated as missing and filled
+        with a default. Where the meaning changed as well as the name the
+        stored value is converted, which is the whole point: a wall thickness
+        that used to mean both walls at once would otherwise be read as one
+        wall and quietly double the thickness of every reflector.
+
+        The old key is removed, so the rename happens once and a second start
+        up finds nothing to do.
+
+        Returns:
+            The renames applied, as "kind/name" -> ["old -> new", ...]. Empty
+            when the catalogue is already current.
+        """
+        renamed = {}
+        for kind, replacements in RENAMED_SPECS.items():
+            for name, specs in self._catalogue(kind).items():
+                applied = []
+                for old_name, (new_name, factor) in replacements.items():
+                    if old_name not in specs:
+                        continue
+                    value = specs.pop(old_name)
+                    # An explicit value already under the new name wins; the
+                    # old one is just dropped.
+                    if new_name not in specs:
+                        specs[new_name] = round(value * factor, 6)
+                    applied.append(f"{old_name} -> {new_name}")
+                if applied:
+                    renamed[f"{kind}/{name}"] = applied
+
+        if renamed:
+            self.save_database()
+        return renamed
+
     def restore_missing_specs(self, config: "SimulationConfig") -> Dict[str, List[str]]:
         """Fills in every spec any catalogue entry is missing, from the settings.
 
@@ -792,9 +850,10 @@ def get_sim_geometry(reflector: dict, emitter: dict, gasket: dict, finish: str,
         A dict of scalars consumed by the tracing kernels, plus three values
         used for reporting: effective_d_hole, focus_delta and op_multiplier.
     """
-    # Inner diameter of the reflector, i.e. the reflective surface itself.
-    inner_diameter = reflector["diameter_mm"] - spec_or_default(
-        reflector, "reflector", "thickness_diameter_mm", config)
+    # Inner diameter of the reflective surface. The spec is one wall, so it
+    # comes off the diameter twice, once on each side.
+    inner_diameter = reflector["diameter_mm"] - 2.0 * spec_or_default(
+        reflector, "reflector", "wall_thickness_mm", config)
     radius_max = inner_diameter / 2.0
     total_height = reflector["height_mm"]
 
@@ -1210,7 +1269,7 @@ def process_single_ray(ex, ey, ez_base, vx, vy, vz, flux,
 
 @cuda.jit
 def ray_trace_kernel_gpu(start_idx, end_idx, element_x, element_y,
-                         ray_vx, ray_vy, ray_vz, ray_flux,
+                         element_weight, ray_vx, ray_vy, ray_vz, ray_flux,
                          focal_length, ez_base, z_bottom, z_min_cut, z_hole_top,
                          z_max_cut, radius_max, r_hole, target_z_mm, grid_res,
                          wall_radius_m, reflectivity_parabola, reflectivity_cylinder,
@@ -1230,6 +1289,8 @@ def ray_trace_kernel_gpu(start_idx, end_idx, element_x, element_y,
         start_idx: First flat work index this launch is responsible for.
         end_idx: One past the last work index.
         element_x, element_y: Die element coordinates in millimetres.
+        element_weight: Share of the emitter's flux carried by each
+            element, proportional to the die area it stands for. Sums to 1.
         ray_vx, ray_vy, ray_vz: Unit ray directions.
         ray_flux: Flux carried by each direction, in lumens.
         hotspot_grid: Accumulator for rays that bounced at least once.
@@ -1246,7 +1307,8 @@ def ray_trace_kernel_gpu(start_idx, end_idx, element_x, element_y,
 
     final_flux, row, col, bounces = process_single_ray(
         element_x[element_idx], element_y[element_idx], ez_base,
-        ray_vx[ray_idx], ray_vy[ray_idx], ray_vz[ray_idx], ray_flux[ray_idx],
+        ray_vx[ray_idx], ray_vy[ray_idx], ray_vz[ray_idx],
+        ray_flux[ray_idx] * element_weight[element_idx],
         focal_length, z_bottom, z_min_cut, z_hole_top, z_max_cut,
         radius_max, r_hole, target_z_mm, grid_res, wall_radius_m,
         reflectivity_parabola, reflectivity_cylinder, reflectivity_gasket,
@@ -1260,7 +1322,7 @@ def ray_trace_kernel_gpu(start_idx, end_idx, element_x, element_y,
 
 @njit
 def ray_trace_kernel_cpu(start_idx, end_idx, element_x, element_y,
-                         ray_vx, ray_vy, ray_vz, ray_flux,
+                         element_weight, ray_vx, ray_vy, ray_vz, ray_flux,
                          focal_length, ez_base, z_bottom, z_min_cut, z_hole_top,
                          z_max_cut, radius_max, r_hole, target_z_mm, grid_res,
                          wall_radius_m, reflectivity_parabola, reflectivity_cylinder,
@@ -1281,7 +1343,8 @@ def ray_trace_kernel_cpu(start_idx, end_idx, element_x, element_y,
 
         final_flux, row, col, bounces = process_single_ray(
             element_x[element_idx], element_y[element_idx], ez_base,
-            ray_vx[ray_idx], ray_vy[ray_idx], ray_vz[ray_idx], ray_flux[ray_idx],
+            ray_vx[ray_idx], ray_vy[ray_idx], ray_vz[ray_idx],
+        ray_flux[ray_idx] * element_weight[element_idx],
             focal_length, z_bottom, z_min_cut, z_hole_top, z_max_cut,
             radius_max, r_hole, target_z_mm, grid_res, wall_radius_m,
             reflectivity_parabola, reflectivity_cylinder, reflectivity_gasket,
@@ -1296,7 +1359,8 @@ def ray_trace_kernel_cpu(start_idx, end_idx, element_x, element_y,
                 spill_grid[row, col] += final_flux
 
 
-def _build_kernel_args(element_x, element_y, ray_vx, ray_vy, ray_vz, ray_flux,
+def _build_kernel_args(element_x, element_y, element_weight,
+                      ray_vx, ray_vy, ray_vz, ray_flux,
                        geom: dict, config: SimulationConfig, target_z_mm: float,
                        hotspot_grid, spill_grid) -> tuple:
     """Packs every kernel argument into one tuple, in the kernels' parameter order.
@@ -1308,6 +1372,7 @@ def _build_kernel_args(element_x, element_y, ray_vx, ray_vy, ray_vz, ray_flux,
 
     Args:
         element_x, element_y: Die element coordinates, C-contiguous float64.
+        element_weight: Flux share per element, C-contiguous float64.
         ray_vx, ray_vy, ray_vz: Unit ray directions, C-contiguous float64.
         ray_flux: Flux per ray direction, C-contiguous float64.
         geom: Output of get_sim_geometry.
@@ -1319,7 +1384,7 @@ def _build_kernel_args(element_x, element_y, ray_vx, ray_vy, ray_vz, ray_flux,
         The argument tuple to splat into a kernel launch.
     """
     return (
-        element_x, element_y, ray_vx, ray_vy, ray_vz, ray_flux,
+        element_x, element_y, element_weight, ray_vx, ray_vy, ray_vz, ray_flux,
         float(geom["focal_length"]), float(geom["ez_base"]), float(geom["z_bottom"]),
         float(geom["z_min_cut"]), float(geom["z_hole_top"]), float(geom["z_max_cut"]),
         float(geom["radius_max"]), float(geom["r_hole"]), float(target_z_mm),
@@ -1535,13 +1600,71 @@ def emitter_die_outline(emitter: dict, shape: str) -> Optional[np.ndarray]:
     return vertices
 
 
-def _build_emitter_elements(emitter: dict, elements_per_side: int, shape: str,
-                            outline: Optional[np.ndarray] = None):
-    """Subdivides the light emitting surface into point sources.
+def _cell_bounds(samples: np.ndarray, low: float, high: float):
+    """Returns the span of the grid cell each sample point stands for.
 
-    Total flux is shared equally between the elements that survive, so the
-    outline sets the shape of the source without changing how many lumens it
-    produces.
+    Cell edges sit halfway between neighbouring samples, so the cells tile the
+    die's bounding box exactly. A sample on the perimeter therefore owns only
+    the half cell that lies inside the die, which is what stops the edge of a
+    die from being over weighted.
+
+    Args:
+        samples: Sorted sample coordinates along one axis.
+        low: Lower edge of the bounding box on this axis.
+        high: Upper edge of the bounding box on this axis.
+
+    Returns:
+        (lower, upper) arrays, one entry per sample.
+    """
+    if samples.size == 1:
+        return np.array([low]), np.array([high])
+
+    midpoints = (samples[:-1] + samples[1:]) / 2.0
+    return (np.concatenate(([low], midpoints)),
+            np.concatenate((midpoints, [high])))
+
+
+def _cell_coverage(x_lo, x_hi, y_lo, y_hi, inside_test, subsamples: int):
+    """Measures what fraction of each grid cell lies on the emitting surface.
+
+    Every cell is probed on a regular sub grid and the hits are counted. Doing
+    it by sampling rather than by clipping the outline analytically means one
+    piece of code covers circles, convex outlines and concave ones alike, and
+    the answer converges predictably as subsamples rises.
+
+    Args:
+        x_lo, x_hi: Cell edges along x, one entry per column.
+        y_lo, y_hi: Cell edges along y, one entry per row.
+        inside_test: Callable taking flat x and y arrays and returning a
+            boolean array.
+        subsamples: Probes per axis within each cell.
+
+    Returns:
+        A (rows, columns) array of fractions between 0 and 1.
+    """
+    steps = (np.arange(subsamples) + 0.5) / subsamples
+    probe_x = (x_lo[:, None] + steps[None, :] * (x_hi - x_lo)[:, None]).ravel()
+    probe_y = (y_lo[:, None] + steps[None, :] * (y_hi - y_lo)[:, None]).ravel()
+
+    mesh_x, mesh_y = np.meshgrid(probe_x, probe_y)
+    inside = inside_test(mesh_x.ravel(), mesh_y.ravel())
+    return inside.reshape(len(y_lo), subsamples,
+                          len(x_lo), subsamples).mean(axis=(1, 3))
+
+
+def _build_emitter_elements(emitter: dict, elements_per_side: int, shape: str,
+                            outline: Optional[np.ndarray] = None,
+                            subsamples: int = DIE_SUBSAMPLES):
+    """Subdivides the light emitting surface into area weighted point sources.
+
+    The die's bounding box is covered with a grid of sample points, the
+    outermost of which sit exactly on the perimeter. Each point stands for the
+    cell around it and carries the share of the emitter's flux that the area of
+    its cell deserves. An edge point owns half a cell and a corner point a
+    quarter, so the perimeter is sampled without being over weighted, and where
+    a curved or angled edge cuts through a cell only the part inside the die
+    counts. This is the same rule for every shape: a rectangle, a circle and an
+    arbitrary outline differ only in how much of each cell is covered.
 
     Args:
         emitter: Emitter specs.
@@ -1550,46 +1673,59 @@ def _build_emitter_elements(emitter: dict, elements_per_side: int, shape: str,
         outline: Vertices from emitter_die_outline, required for "polygon".
             The outline is authoritative for a polygon die, so the grid spans
             its bounding box and die_length_mm and die_width_mm are ignored.
+        subsamples: Probes per axis used to measure a partly covered cell.
 
     Returns:
-        (x, y) coordinate arrays in millimetres. Masked shapes return fewer
-        than elements_per_side^2 points.
+        (x, y, weight) arrays. The weights are areas in square millimetres and
+        sum to the area of the emitting surface. Cells lying entirely off the
+        die are dropped, so the arrays are shorter than elements_per_side^2 for
+        any shape that does not fill its bounding box.
 
     Raises:
-        ValueError: If a polygon outline masks out every grid point, which
-            means it is too thin to sample at this resolution.
+        ValueError: If the outline covers none of the sample cells, which means
+            it is too thin to resolve at this grid resolution.
     """
     if shape == "polygon":
         min_x, min_y = outline.min(axis=0)
         max_x, max_y = outline.max(axis=0)
-        grid_x, grid_y = np.meshgrid(
-            np.linspace(min_x, max_x, elements_per_side),
-            np.linspace(min_y, max_y, elements_per_side))
-
-        # Scaled to the die so the same outline behaves identically whatever
-        # units of size it is drawn at.
         tolerance = 1e-9 * max(max_x - min_x, max_y - min_y, 1.0)
-        inside = _points_in_polygon(grid_x.ravel(), grid_y.ravel(), outline,
-                                    tolerance)
-        if not inside.any():
-            raise ValueError(
-                f"die_outline encloses none of the {elements_per_side} x "
-                f"{elements_per_side} sample points. Raise "
-                f"sim_emitter_elements, or check the outline is in "
-                f"millimetres.")
-        return grid_x.ravel()[inside], grid_y.ravel()[inside]
 
-    die_length = emitter["die_length_mm"]
-    die_width = die_length if shape == "round" else emitter["die_width_mm"]
+        def inside_test(probe_x, probe_y):
+            """True where a probe lies on the polygon die."""
+            return _points_in_polygon(probe_x, probe_y, outline, tolerance)
+    else:
+        die_length = emitter["die_length_mm"]
+        die_width = die_length if shape == "round" else emitter["die_width_mm"]
+        min_x, max_x = -die_length / 2.0, die_length / 2.0
+        min_y, max_y = -die_width / 2.0, die_width / 2.0
 
-    grid_x, grid_y = np.meshgrid(
-        np.linspace(-die_length / 2, die_length / 2, elements_per_side),
-        np.linspace(-die_width / 2, die_width / 2, elements_per_side))
+        if shape == "round":
+            radius_sq = (die_length / 2.0) ** 2
 
-    if shape == "round":
-        inside = (grid_x ** 2 + grid_y ** 2) <= (die_length / 2.0) ** 2
-        return grid_x[inside], grid_y[inside]
-    return grid_x.flatten(), grid_y.flatten()
+            def inside_test(probe_x, probe_y):
+                """True where a probe lies on the circular die."""
+                return probe_x ** 2 + probe_y ** 2 <= radius_sq
+        else:
+            inside_test = None  # A rectangle fills its own bounding box.
+
+    sample_x = np.linspace(min_x, max_x, elements_per_side)
+    sample_y = np.linspace(min_y, max_y, elements_per_side)
+    x_lo, x_hi = _cell_bounds(sample_x, min_x, max_x)
+    y_lo, y_hi = _cell_bounds(sample_y, min_y, max_y)
+
+    coverage = (np.ones((len(y_lo), len(x_lo))) if inside_test is None
+                else _cell_coverage(x_lo, x_hi, y_lo, y_hi, inside_test, subsamples))
+    weight = (np.outer(y_hi - y_lo, x_hi - x_lo) * coverage).ravel()
+
+    grid_x, grid_y = np.meshgrid(sample_x, sample_y)
+    emitting = weight > 0.0
+    if not emitting.any():
+        raise ValueError(
+            f"The die outline covers none of the {elements_per_side} x "
+            f"{elements_per_side} sample cells. Raise sim_emitter_elements, or "
+            f"check the outline is in millimetres.")
+
+    return grid_x.ravel()[emitting], grid_y.ravel()[emitting], weight[emitting]
 
 
 def _build_ray_directions(config: SimulationConfig):
@@ -1655,17 +1791,25 @@ def simulate_wall_illuminance(geom: dict, emitter: dict, current_amps: float, fi
     peak_intensity = total_lumens / (2 * np.pi * hemisphere_integral)
 
     die_shape = spec_or_default(emitter, "emitter", "shape", config)
-    element_x, element_y = _build_emitter_elements(
+    element_x, element_y, element_area = _build_emitter_elements(
         emitter, config.sim_emitter_elements, die_shape,
         emitter_die_outline(emitter, die_shape))
     element_count = len(element_x)
 
+    # Flux follows emitting area, not element count: a point on the perimeter
+    # stands for half or a quarter of the area an interior point does, and a
+    # cell only partly covered by the die stands for less again. Normalising
+    # here keeps the emitter's total output exactly as rated whatever the die
+    # shape or the grid resolution.
+    element_weight = element_area / element_area.sum()
+
     ray_vx, ray_vy, ray_vz, ray_intensity, solid_angle = _build_ray_directions(config)
-    ray_flux = (peak_intensity * ray_intensity * solid_angle) / element_count
+    ray_flux = peak_intensity * ray_intensity * solid_angle
 
     # One contiguous float64 copy of each array, shared by both back ends.
     element_x = np.ascontiguousarray(element_x, dtype=np.float64)
     element_y = np.ascontiguousarray(element_y, dtype=np.float64)
+    element_weight = np.ascontiguousarray(element_weight, dtype=np.float64)
     ray_vx = np.ascontiguousarray(ray_vx, dtype=np.float64)
     ray_vy = np.ascontiguousarray(ray_vy, dtype=np.float64)
     ray_vz = np.ascontiguousarray(ray_vz, dtype=np.float64)
@@ -1696,6 +1840,7 @@ def simulate_wall_illuminance(geom: dict, emitter: dict, current_amps: float, fi
             device_spill = cuda.to_device(spill_grid)
             args = _build_kernel_args(
                 cuda.to_device(element_x), cuda.to_device(element_y),
+                cuda.to_device(element_weight),
                 cuda.to_device(ray_vx), cuda.to_device(ray_vy), cuda.to_device(ray_vz),
                 cuda.to_device(ray_flux),
                 geom, config, target_z_mm, device_hotspot, device_spill)
@@ -1725,7 +1870,8 @@ def simulate_wall_illuminance(geom: dict, emitter: dict, current_amps: float, fi
             log_callback(f"[CPU FEA Engine] Processing {total_threads:,} "
                          f"ray-element pairs on logical cores...")
 
-        args = _build_kernel_args(element_x, element_y, ray_vx, ray_vy, ray_vz, ray_flux,
+        args = _build_kernel_args(element_x, element_y, element_weight,
+                                  ray_vx, ray_vy, ray_vz, ray_flux,
                                   geom, config, target_z_mm, hotspot_grid, spill_grid)
 
         execute_tracers(False, ray_trace_kernel_cpu, total_threads, args,
@@ -2003,18 +2149,21 @@ def _render_wall_shot(render_data: np.ndarray, title_str: str, geometry_text: st
 
     overlay = dict(facecolor="black", alpha=0.7, edgecolor="none", pad=6)
     ax.text(0.02, 0.02, geometry_text.strip(), transform=ax.transAxes,
-            color="#CCCCCC", fontsize=10, va="bottom", bbox=overlay)
-    ax.text(0.98, 0.02, modes_text.strip(), transform=ax.transAxes, color="#CCCCCC",
-            fontsize=10, family="monospace", ha="right", va="bottom", bbox=overlay)
+            color="#CCCCCC", fontsize=9, va="bottom", bbox=overlay)
+    ax.text(0.98, 0.02, modes_text.strip(), transform=ax.transAxes,
+            color="#CCCCCC", fontsize=9, family="monospace",
+            ha="right", va="bottom", bbox=overlay)
 
     mm_per_pixel = ((2.0 * config.wall_radius_m) / config.sim_grid_res) * 1000.0
     plt.figtext(0.5, 0.015,
                 f"Canvas FOV: {config.canvas_fov_deg}° | Plot FOV: {config.plot_fov_deg}° | "
                 f"Grid Res: {mm_per_pixel:.1f} mm/px | [{_format_exposure_caption(config)}]",
-                color="#CCCCCC", fontsize=10, ha="center", va="bottom",
+                color="#CCCCCC", fontsize=9, ha="center", va="bottom",
                 bbox=dict(facecolor="black", alpha=0.7, edgecolor="none", pad=4))
-    plt.title(title_str, color="#CCCCCC", pad=15)
-    plt.tight_layout(rect=[0, 0.05, 1, 1])
+    # The header runs to two lines and the hardware names can be long,
+    # so the axes give up a strip at the top rather than let it clip.
+    plt.title(title_str, color="#CCCCCC", fontsize=10, pad=12)
+    plt.tight_layout(rect=[0.01, 0.05, 0.99, 0.95])
 
     if save_path and config.export_plots:
         plt.savefig(save_path, facecolor="black", edgecolor="none",
@@ -2075,12 +2224,15 @@ def generate_flashlight_plot(emitter_name: str, reflector_name: str, gasket_name
                                illumination.spill_lux, max_cd,
                                illumination.total_lumens, config)
 
+    # The hardware line carries the three names and nothing else: which part is
+    # which is obvious from the names themselves. The finish stays with the
+    # reflector it belongs to, because it changes the result.
     title_str = (
-        f"Hardware: {emitter_name} | Reflector: {reflector_name} "
-        f"({finish_type.upper()}) | Gasket: {gasket_name}\n"
-        f"Distance to Wall: {config.target_distance_m}m | "
+        f"{reflector_name} ({finish_type.replace('_', ' ').title()}) | "
+        f"{emitter_name} | {gasket_name}\n"
+        f"Distance: {config.target_distance_m}m | "
         f"Bore: {geom['effective_d_hole']:.1f}mm | "
-        f"Focus Delta: {geom['focus_delta']:+.2f}mm | "
+        f"Focus: {geom['focus_delta']:+.2f}mm | "
         f"Max Intensity: {int(max_cd):,} cd | Throw: {throw_m:,}m")
 
     # A centred emitter is the normal case, so it is left out of the title.
