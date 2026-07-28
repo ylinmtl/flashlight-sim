@@ -227,6 +227,26 @@
          <property name="title"><string>Gasket Library</string></property>
          <layout class="QVBoxLayout" name="verticalLayout_Gasket">
           <item>
+           <widget class="QWidget" name="widgetGasketPreview" native="true">
+            <property name="sizePolicy">
+             <sizepolicy hsizetype="Ignored" vsizetype="Fixed">
+              <horstretch>0</horstretch>
+              <verstretch>0</verstretch>
+             </sizepolicy>
+            </property>
+            <property name="minimumSize">
+             <size><width>0</width><height>0</height></size>
+            </property>
+            <property name="toolTip"><string>Gasket seen from above: the base disc with its emitter cutout, and the wall disc stacked on top.</string></property>
+            <layout class="QVBoxLayout" name="layoutGasketPreview">
+             <property name="leftMargin"><number>0</number></property>
+             <property name="topMargin"><number>0</number></property>
+             <property name="rightMargin"><number>0</number></property>
+             <property name="bottomMargin"><number>0</number></property>
+            </layout>
+           </widget>
+          </item>
+          <item>
            <widget class="QComboBox" name="cmbGasket"/>
           </item>
           <item>
@@ -234,12 +254,18 @@
             <property name="widgetResizable"><bool>true</bool></property>
             <widget class="QWidget" name="scrollWidget_Gasket">
              <layout class="QFormLayout" name="formLayout_Gasket">
-              <item row="0" column="0"><widget class="QLabel"><property name="text"><string>Thickness (mm)</string></property></widget></item>
-              <item row="0" column="1"><widget class="QLineEdit" name="txtGask_gasket_thickness_mm"><property name="maximumSize"><size><width>100</width><height>16777215</height></size></property></widget></item>
-              <item row="1" column="0"><widget class="QLabel"><property name="text"><string>Total Height (mm)</string></property></widget></item>
-              <item row="1" column="1"><widget class="QLineEdit" name="txtGask_gasket_total_height_mm"><property name="maximumSize"><size><width>100</width><height>16777215</height></size></property></widget></item>
-              <item row="2" column="0"><widget class="QLabel"><property name="text"><string>Opening (mm)</string></property></widget></item>
-              <item row="2" column="1"><widget class="QLineEdit" name="txtGask_gasket_opening_mm"><property name="maximumSize"><size><width>100</width><height>16777215</height></size></property></widget></item>
+              <item row="0" column="0"><widget class="QLabel"><property name="text"><string>Outer Diameter (mm)</string></property></widget></item>
+              <item row="0" column="1"><widget class="QLineEdit" name="txtGask_outer_diameter_mm"><property name="maximumSize"><size><width>100</width><height>16777215</height></size></property></widget></item>
+              <item row="1" column="0"><widget class="QLabel"><property name="text"><string>Inner Diameter (mm)</string></property></widget></item>
+              <item row="1" column="1"><widget class="QLineEdit" name="txtGask_inner_diameter_mm"><property name="maximumSize"><size><width>100</width><height>16777215</height></size></property></widget></item>
+              <item row="2" column="0"><widget class="QLabel"><property name="text"><string>Emitter Size (mm)</string></property></widget></item>
+              <item row="2" column="1"><widget class="QLineEdit" name="txtGask_emitter_size_mm"><property name="maximumSize"><size><width>100</width><height>16777215</height></size></property></widget></item>
+              <item row="3" column="0"><widget class="QLabel"><property name="text"><string>Wall Shape</string></property></widget></item>
+              <item row="3" column="1"><widget class="QComboBox" name="txtGask_wall_shape"><property name="maximumSize"><size><width>100</width><height>16777215</height></size></property></widget></item>
+              <item row="4" column="0"><widget class="QLabel"><property name="text"><string>Thickness (mm)</string></property></widget></item>
+              <item row="4" column="1"><widget class="QLineEdit" name="txtGask_thickness_mm"><property name="maximumSize"><size><width>100</width><height>16777215</height></size></property></widget></item>
+              <item row="5" column="0"><widget class="QLabel"><property name="text"><string>Total Height (mm)</string></property></widget></item>
+              <item row="5" column="1"><widget class="QLineEdit" name="txtGask_total_height_mm"><property name="maximumSize"><size><width>100</width><height>16777215</height></size></property></widget></item>
              </layout>
             </widget>
            </widget>

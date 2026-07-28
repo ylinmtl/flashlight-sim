@@ -734,7 +734,7 @@
             "OP_Factor": 1.0,
             "transmissivity_lens": 0.95,
             "surface_finish": "smooth",
-            "wall_thickness_mm": 2.0
+            "wall_thickness_mm": 1.0
         },
         "Convoy M3": {
             "diameter_mm": 43.9,
@@ -794,7 +794,7 @@
             "OP_Factor": 1.0,
             "transmissivity_lens": 0.95,
             "surface_finish": "smooth",
-            "wall_thickness_mm": 2.0
+            "wall_thickness_mm": 1.0
         },
         "Convoy 3x21D": {
             "diameter_mm": 85.5,
@@ -809,7 +809,7 @@
             "OP_Factor": 1.0,
             "transmissivity_lens": 0.95,
             "surface_finish": "smooth",
-            "wall_thickness_mm": 2.0
+            "wall_thickness_mm": 1.0
         },
         "Convoy 4x18": {
             "diameter_mm": 85.5,
@@ -824,7 +824,7 @@
             "OP_Factor": 1.0,
             "transmissivity_lens": 0.95,
             "surface_finish": "smooth",
-            "wall_thickness_mm": 2.0
+            "wall_thickness_mm": 1.0
         },
         "Convoy C8/M21A/M21E": {
             "diameter_mm": 42.0,
@@ -839,7 +839,7 @@
             "OP_Factor": 1.0,
             "transmissivity_lens": 0.95,
             "surface_finish": "smooth",
-            "wall_thickness_mm": 2.0
+            "wall_thickness_mm": 1.0
         },
         "Sofirn C8L": {
             "diameter_mm": 43.6,
@@ -854,7 +854,7 @@
             "OP_Factor": 1.0,
             "transmissivity_lens": 0.95,
             "surface_finish": "smooth",
-            "wall_thickness_mm": 2.0
+            "wall_thickness_mm": 1.0
         },
         "Wurkkos FC11C": {
             "diameter_mm": 20.0,
@@ -869,7 +869,7 @@
             "OP_Factor": 1.0,
             "transmissivity_lens": 0.95,
             "surface_finish": "smooth",
-            "wall_thickness_mm": 2.0
+            "wall_thickness_mm": 1.0
         },
         "Convoy L21A/L21B 11mm": {
             "diameter_mm": 58.0,
@@ -884,7 +884,7 @@
             "OP_Factor": 1.0,
             "transmissivity_lens": 0.95,
             "surface_finish": "smooth",
-            "wall_thickness_mm": 2.0
+            "wall_thickness_mm": 1.0
         },
         "Convoy L21A/L21B 9mm": {
             "diameter_mm": 58.0,
@@ -899,7 +899,7 @@
             "OP_Factor": 1.0,
             "transmissivity_lens": 0.95,
             "surface_finish": "smooth",
-            "wall_thickness_mm": 2.0
+            "wall_thickness_mm": 1.0
         },
         "Convoy L6": {
             "diameter_mm": 67.6,
@@ -914,7 +914,7 @@
             "OP_Factor": 1.1,
             "transmissivity_lens": 0.95,
             "surface_finish": "smooth",
-            "wall_thickness_mm": 2.0
+            "wall_thickness_mm": 1.0
         },
         "Convoy L7": {
             "diameter_mm": 67.6,
@@ -929,7 +929,7 @@
             "OP_Factor": 1.1,
             "transmissivity_lens": 0.95,
             "surface_finish": "smooth",
-            "wall_thickness_mm": 2.0
+            "wall_thickness_mm": 1.0
         },
         "Noctigon K1": {
             "diameter_mm": 64.9,
@@ -944,7 +944,7 @@
             "OP_Factor": 1.0,
             "transmissivity_lens": 0.95,
             "surface_finish": "smooth",
-            "wall_thickness_mm": 2.0
+            "wall_thickness_mm": 1.0
         },
         "Sofirn SP60": {
             "diameter_mm": 65.7,
@@ -959,7 +959,7 @@
             "OP_Factor": 1.0,
             "transmissivity_lens": 0.95,
             "surface_finish": "smooth",
-            "wall_thickness_mm": 2.0
+            "wall_thickness_mm": 1.0
         },
         "Sofirn SC33": {
             "diameter_mm": 28.8,
@@ -974,7 +974,7 @@
             "OP_Factor": 1.0,
             "transmissivity_lens": 0.95,
             "surface_finish": "smooth",
-            "wall_thickness_mm": 2.0
+            "wall_thickness_mm": 1.0
         },
         "Skilhunt M200 V4": {
             "diameter_mm": 17.6,
@@ -989,7 +989,7 @@
             "OP_Factor": 1.0,
             "transmissivity_lens": 0.95,
             "surface_finish": "smooth",
-            "wall_thickness_mm": 2.0
+            "wall_thickness_mm": 1.0
         },
         "Skilhunt M300 V2": {
             "diameter_mm": 24.0,
@@ -1004,7 +1004,7 @@
             "OP_Factor": 1.0,
             "transmissivity_lens": 0.95,
             "surface_finish": "smooth",
-            "wall_thickness_mm": 2.0
+            "wall_thickness_mm": 1.0
         },
         "Olight Seeker 4": {
             "diameter_mm": 29.6,
@@ -1019,7 +1019,7 @@
             "OP_Factor": 1.0,
             "transmissivity_lens": 0.95,
             "surface_finish": "smooth",
-            "wall_thickness_mm": 2.0
+            "wall_thickness_mm": 1.0
         },
         "Olight Baton Turbo": {
             "diameter_mm": 24.9,
@@ -1034,7 +1034,7 @@
             "OP_Factor": 1.0,
             "transmissivity_lens": 0.95,
             "surface_finish": "smooth",
-            "wall_thickness_mm": 2.0
+            "wall_thickness_mm": 1.0
         },
         "Olight Javelot": {
             "diameter_mm": 34.5,
@@ -1049,7 +1049,7 @@
             "OP_Factor": 1.0,
             "transmissivity_lens": 0.95,
             "surface_finish": "smooth",
-            "wall_thickness_mm": 2.0
+            "wall_thickness_mm": 1.0
         },
         "Olight Warrior X4": {
             "diameter_mm": 34.9,
@@ -1064,7 +1064,7 @@
             "OP_Factor": 1.0,
             "transmissivity_lens": 0.95,
             "surface_finish": "smooth",
-            "wall_thickness_mm": 2.0
+            "wall_thickness_mm": 1.0
         },
         "Olight Warrior X3": {
             "diameter_mm": 33.0,
@@ -1079,7 +1079,7 @@
             "OP_Factor": 1.0,
             "transmissivity_lens": 0.95,
             "surface_finish": "smooth",
-            "wall_thickness_mm": 2.0
+            "wall_thickness_mm": 1.0
         },
         "Armytek Prime C2 Pro Max": {
             "diameter_mm": 35.8,
@@ -1094,7 +1094,7 @@
             "OP_Factor": 1.0,
             "transmissivity_lens": 0.95,
             "surface_finish": "smooth",
-            "wall_thickness_mm": 2.0
+            "wall_thickness_mm": 1.0
         },
         "Jetbeam M37 Pro": {
             "diameter_mm": 33.0,
@@ -1109,7 +1109,7 @@
             "OP_Factor": 1.0,
             "transmissivity_lens": 0.95,
             "surface_finish": "smooth",
-            "wall_thickness_mm": 2.0
+            "wall_thickness_mm": 1.0
         },
         "Nitecore EDC33": {
             "diameter_mm": 22.7,
@@ -1124,7 +1124,7 @@
             "OP_Factor": 1.0,
             "transmissivity_lens": 0.95,
             "surface_finish": "smooth",
-            "wall_thickness_mm": 2.0
+            "wall_thickness_mm": 1.0
         },
         "Nitecore EDC35": {
             "diameter_mm": 26.7,
@@ -1139,7 +1139,7 @@
             "OP_Factor": 1.0,
             "transmissivity_lens": 0.95,
             "surface_finish": "smooth",
-            "wall_thickness_mm": 2.0
+            "wall_thickness_mm": 1.0
         },
         "Thrunite Catapult Pro": {
             "diameter_mm": 58.9,
@@ -1154,7 +1154,7 @@
             "OP_Factor": 1.0,
             "transmissivity_lens": 0.95,
             "surface_finish": "smooth",
-            "wall_thickness_mm": 2.0
+            "wall_thickness_mm": 1.0
         },
         "Thrunite TC20 V2": {
             "diameter_mm": 35.1,
@@ -1169,7 +1169,7 @@
             "OP_Factor": 1.0,
             "transmissivity_lens": 0.95,
             "surface_finish": "smooth",
-            "wall_thickness_mm": 2.0
+            "wall_thickness_mm": 1.0
         },
         "Wildtrail WT90": {
             "diameter_mm": 91.5,
@@ -1184,111 +1184,153 @@
             "OP_Factor": 1.0,
             "transmissivity_lens": 0.95,
             "surface_finish": "smooth",
-            "wall_thickness_mm": 2.0
+            "wall_thickness_mm": 1.0
         }
     },
     "gaskets": {
         "13mm 9090": {
             "outer_diameter_mm": 13.0,
-            "gasket_thickness_mm": 2.0,
-            "gasket_total_height_mm": 3.2,
-            "gasket_opening_mm": 11.7
+            "inner_diameter_mm": 11.7,
+            "emitter_size_mm": 9.0,
+            "wall_shape": "round",
+            "thickness_mm": 2.0,
+            "total_height_mm": 3.2
         },
         "11mm 7070": {
             "outer_diameter_mm": 11.0,
-            "gasket_thickness_mm": 1.4,
-            "gasket_total_height_mm": 2.25,
-            "gasket_opening_mm": 10.0
+            "inner_diameter_mm": 10.0,
+            "emitter_size_mm": 7.0,
+            "wall_shape": "round",
+            "thickness_mm": 1.4,
+            "total_height_mm": 2.25
         },
         "11mm 5050": {
             "outer_diameter_mm": 11.0,
-            "gasket_thickness_mm": 0.7,
-            "gasket_total_height_mm": 1.2,
-            "gasket_opening_mm": 10.0
+            "inner_diameter_mm": 9.0,
+            "emitter_size_mm": 5.0,
+            "wall_shape": "round",
+            "thickness_mm": 0.7,
+            "total_height_mm": 1.2
         },
         "10mm 7070": {
             "outer_diameter_mm": 10.0,
-            "gasket_thickness_mm": 1.0,
-            "gasket_total_height_mm": 2.25,
-            "gasket_opening_mm": 10.0
+            "inner_diameter_mm": 8.65,
+            "emitter_size_mm": 7.0,
+            "wall_shape": "round",
+            "thickness_mm": 1.0,
+            "total_height_mm": 2.2
         },
         "9mm 5050": {
             "outer_diameter_mm": 9.0,
-            "gasket_thickness_mm": 1.0,
-            "gasket_total_height_mm": 2.25,
-            "gasket_opening_mm": 7.25
+            "inner_diameter_mm": 7.25,
+            "emitter_size_mm": 5.0,
+            "wall_shape": "round",
+            "thickness_mm": 1.0,
+            "total_height_mm": 2.25
         },
         "9mm 4040": {
             "outer_diameter_mm": 9.0,
-            "gasket_thickness_mm": 0.7,
-            "gasket_total_height_mm": 1.2,
-            "gasket_opening_mm": 7.25
+            "inner_diameter_mm": 8.0,
+            "emitter_size_mm": 4.0,
+            "wall_shape": "round",
+            "thickness_mm": 0.7,
+            "total_height_mm": 1.2
         },
         "9mm 3535": {
             "outer_diameter_mm": 9.0,
-            "gasket_thickness_mm": 0.7,
-            "gasket_total_height_mm": 1.2,
-            "gasket_opening_mm": 7.25
+            "inner_diameter_mm": 8.0,
+            "emitter_size_mm": 3.5,
+            "wall_shape": "round",
+            "thickness_mm": 0.7,
+            "total_height_mm": 1.2
         },
         "9mm 3030": {
             "outer_diameter_mm": 9.0,
-            "gasket_thickness_mm": 0.7,
-            "gasket_total_height_mm": 1.2,
-            "gasket_opening_mm": 7.25
+            "inner_diameter_mm": 8.0,
+            "emitter_size_mm": 3.0,
+            "wall_shape": "round",
+            "thickness_mm": 0.7,
+            "total_height_mm": 1.2
         },
         "7mm 5050 Round": {
             "outer_diameter_mm": 7.0,
-            "gasket_thickness_mm": 1.0,
-            "gasket_total_height_mm": 2.25,
-            "gasket_opening_mm": 5.3
+            "inner_diameter_mm": 5.3,
+            "emitter_size_mm": 5.0,
+            "wall_shape": "round",
+            "thickness_mm": 1.0,
+            "total_height_mm": 2.25
         },
         "7mm 5050 Butterfly": {
             "outer_diameter_mm": 7.0,
-            "gasket_thickness_mm": 0.73,
-            "gasket_total_height_mm": 1.2,
-            "gasket_opening_mm": 5.3
+            "inner_diameter_mm": 5.0,
+            "emitter_size_mm": 5.0,
+            "wall_shape": "square",
+            "thickness_mm": 0.73,
+            "total_height_mm": 1.2
         },
         "7mm 5050 Butterfly (Oversize)": {
             "outer_diameter_mm": 7.0,
-            "gasket_thickness_mm": 0.73,
-            "gasket_total_height_mm": 1.2,
-            "gasket_opening_mm": 5.3
+            "inner_diameter_mm": 5.0,
+            "emitter_size_mm": 5.0,
+            "wall_shape": "square",
+            "thickness_mm": 0.73,
+            "total_height_mm": 1.2
         },
         "7mm 4040": {
             "outer_diameter_mm": 7.0,
-            "gasket_thickness_mm": 0.7,
-            "gasket_total_height_mm": 1.2,
-            "gasket_opening_mm": 5.3
+            "inner_diameter_mm": 5.7,
+            "emitter_size_mm": 4.0,
+            "wall_shape": "round",
+            "thickness_mm": 0.7,
+            "total_height_mm": 1.2
         },
         "7mm 3535 Square": {
             "outer_diameter_mm": 7.0,
-            "gasket_thickness_mm": 0.7,
-            "gasket_total_height_mm": 1.2,
-            "gasket_opening_mm": 5.3
+            "inner_diameter_mm": 5.3,
+            "emitter_size_mm": 3.5,
+            "wall_shape": "round",
+            "thickness_mm": 0.7,
+            "total_height_mm": 1.2
         },
         "7mm 3535 Round": {
             "outer_diameter_mm": 7.0,
-            "gasket_thickness_mm": 0.7,
-            "gasket_total_height_mm": 1.2,
-            "gasket_opening_mm": 5.3
+            "inner_diameter_mm": 6.0,
+            "emitter_size_mm": 3.5,
+            "wall_shape": "round",
+            "thickness_mm": 0.7,
+            "total_height_mm": 1.2
         },
         "7mm 3030": {
             "outer_diameter_mm": 7.0,
-            "gasket_thickness_mm": 0.7,
-            "gasket_total_height_mm": 1.2,
-            "gasket_opening_mm": 5.3
+            "inner_diameter_mm": 5.3,
+            "emitter_size_mm": 3.0,
+            "wall_shape": "round",
+            "thickness_mm": 0.7,
+            "total_height_mm": 1.2
         },
         "5mm 3535": {
             "outer_diameter_mm": 5.0,
-            "gasket_thickness_mm": 0.7,
-            "gasket_total_height_mm": 1.2,
-            "gasket_opening_mm": 4.0
+            "inner_diameter_mm": 4.0,
+            "emitter_size_mm": 3.5,
+            "wall_shape": "square",
+            "thickness_mm": 0.7,
+            "total_height_mm": 1.2
         },
         "5mm 3030": {
             "outer_diameter_mm": 5.0,
-            "gasket_thickness_mm": 0.7,
-            "gasket_total_height_mm": 1.2,
-            "gasket_opening_mm": 4.0
+            "inner_diameter_mm": 4.24,
+            "emitter_size_mm": 3.0,
+            "wall_shape": "round",
+            "thickness_mm": 0.7,
+            "total_height_mm": 1.2
+        },
+        "7mm 3.65*3.65": {
+            "outer_diameter_mm": 7.0,
+            "inner_diameter_mm": 5.2,
+            "emitter_size_mm": 3.65,
+            "wall_shape": "round",
+            "thickness_mm": 0.7,
+            "total_height_mm": 1.2
         }
     }
 }
