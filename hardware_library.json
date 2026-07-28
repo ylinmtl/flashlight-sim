@@ -238,8 +238,8 @@
             "die_length_mm": 3.0,
             "die_width_mm": 3.0,
             "shape": "square",
-            "footprint_x_mm": 10.0,
-            "footprint_y_mm": 11.0,
+            "footprint_x_mm": 9.0,
+            "footprint_y_mm": 9.0,
             "height_mm": 1.54,
             "max_current_amps": 20.5,
             "vf_turn_on_v": 2.0,
@@ -1291,7 +1291,7 @@
             "emitter_size_mm": 5.0,
             "wall_shape": "round",
             "thickness_mm": 0.7,
-            "total_height_mm": 1.2
+            "total_height_mm": 1.7
         },
         "10mm 7070": {
             "outer_diameter_mm": 10.0,
