@@ -511,28 +511,6 @@ def _dimpled_revolution(radii, heights, segments, amplitude, around, along):
             heights + 0.0 * angle)
 
 
-def _filled_outline_surface(corners, height):
-    """Turns a closed outline into a fan of surface patches at one height.
-
-    Every part of the reflector preview is drawn with plot_surface, so the
-    emitter is built the same way rather than as a separate collection.
-    Mixing the two makes mplot3d sort them against each other unreliably,
-    which loses the emitter entirely once the reflector is large.
-
-    Args:
-        corners: (x, y) pairs in order around the outline.
-        height: Height of the plane the outline lies in.
-
-    Returns:
-        (x, y, z) arrays shaped for plot_surface, fanned from the centre.
-    """
-    x = np.array([c[0] for c in corners] + [corners[0][0]], dtype=float)
-    y = np.array([c[1] for c in corners] + [corners[0][1]], dtype=float)
-    return (np.vstack([np.full_like(x, x[:-1].mean()), x]),
-            np.vstack([np.full_like(y, y[:-1].mean()), y]),
-            np.full((2, x.size), float(height)))
-
-
 def _outline_area(vertices):
     """Returns the area a polygon outline encloses, via the shoelace sum.
 

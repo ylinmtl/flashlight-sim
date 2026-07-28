@@ -156,8 +156,10 @@ def _bootstrap_bundled_cuda() -> list:
     return handles
 
 
-# Must run before Numba is imported: Numba caches its toolkit path lookup the
-# first time it is asked for it.
+# Must run before Numba is imported: Numba caches its toolkit path lookup
+# the first time it is asked for it. The handles are kept in a module
+# level name on purpose. Nothing reads them, but dropping the reference
+# would let the loaded DLLs be released again.
 _CUDA_DLL_DIRECTORIES = _bootstrap_bundled_cuda()
 
 # Agg keeps Matplotlib off the GUI thread and stops it opening detached windows.
@@ -1835,6 +1837,58 @@ def _build_emitter_elements(emitter: dict, elements_per_side: int, shape: str,
     return grid_x.ravel()[emitting], grid_y.ravel()[emitting], weight[emitting]
 
 
+# Azimuth steps that divide 180 exactly and are round numbers to type.
+# Suggested in place of a step that would bias the beam.
+TIDY_AZIMUTH_STEPS_DEG = (0.1, 0.2, 0.25, 0.5, 1.0, 1.5, 2.0, 2.5, 3.0,
+                          4.0, 5.0, 6.0, 9.0, 10.0, 12.0, 15.0, 18.0,
+                          20.0, 30.0, 36.0, 45.0, 60.0, 90.0)
+
+
+def angular_sampling_warnings(config: SimulationConfig) -> List[str]:
+    """Reports angular step sizes that would bias the beam.
+
+    The azimuth sweep runs in equal steps around the full turn. Mirroring the
+    beam left to right maps an azimuth to 180 degrees minus itself, so unless
+    the step divides 180 the sampled directions are not a mirror image of
+    themselves and a perfectly symmetric build comes out lopsided. It is not a
+    small effect: a round emitter in a round reflector traced at 8 degrees
+    differs by 60% between its left and right halves, where 9 degrees gives a
+    difference of exactly zero.
+
+    The sweep also has to close on itself, which needs the range to be a whole
+    number of steps.
+
+    Args:
+        config: Active configuration.
+
+    Returns:
+        A list of warnings, empty when the sampling is sound.
+    """
+    warnings = []
+    step = float(config.sim_phi_step_deg)
+    span = float(config.sim_phi_max_deg) - float(config.sim_phi_min_deg)
+
+    if step <= 0.0:
+        return ["Azimuth step must be greater than zero."]
+
+    def divides(total, by):
+        """True when total is a whole number of steps of size by."""
+        return abs(total / by - round(total / by)) < 1e-9
+
+    if not divides(span, step):
+        warnings.append(
+            f"Azimuth range {span:g} deg is not a whole number of "
+            f"{step:g} deg steps, so the sweep does not close evenly.")
+    elif not divides(180.0, step):
+        nearest = min(TIDY_AZIMUTH_STEPS_DEG, key=lambda tidy: abs(tidy - step))
+        warnings.append(
+            f"Azimuth step {step:g} deg does not divide 180, so the beam will "
+            f"not be left-right symmetric even for a symmetric build. "
+            f"Try {nearest:g} deg.")
+
+    return warnings
+
+
 def _build_ray_directions(config: SimulationConfig):
     """Builds the fan of ray directions and the solid angle each one carries.
 
@@ -2537,6 +2591,12 @@ def run_simulation_job(config: SimulationConfig, library: HardwareLibrary,
     """
     output_dir = config.resolved_output_directory
     os.makedirs(output_dir, exist_ok=True)
+
+    # Sampling problems are silent otherwise: the run finishes and the
+    # numbers look plausible, they are just not symmetric.
+    for warning in angular_sampling_warnings(config):
+        if log_callback:
+            log_callback(f"Warning: {warning}")
 
     if config.use_auto_exposure:
         exposure_id = f"Auto_EV_{config.auto_exposure_compensation_ev:+.1f}"
