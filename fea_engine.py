@@ -235,12 +235,15 @@ class SimulationConfig:
             "hotspot_fwhm_threshold", "default_gasket_thickness_mm",
             "default_gasket_total_height_mm",
             "default_gasket_inner_diameter_mm",
-            "default_gasket_outer_diameter_mm",
-            "default_gasket_emitter_size_mm", "default_gasket_wall_shape",
+            "default_gasket_wall_shape",
             "default_reflector_wall_thickness_mm",
             "default_reflector_base_thickness_mm", "default_focus_offset_mm",
             "default_opening_diameter_mm", "default_dome_size_mm",
             "default_refractive_index", "default_emitter_shape",
+            "default_emitter_output_mode", "default_max_lumens",
+            "default_forward_voltage_v", "default_vf_turn_on_v",
+            "default_vf_scale", "default_base_efficacy_lm_w",
+            "default_droop_factor",
         ],
     }
 
@@ -416,6 +419,11 @@ SURFACE_FINISHES = ("smooth", "orange_peel")
 # leaves a circular aperture; a square one follows the die package.
 GASKET_WALL_SHAPES = ("round", "square")
 
+# How an emitter's light output is described. Advanced works it out
+# from the electrical specs; simple takes a rated figure at maximum
+# current and scales it, which needs one number instead of four.
+OUTPUT_MODES = ("simple", "advanced")
+
 # Specs a later version renamed, as kind -> {old name: (new name, factor)}.
 # thickness_diameter_mm was the total reduction in diameter, both walls at
 # once. wall_thickness_mm is a single wall, so a catalogue written before the
@@ -452,19 +460,70 @@ SPEC_DEFAULT_SETTINGS = {
         "surface_finish": "default_surface_finish",
     },
     "emitter": {
+        "output_mode": "default_emitter_output_mode",
+        "max_lumens": "default_max_lumens",
+        "forward_voltage_v": "default_forward_voltage_v",
+        "vf_turn_on_v": "default_vf_turn_on_v",
+        "vf_scale": "default_vf_scale",
+        "base_efficacy_lm_w": "default_base_efficacy_lm_w",
+        "droop_factor": "default_droop_factor",
         "dome_size_mm": "default_dome_size_mm",
         "refractive_index": "default_refractive_index",
         "shape": "default_emitter_shape",
     },
     "gasket": {
-        "outer_diameter_mm": "default_gasket_outer_diameter_mm",
         "inner_diameter_mm": "default_gasket_inner_diameter_mm",
-        "emitter_size_mm": "default_gasket_emitter_size_mm",
         "wall_shape": "default_gasket_wall_shape",
         "thickness_mm": "default_gasket_thickness_mm",
         "total_height_mm": "default_gasket_total_height_mm",
     },
 }
+
+
+def emitter_footprint_diagonal(emitter: dict) -> float:
+    """Returns the diagonal across an emitter's package, in millimetres.
+
+    This is the narrowest hole the package can pass through, so it is the
+    smallest bore a reflector can have and still clear the emitter.
+
+    Args:
+        emitter: Emitter specs.
+
+    Returns:
+        The diagonal in millimetres.
+    """
+    return math.sqrt(float(emitter["footprint_x_mm"]) ** 2
+                     + float(emitter["footprint_y_mm"]) ** 2)
+
+
+def effective_bore_diameter(reflector: dict, emitter: dict,
+                            config: "SimulationConfig") -> float:
+    """Returns the reflector bore the tracer will actually use.
+
+    Three cases, and the GUI and the tracer both come here so they cannot
+    disagree about which one applies:
+
+    * An opening of zero has never been measured, so the emitter's footprint
+      diagonal stands in for it. Forcing the catalogue value cannot override
+      this, because there is no measured value to force.
+    * With use_reflector_opening set, a measured opening is used as it stands,
+      even where the emitter will not fit through it.
+    * Otherwise the bore is opened out to clear the emitter if it has to be.
+
+    Args:
+        reflector: Reflector specs.
+        emitter: Emitter specs.
+        config: Active configuration.
+
+    Returns:
+        The bore diameter in millimetres.
+    """
+    bore = float(spec_or_default(reflector, "reflector", "opening_diameter_mm",
+                                 config))
+    diagonal = emitter_footprint_diagonal(emitter)
+    if bore <= 0.0:
+        return diagonal
+    return bore if config.use_reflector_opening else max(bore, diagonal)
 
 
 def spec_or_default(specs: dict, kind: str, name: str, config: "SimulationConfig"):
@@ -787,22 +846,57 @@ def lambertian_intensity(theta_rad: np.ndarray) -> np.ndarray:
     return intensity
 
 
-def calculate_lumens(emitter: dict, current_amps: float) -> float:
-    """Estimates total luminous flux for an emitter at a drive current.
-
-    Forward voltage is modelled logarithmically and efficacy decays
-    exponentially with current (droop).
+def forward_voltage(emitter: dict, current_amps: float,
+                    config: "SimulationConfig") -> float:
+    """Returns the emitter's forward voltage at a drive current.
 
     Args:
         emitter: Emitter specs.
         current_amps: Drive current in amps.
+        config: Active configuration, for the mode and its defaults.
+
+    Returns:
+        Forward voltage in volts.
+    """
+    if spec_or_default(emitter, "emitter", "output_mode", config) == "simple":
+        return float(spec_or_default(emitter, "emitter", "forward_voltage_v", config))
+
+    return float(spec_or_default(emitter, "emitter", "vf_turn_on_v", config)
+                 + spec_or_default(emitter, "emitter", "vf_scale", config)
+                 * math.log(current_amps + 1.0))
+
+
+def calculate_lumens(emitter: dict, current_amps: float,
+                     config: "SimulationConfig") -> float:
+    """Estimates total luminous flux for an emitter at a drive current.
+
+    Which of the two models applies is the emitter's own choice:
+
+    * "advanced" works from the electrical specs. Forward voltage is modelled
+      logarithmically and efficacy decays exponentially with current, so the
+      efficiency lost at high drive is accounted for.
+    * "simple" takes the rated output at maximum current and scales it in
+      proportion to current. It has no way to know about droop, so it reads
+      high in the middle of the range, but it only needs the one figure that
+      every datasheet prints.
+
+    Args:
+        emitter: Emitter specs.
+        current_amps: Drive current in amps.
+        config: Active configuration, for the mode and its defaults.
 
     Returns:
         Total output in lumens.
     """
-    voltage = emitter["vf_turn_on_v"] + (emitter["vf_scale"] * np.log(current_amps + 1.0))
-    power_watts = current_amps * voltage
-    efficacy = emitter["base_efficacy_lm_w"] * np.exp(-emitter["droop_factor"] * current_amps)
+    if spec_or_default(emitter, "emitter", "output_mode", config) == "simple":
+        max_amps = float(emitter["max_current_amps"])
+        rated = float(spec_or_default(emitter, "emitter", "max_lumens", config))
+        return rated * (current_amps / max_amps) if max_amps > 0.0 else 0.0
+
+    power_watts = current_amps * forward_voltage(emitter, current_amps, config)
+    efficacy = (spec_or_default(emitter, "emitter", "base_efficacy_lm_w", config)
+                * np.exp(-spec_or_default(emitter, "emitter", "droop_factor", config)
+                         * current_amps))
     return power_watts * efficacy
 
 
@@ -889,12 +983,7 @@ def get_sim_geometry(reflector: dict, emitter: dict, gasket: dict, finish: str,
     gasket_opening_mm = spec_or_default(
         gasket, "gasket", "inner_diameter_mm", config)
 
-    # Unless the operator forces the catalogue value, the bore has to be at
-    # least as wide as the diagonal of the emitter's footprint.
-    footprint_diagonal = math.sqrt(
-        emitter["footprint_x_mm"] ** 2 + emitter["footprint_y_mm"] ** 2)
-    effective_d_hole = (bore_diameter if config.use_reflector_opening
-                        else max(bore_diameter, footprint_diagonal))
+    effective_d_hole = effective_bore_diameter(reflector, emitter, config)
     r_hole = effective_d_hole / 2.0
 
     # Focal length of the parabola that is `total_height` deep and `radius_max`
@@ -1799,7 +1888,7 @@ def simulate_wall_illuminance(geom: dict, emitter: dict, current_amps: float, fi
     Returns:
         A WallIllumination, or None if the run was cancelled.
     """
-    total_lumens = calculate_lumens(emitter, current_amps)
+    total_lumens = calculate_lumens(emitter, current_amps, config)
 
     # Normalise the Lambertian profile so it integrates to the emitter's output.
     theta_samples = np.radians(np.arange(0, 90, config.lumen_calc_step_deg))
@@ -2117,7 +2206,8 @@ def _format_beam_geometry(metrics: BeamMetrics, config: SimulationConfig) -> str
 
 
 def _format_output_modes(emitter: dict, max_amps: float, max_cd: float,
-                         total_flux: float) -> str:
+                         total_flux: float,
+                         config: SimulationConfig) -> str:
     """Builds the output table for the usual 1/10/35/100 percent drive levels.
 
     Intensity is scaled from the simulated maximum by the lumen ratio, since the
@@ -2126,7 +2216,7 @@ def _format_output_modes(emitter: dict, max_amps: float, max_cd: float,
     table = " Mode | Amps | Lumens |  Candela | Throw \n" + "-" * 46 + "\n"
     for fraction in (0.01, 0.10, 0.35, 1.0):
         amps = max_amps * fraction
-        lumens = calculate_lumens(emitter, amps)
+        lumens = calculate_lumens(emitter, amps, config)
         candela = max_cd * (lumens / total_flux)
         table += (f"{int(fraction * 100):>4}% | {amps:>4.1f} | {int(lumens):>6,} | "
                   f"{int(candela):>8,} | {int(np.sqrt(candela * 4)):>4,}m\n")
@@ -2266,12 +2356,12 @@ def generate_flashlight_plot(emitter_name: str, reflector_name: str, gasket_name
             apply_camera_exposure_and_tonemap(illumination.total_lux, config),
             title_str,
             _format_beam_geometry(metrics, config),
-            _format_output_modes(emitter, max_amps, max_cd, illumination.total_lumens),
+            _format_output_modes(emitter, max_amps, max_cd,
+                                 illumination.total_lumens, config),
             config, save_path)
 
     if config.export_ies and save_path:
-        forward_voltage = (emitter["vf_turn_on_v"]
-                           + emitter["vf_scale"] * math.sqrt(max_amps))
+        watts = max_amps * forward_voltage(emitter, max_amps, config)
         summary = export_beam_ies(
             os.path.splitext(save_path)[0] + ".ies", illumination.total_lux,
             config, {
@@ -2280,7 +2370,7 @@ def generate_flashlight_plot(emitter_name: str, reflector_name: str, gasket_name
                               f"{gasket_name}"),
                 "lamp": emitter_name,
                 "lumens": illumination.total_lumens,
-                "watts": forward_voltage * max_amps,
+                "watts": watts,
                 "notes": [
                     f"Finish: {finish_type.replace('_', ' ').title()}",
                     f"Peak intensity: {int(max_cd):,} cd",

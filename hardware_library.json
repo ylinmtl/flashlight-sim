@@ -13,7 +13,10 @@
             "base_efficacy_lm_w": 213.3,
             "droop_factor": 0.319,
             "dome_size_mm": 3.1,
-            "refractive_index": 1.41
+            "refractive_index": 1.41,
+            "output_mode": "advanced",
+            "max_lumens": 0.0,
+            "forward_voltage_v": 0.0
         },
         "Nichia 519A 4000K": {
             "die_length_mm": 2.0,
@@ -28,7 +31,10 @@
             "base_efficacy_lm_w": 116.3,
             "droop_factor": 0.147,
             "dome_size_mm": 3.1,
-            "refractive_index": 1.41
+            "refractive_index": 1.41,
+            "output_mode": "advanced",
+            "max_lumens": 0.0,
+            "forward_voltage_v": 0.0
         },
         "Nichia 519A 5000K": {
             "die_length_mm": 2.0,
@@ -43,7 +49,10 @@
             "base_efficacy_lm_w": 136.3,
             "droop_factor": 0.142,
             "dome_size_mm": 3.1,
-            "refractive_index": 1.41
+            "refractive_index": 1.41,
+            "output_mode": "advanced",
+            "max_lumens": 0.0,
+            "forward_voltage_v": 0.0
         },
         "Nichia 719A 5000K": {
             "die_length_mm": 2.0,
@@ -58,7 +67,10 @@
             "base_efficacy_lm_w": 106.1,
             "droop_factor": 0.184,
             "dome_size_mm": 0.0,
-            "refractive_index": 1.0
+            "refractive_index": 1.0,
+            "output_mode": "advanced",
+            "max_lumens": 0.0,
+            "forward_voltage_v": 0.0
         },
         "Nichia B35AM 5700K": {
             "die_length_mm": 3.12,
@@ -73,7 +85,10 @@
             "base_efficacy_lm_w": 133.3,
             "droop_factor": 0.125,
             "dome_size_mm": 0.0,
-            "refractive_index": 1.0
+            "refractive_index": 1.0,
+            "output_mode": "advanced",
+            "max_lumens": 0.0,
+            "forward_voltage_v": 0.0
         },
         "Getian GT FC40 5000K": {
             "die_length_mm": 5.55,
@@ -88,7 +103,10 @@
             "base_efficacy_lm_w": 112.75,
             "droop_factor": 0.0905,
             "dome_size_mm": 0.0,
-            "refractive_index": 1.0
+            "refractive_index": 1.0,
+            "output_mode": "advanced",
+            "max_lumens": 0.0,
+            "forward_voltage_v": 0.0
         },
         "Osram KW CULPM1.TG": {
             "die_length_mm": 1.59,
@@ -103,7 +121,10 @@
             "base_efficacy_lm_w": 94.2,
             "droop_factor": 0.058,
             "dome_size_mm": 0.0,
-            "refractive_index": 1.0
+            "refractive_index": 1.0,
+            "output_mode": "advanced",
+            "max_lumens": 0.0,
+            "forward_voltage_v": 0.0
         },
         "Lumen Pioneer LHP531 6500K": {
             "die_length_mm": 3.67,
@@ -118,7 +139,10 @@
             "base_efficacy_lm_w": 161.0,
             "droop_factor": 0.0329,
             "dome_size_mm": 0.0,
-            "refractive_index": 1.0
+            "refractive_index": 1.0,
+            "output_mode": "advanced",
+            "max_lumens": 0.0,
+            "forward_voltage_v": 0.0
         },
         "Lumen Pioneer LHP531 5000K": {
             "die_length_mm": 3.67,
@@ -133,7 +157,10 @@
             "base_efficacy_lm_w": 156.2,
             "droop_factor": 0.0321,
             "dome_size_mm": 0.0,
-            "refractive_index": 1.0
+            "refractive_index": 1.0,
+            "output_mode": "advanced",
+            "max_lumens": 0.0,
+            "forward_voltage_v": 0.0
         },
         "Lumen Pioneer LHP531 4000K": {
             "die_length_mm": 3.67,
@@ -148,7 +175,10 @@
             "base_efficacy_lm_w": 148.8,
             "droop_factor": 0.0302,
             "dome_size_mm": 0.0,
-            "refractive_index": 1.0
+            "refractive_index": 1.0,
+            "output_mode": "advanced",
+            "max_lumens": 0.0,
+            "forward_voltage_v": 0.0
         },
         "Lumen Pioneer LHP531 3000K": {
             "die_length_mm": 3.67,
@@ -163,7 +193,10 @@
             "base_efficacy_lm_w": 148.3,
             "droop_factor": 0.0346,
             "dome_size_mm": 0.0,
-            "refractive_index": 1.0
+            "refractive_index": 1.0,
+            "output_mode": "advanced",
+            "max_lumens": 0.0,
+            "forward_voltage_v": 0.0
         },
         "Lumen Pioneer LHP531 1800K": {
             "die_length_mm": 3.78,
@@ -178,7 +211,10 @@
             "base_efficacy_lm_w": 137.2,
             "droop_factor": 0.0482,
             "dome_size_mm": 0.0,
-            "refractive_index": 1.0
+            "refractive_index": 1.0,
+            "output_mode": "advanced",
+            "max_lumens": 0.0,
+            "forward_voltage_v": 0.0
         },
         "Lumen Pioneer LHP73B 5000K": {
             "die_length_mm": 5.0,
@@ -193,7 +229,10 @@
             "base_efficacy_lm_w": 152.9,
             "droop_factor": 0.0188,
             "dome_size_mm": 0.0,
-            "refractive_index": 1.0
+            "refractive_index": 1.0,
+            "output_mode": "advanced",
+            "max_lumens": 0.0,
+            "forward_voltage_v": 0.0
         },
         "Luminus SBT90.2 6500K": {
             "die_length_mm": 3.0,
@@ -208,7 +247,10 @@
             "base_efficacy_lm_w": 151.2,
             "droop_factor": 0.0335,
             "dome_size_mm": 0.0,
-            "refractive_index": 1.0
+            "refractive_index": 1.0,
+            "output_mode": "advanced",
+            "max_lumens": 0.0,
+            "forward_voltage_v": 0.0
         },
         "Luminus SFT12 6500K": {
             "die_length_mm": 1.26,
@@ -223,7 +265,10 @@
             "base_efficacy_lm_w": 154.6,
             "droop_factor": 0.1995,
             "dome_size_mm": 0.0,
-            "refractive_index": 1.0
+            "refractive_index": 1.0,
+            "output_mode": "advanced",
+            "max_lumens": 0.0,
+            "forward_voltage_v": 0.0
         },
         "Luminus SFT25R 5700K": {
             "die_length_mm": 1.7,
@@ -238,7 +283,10 @@
             "base_efficacy_lm_w": 114.1,
             "droop_factor": 0.1098,
             "dome_size_mm": 0.0,
-            "refractive_index": 1.0
+            "refractive_index": 1.0,
+            "output_mode": "advanced",
+            "max_lumens": 0.0,
+            "forward_voltage_v": 0.0
         },
         "Luminus SFT25R 6500K": {
             "die_length_mm": 1.7,
@@ -253,7 +301,10 @@
             "base_efficacy_lm_w": 135.1,
             "droop_factor": 0.09,
             "dome_size_mm": 0.0,
-            "refractive_index": 1.0
+            "refractive_index": 1.0,
+            "output_mode": "advanced",
+            "max_lumens": 0.0,
+            "forward_voltage_v": 0.0
         },
         "Luminus SFT40 3000K": {
             "die_length_mm": 1.97,
@@ -318,7 +369,10 @@
                     -0.69,
                     -0.69
                 ]
-            ]
+            ],
+            "output_mode": "advanced",
+            "max_lumens": 0.0,
+            "forward_voltage_v": 0.0
         },
         "Luminus SFT40 6500K": {
             "die_length_mm": 1.97,
@@ -383,7 +437,10 @@
                     -0.69,
                     -0.69
                 ]
-            ]
+            ],
+            "output_mode": "advanced",
+            "max_lumens": 0.0,
+            "forward_voltage_v": 0.0
         },
         "Luminus SFT42R 6500K": {
             "max_current_amps": 8.0,
@@ -398,7 +455,10 @@
             "refractive_index": 1.0,
             "die_length_mm": 2.32,
             "die_width_mm": 2.32,
-            "shape": "round"
+            "shape": "round",
+            "output_mode": "advanced",
+            "max_lumens": 0.0,
+            "forward_voltage_v": 0.0
         },
         "Luminus SFT60 6500K": {
             "die_length_mm": 2.25,
@@ -447,7 +507,10 @@
                     -1.125,
                     -0.788
                 ]
-            ]
+            ],
+            "output_mode": "advanced",
+            "max_lumens": 0.0,
+            "forward_voltage_v": 0.0
         },
         "Luminus SFT70 3000K": {
             "die_length_mm": 2.38,
@@ -462,7 +525,10 @@
             "base_efficacy_lm_w": 92.7,
             "droop_factor": 0.1046,
             "dome_size_mm": 0.0,
-            "refractive_index": 1.0
+            "refractive_index": 1.0,
+            "output_mode": "advanced",
+            "max_lumens": 0.0,
+            "forward_voltage_v": 0.0
         },
         "Luminus SFT70 6500K": {
             "die_length_mm": 2.38,
@@ -477,7 +543,10 @@
             "base_efficacy_lm_w": 140.5,
             "droop_factor": 0.0977,
             "dome_size_mm": 0.0,
-            "refractive_index": 1.0
+            "refractive_index": 1.0,
+            "output_mode": "advanced",
+            "max_lumens": 0.0,
+            "forward_voltage_v": 0.0
         },
         "Luminus SFT90 6500K": {
             "die_length_mm": 3.0,
@@ -492,7 +561,10 @@
             "base_efficacy_lm_w": 171.4,
             "droop_factor": 0.0502,
             "dome_size_mm": 0.0,
-            "refractive_index": 1.0
+            "refractive_index": 1.0,
+            "output_mode": "advanced",
+            "max_lumens": 0.0,
+            "forward_voltage_v": 0.0
         },
         "Lumen Pioneer W5050SQ5 6500K": {
             "die_length_mm": 1.7,
@@ -507,7 +579,10 @@
             "base_efficacy_lm_w": 124.7,
             "droop_factor": 0.1376,
             "dome_size_mm": 0.0,
-            "refractive_index": 1.0
+            "refractive_index": 1.0,
+            "output_mode": "advanced",
+            "max_lumens": 0.0,
+            "forward_voltage_v": 0.0
         },
         "Cree XHP50.3 HI 4500K": {
             "die_length_mm": 2.95,
@@ -522,7 +597,10 @@
             "base_efficacy_lm_w": 124.3,
             "droop_factor": 0.0908,
             "dome_size_mm": 0.0,
-            "refractive_index": 1.0
+            "refractive_index": 1.0,
+            "output_mode": "advanced",
+            "max_lumens": 0.0,
+            "forward_voltage_v": 0.0
         },
         "Cree XHP70.3 HI 4000K": {
             "die_length_mm": 4.0,
@@ -537,7 +615,10 @@
             "base_efficacy_lm_w": 156.0,
             "droop_factor": 0.045,
             "dome_size_mm": 0.0,
-            "refractive_index": 1.0
+            "refractive_index": 1.0,
+            "output_mode": "advanced",
+            "max_lumens": 0.0,
+            "forward_voltage_v": 0.0
         }
     },
     "reflectors": {
@@ -665,7 +746,7 @@
             "diameter_mm": 30.5,
             "height_mm": 21.2,
             "thickness_height_mm": 0.5,
-            "opening_diameter_mm": 0.0,
+            "opening_diameter_mm": 8.0,
             "focus_offset_mm": 0.0,
             "reflectivity_smooth": 0.85,
             "reflectivity_op": 0.8,
@@ -704,7 +785,7 @@
             "reflectivity_cylinder": 0.8,
             "transmissivity_lens": 0.95,
             "wall_thickness_mm": 1.0,
-            "surface_finish": "smooth"
+            "surface_finish": "orange_peel"
         },
         "Convoy M21F": {
             "diameter_mm": 33.1,
@@ -733,7 +814,7 @@
             "gasket_reflectivity": 0.0,
             "OP_Factor": 1.0,
             "transmissivity_lens": 0.95,
-            "surface_finish": "smooth",
+            "surface_finish": "orange_peel",
             "wall_thickness_mm": 1.0
         },
         "Convoy M3": {
@@ -779,7 +860,7 @@
             "reflectivity_cylinder": 0.8,
             "transmissivity_lens": 0.95,
             "wall_thickness_mm": 1.0,
-            "surface_finish": "smooth"
+            "surface_finish": "orange_peel"
         },
         "Noctigon KR1/D1": {
             "diameter_mm": 30.5,
@@ -793,7 +874,7 @@
             "gasket_reflectivity": 0.0,
             "OP_Factor": 1.0,
             "transmissivity_lens": 0.95,
-            "surface_finish": "smooth",
+            "surface_finish": "orange_peel",
             "wall_thickness_mm": 1.0
         },
         "Convoy 3x21D": {
@@ -853,13 +934,13 @@
             "gasket_reflectivity": 0.0,
             "OP_Factor": 1.0,
             "transmissivity_lens": 0.95,
-            "surface_finish": "smooth",
+            "surface_finish": "orange_peel",
             "wall_thickness_mm": 1.0
         },
         "Wurkkos FC11C": {
             "diameter_mm": 20.0,
             "height_mm": 10.0,
-            "opening_diameter_mm": 0.0,
+            "opening_diameter_mm": 7.45,
             "focus_offset_mm": 0.27,
             "thickness_height_mm": 0.5,
             "reflectivity_smooth": 0.85,
@@ -868,7 +949,7 @@
             "gasket_reflectivity": 0.0,
             "OP_Factor": 1.0,
             "transmissivity_lens": 0.95,
-            "surface_finish": "smooth",
+            "surface_finish": "orange_peel",
             "wall_thickness_mm": 1.0
         },
         "Convoy L21A/L21B 11mm": {
@@ -883,7 +964,7 @@
             "gasket_reflectivity": 0.0,
             "OP_Factor": 1.0,
             "transmissivity_lens": 0.95,
-            "surface_finish": "smooth",
+            "surface_finish": "orange_peel",
             "wall_thickness_mm": 1.0
         },
         "Convoy L21A/L21B 9mm": {
@@ -913,7 +994,7 @@
             "gasket_reflectivity": 0.0,
             "OP_Factor": 1.1,
             "transmissivity_lens": 0.95,
-            "surface_finish": "smooth",
+            "surface_finish": "orange_peel",
             "wall_thickness_mm": 1.0
         },
         "Convoy L7": {
@@ -958,7 +1039,7 @@
             "gasket_reflectivity": 0.0,
             "OP_Factor": 1.0,
             "transmissivity_lens": 0.95,
-            "surface_finish": "smooth",
+            "surface_finish": "orange_peel",
             "wall_thickness_mm": 1.0
         },
         "Sofirn SC33": {
@@ -973,7 +1054,7 @@
             "gasket_reflectivity": 0.0,
             "OP_Factor": 1.0,
             "transmissivity_lens": 0.95,
-            "surface_finish": "smooth",
+            "surface_finish": "orange_peel",
             "wall_thickness_mm": 1.0
         },
         "Skilhunt M200 V4": {
@@ -988,7 +1069,7 @@
             "gasket_reflectivity": 0.0,
             "OP_Factor": 1.0,
             "transmissivity_lens": 0.95,
-            "surface_finish": "smooth",
+            "surface_finish": "orange_peel",
             "wall_thickness_mm": 1.0
         },
         "Skilhunt M300 V2": {
@@ -1003,7 +1084,7 @@
             "gasket_reflectivity": 0.0,
             "OP_Factor": 1.0,
             "transmissivity_lens": 0.95,
-            "surface_finish": "smooth",
+            "surface_finish": "orange_peel",
             "wall_thickness_mm": 1.0
         },
         "Olight Seeker 4": {
@@ -1123,7 +1204,7 @@
             "gasket_reflectivity": 0.0,
             "OP_Factor": 1.0,
             "transmissivity_lens": 0.95,
-            "surface_finish": "smooth",
+            "surface_finish": "orange_peel",
             "wall_thickness_mm": 1.0
         },
         "Nitecore EDC35": {
@@ -1138,7 +1219,7 @@
             "gasket_reflectivity": 0.0,
             "OP_Factor": 1.0,
             "transmissivity_lens": 0.95,
-            "surface_finish": "smooth",
+            "surface_finish": "orange_peel",
             "wall_thickness_mm": 1.0
         },
         "Thrunite Catapult Pro": {
@@ -1168,7 +1249,7 @@
             "gasket_reflectivity": 0.0,
             "OP_Factor": 1.0,
             "transmissivity_lens": 0.95,
-            "surface_finish": "smooth",
+            "surface_finish": "orange_peel",
             "wall_thickness_mm": 1.0
         },
         "Wildtrail WT90": {

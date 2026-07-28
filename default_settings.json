@@ -57,8 +57,6 @@
         "default_gasket_thickness_mm": 1.0,
         "default_gasket_total_height_mm": 1.0,
         "default_gasket_inner_diameter_mm": 0.0,
-        "default_gasket_outer_diameter_mm": 0.0,
-        "default_gasket_emitter_size_mm": 0.0,
         "default_gasket_wall_shape": "round",
         "default_reflector_wall_thickness_mm": 1.0,
         "default_reflector_base_thickness_mm": 0.5,
@@ -66,6 +64,13 @@
         "default_opening_diameter_mm": 0.0,
         "default_dome_size_mm": 0.0,
         "default_refractive_index": 1.0,
-        "default_emitter_shape": "square"
+        "default_emitter_shape": "square",
+        "default_emitter_output_mode": "advanced",
+        "default_max_lumens": 0.0,
+        "default_forward_voltage_v": 0.0,
+        "default_vf_turn_on_v": 0.0,
+        "default_vf_scale": 0.0,
+        "default_base_efficacy_lm_w": 0.0,
+        "default_droop_factor": 0.0
     }
 }

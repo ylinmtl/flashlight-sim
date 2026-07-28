@@ -54,6 +54,13 @@
            </widget>
           </item>
           <item>
+           <widget class="QLabel" name="lblReflectorWarning">
+            <property name="wordWrap"><bool>true</bool></property>
+            <property name="styleSheet"><string>color: #E8A33D;</string></property>
+            <property name="text"><string/></property>
+           </widget>
+          </item>
+          <item>
            <widget class="QComboBox" name="cmbReflector"/>
           </item>
           <item>
@@ -107,12 +114,21 @@
            </widget>
           </item>
           <item>
-           <layout class="QHBoxLayout" name="horizontalLayout_ReflectorButtons">
+           <layout class="QHBoxLayout" name="horizontalLayout_ReflectorButtonsTop">
+            <item>
+             <widget class="QPushButton" name="btnNewReflector">
+              <property name="text"><string>New</string></property>
+             </widget>
+            </item>
             <item>
              <widget class="QPushButton" name="btnResetReflector">
               <property name="text"><string>Reset</string></property>
              </widget>
             </item>
+           </layout>
+          </item>
+          <item>
+           <layout class="QHBoxLayout" name="horizontalLayout_ReflectorButtonsBottom">
             <item>
              <widget class="QPushButton" name="btnSaveReflector">
               <property name="text"><string>Save</string></property>
@@ -157,6 +173,13 @@
            </widget>
           </item>
           <item>
+           <widget class="QLabel" name="lblEmitterWarning">
+            <property name="wordWrap"><bool>true</bool></property>
+            <property name="styleSheet"><string>color: #E8A33D;</string></property>
+            <property name="text"><string/></property>
+           </widget>
+          </item>
+          <item>
            <widget class="QComboBox" name="cmbEmitter"/>
           </item>
           <item>
@@ -166,43 +189,58 @@
              <layout class="QFormLayout" name="formLayout_Emitter">
               <item row="0" column="0"><widget class="QLabel"><property name="text"><string>Max Current (A)</string></property></widget></item>
               <item row="0" column="1"><widget class="QLineEdit" name="txtEmi_max_current_amps"><property name="maximumSize"><size><width>100</width><height>16777215</height></size></property></widget></item>
-              <item row="1" column="0"><widget class="QLabel"><property name="text"><string>VF Turn On (V)</string></property></widget></item>
-              <item row="1" column="1"><widget class="QLineEdit" name="txtEmi_vf_turn_on_v"><property name="maximumSize"><size><width>100</width><height>16777215</height></size></property></widget></item>
-              <item row="2" column="0"><widget class="QLabel"><property name="text"><string>VF Scale</string></property></widget></item>
-              <item row="2" column="1"><widget class="QLineEdit" name="txtEmi_vf_scale"><property name="maximumSize"><size><width>100</width><height>16777215</height></size></property></widget></item>
-              <item row="3" column="0"><widget class="QLabel"><property name="text"><string>Base Efficiency (lm/W)</string></property></widget></item>
-              <item row="3" column="1"><widget class="QLineEdit" name="txtEmi_base_efficacy_lm_w"><property name="maximumSize"><size><width>100</width><height>16777215</height></size></property></widget></item>
-              <item row="4" column="0"><widget class="QLabel"><property name="text"><string>Droop Factor</string></property></widget></item>
-              <item row="4" column="1"><widget class="QLineEdit" name="txtEmi_droop_factor"><property name="maximumSize"><size><width>100</width><height>16777215</height></size></property></widget></item>
-              <item row="5" column="0"><widget class="QLabel"><property name="text"><string>Footprint X (mm)</string></property></widget></item>
-              <item row="5" column="1"><widget class="QLineEdit" name="txtEmi_footprint_x_mm"><property name="maximumSize"><size><width>100</width><height>16777215</height></size></property></widget></item>
-              <item row="6" column="0"><widget class="QLabel"><property name="text"><string>Footprint Y (mm)</string></property></widget></item>
-              <item row="6" column="1"><widget class="QLineEdit" name="txtEmi_footprint_y_mm"><property name="maximumSize"><size><width>100</width><height>16777215</height></size></property></widget></item>
-              <item row="7" column="0"><widget class="QLabel"><property name="text"><string>Height (mm)</string></property></widget></item>
-              <item row="7" column="1"><widget class="QLineEdit" name="txtEmi_height_mm"><property name="maximumSize"><size><width>100</width><height>16777215</height></size></property></widget></item>
-              <item row="8" column="0"><widget class="QLabel"><property name="text"><string>Dome Size (mm)</string></property></widget></item>
-              <item row="8" column="1"><widget class="QLineEdit" name="txtEmi_dome_size_mm"><property name="maximumSize"><size><width>100</width><height>16777215</height></size></property></widget></item>
-              <item row="9" column="0"><widget class="QLabel"><property name="text"><string>Refractive Index</string></property></widget></item>
-              <item row="9" column="1"><widget class="QLineEdit" name="txtEmi_refractive_index"><property name="maximumSize"><size><width>100</width><height>16777215</height></size></property></widget></item>
-              <item row="10" column="0"><widget class="QLabel"><property name="text"><string>Die Length (mm)</string></property></widget></item>
-              <item row="10" column="1"><widget class="QLineEdit" name="txtEmi_die_length_mm"><property name="maximumSize"><size><width>100</width><height>16777215</height></size></property></widget></item>
-              <item row="11" column="0"><widget class="QLabel"><property name="text"><string>Die Width (mm)</string></property></widget></item>
-              <item row="11" column="1"><widget class="QLineEdit" name="txtEmi_die_width_mm"><property name="maximumSize"><size><width>100</width><height>16777215</height></size></property></widget></item>
-              <item row="12" column="0"><widget class="QLabel"><property name="text"><string>Shape</string></property></widget></item>
-              <item row="12" column="1"><widget class="QComboBox" name="txtEmi_shape"><property name="toolTip"><string>Outline of the light emitting surface. Use polygon for anything that is not a plain rectangle or circle, and fill in the Die Outline below.</string></property><property name="maximumSize"><size><width>100</width><height>16777215</height></size></property></widget></item>
-              <item row="13" column="0"><widget class="QLabel"><property name="text"><string>Die Outline (mm)</string></property></widget></item>
-              <item row="13" column="1"><widget class="QLineEdit" name="txtEmi_die_outline"><property name="toolTip"><string>Only used when Shape is polygon. A JSON list of [x,y] corners in mm, measured from the die centre, in order around the outline. Paste the output of emitter_shapes.py here. Leave blank for square or round dies.</string></property><property name="placeholderText"><string>[[-1,-1],[1,-1],[1,1],[-1,1]]</string></property><property name="maximumSize"><size><width>100</width><height>16777215</height></size></property></widget></item>
+              <item row="1" column="0"><widget class="QLabel"><property name="text"><string>Output Mode</string></property></widget></item>
+              <item row="1" column="1"><widget class="QComboBox" name="txtEmi_output_mode"><property name="maximumSize"><size><width>100</width><height>16777215</height></size></property></widget></item>
+              <item row="2" column="0"><widget class="QLabel"><property name="text"><string>Max Lumens (lm)</string></property></widget></item>
+              <item row="2" column="1"><widget class="QLineEdit" name="txtEmi_max_lumens"><property name="maximumSize"><size><width>100</width><height>16777215</height></size></property></widget></item>
+              <item row="3" column="0"><widget class="QLabel"><property name="text"><string>Voltage (V)</string></property></widget></item>
+              <item row="3" column="1"><widget class="QLineEdit" name="txtEmi_forward_voltage_v"><property name="maximumSize"><size><width>100</width><height>16777215</height></size></property></widget></item>
+              <item row="4" column="0"><widget class="QLabel"><property name="text"><string>VF Turn On (V)</string></property></widget></item>
+              <item row="4" column="1"><widget class="QLineEdit" name="txtEmi_vf_turn_on_v"><property name="maximumSize"><size><width>100</width><height>16777215</height></size></property></widget></item>
+              <item row="5" column="0"><widget class="QLabel"><property name="text"><string>VF Scale</string></property></widget></item>
+              <item row="5" column="1"><widget class="QLineEdit" name="txtEmi_vf_scale"><property name="maximumSize"><size><width>100</width><height>16777215</height></size></property></widget></item>
+              <item row="6" column="0"><widget class="QLabel"><property name="text"><string>Base Efficiency (lm/W)</string></property></widget></item>
+              <item row="6" column="1"><widget class="QLineEdit" name="txtEmi_base_efficacy_lm_w"><property name="maximumSize"><size><width>100</width><height>16777215</height></size></property></widget></item>
+              <item row="7" column="0"><widget class="QLabel"><property name="text"><string>Droop Factor</string></property></widget></item>
+              <item row="7" column="1"><widget class="QLineEdit" name="txtEmi_droop_factor"><property name="maximumSize"><size><width>100</width><height>16777215</height></size></property></widget></item>
+              <item row="8" column="0"><widget class="QLabel"><property name="text"><string>Footprint X (mm)</string></property></widget></item>
+              <item row="8" column="1"><widget class="QLineEdit" name="txtEmi_footprint_x_mm"><property name="maximumSize"><size><width>100</width><height>16777215</height></size></property></widget></item>
+              <item row="9" column="0"><widget class="QLabel"><property name="text"><string>Footprint Y (mm)</string></property></widget></item>
+              <item row="9" column="1"><widget class="QLineEdit" name="txtEmi_footprint_y_mm"><property name="maximumSize"><size><width>100</width><height>16777215</height></size></property></widget></item>
+              <item row="10" column="0"><widget class="QLabel"><property name="text"><string>Height (mm)</string></property></widget></item>
+              <item row="10" column="1"><widget class="QLineEdit" name="txtEmi_height_mm"><property name="maximumSize"><size><width>100</width><height>16777215</height></size></property></widget></item>
+              <item row="11" column="0"><widget class="QLabel"><property name="text"><string>Dome Size (mm)</string></property></widget></item>
+              <item row="11" column="1"><widget class="QLineEdit" name="txtEmi_dome_size_mm"><property name="maximumSize"><size><width>100</width><height>16777215</height></size></property></widget></item>
+              <item row="12" column="0"><widget class="QLabel"><property name="text"><string>Refractive Index</string></property></widget></item>
+              <item row="12" column="1"><widget class="QLineEdit" name="txtEmi_refractive_index"><property name="maximumSize"><size><width>100</width><height>16777215</height></size></property></widget></item>
+              <item row="13" column="0"><widget class="QLabel"><property name="text"><string>Die Length (mm)</string></property></widget></item>
+              <item row="13" column="1"><widget class="QLineEdit" name="txtEmi_die_length_mm"><property name="maximumSize"><size><width>100</width><height>16777215</height></size></property></widget></item>
+              <item row="14" column="0"><widget class="QLabel"><property name="text"><string>Die Width (mm)</string></property></widget></item>
+              <item row="14" column="1"><widget class="QLineEdit" name="txtEmi_die_width_mm"><property name="maximumSize"><size><width>100</width><height>16777215</height></size></property></widget></item>
+              <item row="15" column="0"><widget class="QLabel"><property name="text"><string>Shape</string></property></widget></item>
+              <item row="15" column="1"><widget class="QComboBox" name="txtEmi_shape"><property name="toolTip"><string>Outline of the light emitting surface. Use polygon for anything that is not a plain rectangle or circle, and fill in the Die Outline below.</string></property><property name="maximumSize"><size><width>100</width><height>16777215</height></size></property></widget></item>
+              <item row="16" column="0"><widget class="QLabel"><property name="text"><string>Die Outline (mm)</string></property></widget></item>
+              <item row="16" column="1"><widget class="QLineEdit" name="txtEmi_die_outline"><property name="toolTip"><string>Only used when Shape is polygon. A JSON list of [x,y] corners in mm, measured from the die centre, in order around the outline. Paste the output of emitter_shapes.py here. Leave blank for square or round dies.</string></property><property name="placeholderText"><string>[[-1,-1],[1,-1],[1,1],[-1,1]]</string></property><property name="maximumSize"><size><width>100</width><height>16777215</height></size></property></widget></item>
              </layout>
             </widget>
            </widget>
           </item>
           <item>
-           <layout class="QHBoxLayout" name="horizontalLayout_EmitterButtons">
+           <layout class="QHBoxLayout" name="horizontalLayout_EmitterButtonsTop">
+            <item>
+             <widget class="QPushButton" name="btnNewEmitter">
+              <property name="text"><string>New</string></property>
+             </widget>
+            </item>
             <item>
              <widget class="QPushButton" name="btnResetEmitter">
               <property name="text"><string>Reset</string></property>
              </widget>
             </item>
+           </layout>
+          </item>
+          <item>
+           <layout class="QHBoxLayout" name="horizontalLayout_EmitterButtonsBottom">
             <item>
              <widget class="QPushButton" name="btnSaveEmitter">
               <property name="text"><string>Save</string></property>
@@ -247,6 +285,13 @@
            </widget>
           </item>
           <item>
+           <widget class="QLabel" name="lblGasketWarning">
+            <property name="wordWrap"><bool>true</bool></property>
+            <property name="styleSheet"><string>color: #E8A33D;</string></property>
+            <property name="text"><string/></property>
+           </widget>
+          </item>
+          <item>
            <widget class="QComboBox" name="cmbGasket"/>
           </item>
           <item>
@@ -271,12 +316,21 @@
            </widget>
           </item>
           <item>
-           <layout class="QHBoxLayout" name="horizontalLayout_GasketButtons">
+           <layout class="QHBoxLayout" name="horizontalLayout_GasketButtonsTop">
+            <item>
+             <widget class="QPushButton" name="btnNewGasket">
+              <property name="text"><string>New</string></property>
+             </widget>
+            </item>
             <item>
              <widget class="QPushButton" name="btnResetGasket">
               <property name="text"><string>Reset</string></property>
              </widget>
             </item>
+           </layout>
+          </item>
+          <item>
+           <layout class="QHBoxLayout" name="horizontalLayout_GasketButtonsBottom">
             <item>
              <widget class="QPushButton" name="btnSaveGasket">
               <property name="text"><string>Save</string></property>
