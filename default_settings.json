@@ -40,15 +40,23 @@
         "default_reflectivity_smooth": 0.85,
         "default_reflectivity_op": 0.80,
         "default_reflectivity_cylinder": 0.0,
+        "default_gasket_reflectivity": 0.0,
         "default_op_blur_strength": 1.0,
+        "default_op_factor": 1.0,
+        "default_transmissivity_lens": 0.95,
+        "default_surface_finish": "smooth",
         "spill_visible_threshold_lux": 0.0001,
         "corona_visible_threshold": 0.01,
         "hotspot_fwhm_threshold": 0.5,
         "default_gasket_thickness_mm": 1.0,
         "default_gasket_total_height_mm": 1.0,
         "default_gasket_opening_mm": 0.0,
-        "default_reflector_wall_thickness_mm": 2.0,
+        "default_reflector_wall_thickness_mm": 1.0,
         "default_reflector_base_thickness_mm": 0.5,
-        "default_focus_offset_mm": 0.0
+        "default_focus_offset_mm": 0.0,
+        "default_opening_diameter_mm": 0.0,
+        "default_dome_size_mm": 0.0,
+        "default_refractive_index": 1.0,
+        "default_emitter_shape": "square"
     }
 }

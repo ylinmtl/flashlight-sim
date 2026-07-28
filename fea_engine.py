@@ -18,6 +18,7 @@ Typical usage:
         config, library, "Convoy M3", "Luminus SFT40 6500K", "9mm 5050", "smooth")
 """
 
+import copy
 import csv
 import json
 import math
@@ -198,6 +199,8 @@ class SimulationConfig:
     Attributes:
         filepath: Writable JSON file holding the live settings.
         default_filepath: Read-only template shipped with the application.
+        restored_settings: Names of the settings the last load had to take from
+            the template because the user's file predates them.
     """
 
     _CATEGORIES = {
@@ -221,17 +224,30 @@ class SimulationConfig:
         ],
         "Material Defaults & Thresholds": [
             "default_reflectivity_smooth", "default_reflectivity_op",
-            "default_reflectivity_cylinder", "default_op_blur_strength",
+            "default_reflectivity_cylinder", "default_gasket_reflectivity",
+            "default_op_blur_strength", "default_op_factor",
+            "default_transmissivity_lens", "default_surface_finish",
             "spill_visible_threshold_lux", "corona_visible_threshold",
             "hotspot_fwhm_threshold", "default_gasket_thickness_mm",
             "default_gasket_total_height_mm", "default_gasket_opening_mm",
             "default_reflector_wall_thickness_mm",
             "default_reflector_base_thickness_mm", "default_focus_offset_mm",
+            "default_opening_diameter_mm", "default_dome_size_mm",
+            "default_refractive_index", "default_emitter_shape",
         ],
     }
 
     def __init__(self, filepath: str = None, default_filepath: str = None):
-        """Loads settings, seeding the user's file from the template if needed.
+        """Loads settings, topping them up from the template where needed.
+
+        The two files deliberately live in different places:
+
+            simulation_settings.json  the operator's own copy, always beside
+                flashlight-sim.py when run from source and beside the .exe when
+                frozen, because it is written to.
+            default_settings.json     the read-only template, next to the
+                source when run from source and inside the PyInstaller bundle
+                when frozen, because it ships with the application.
 
         Args:
             filepath: Override for the writable settings file.
@@ -260,25 +276,45 @@ class SimulationConfig:
                 yield key, value
 
     def load_settings(self) -> None:
-        """Reads the settings file, falling back to the shipped template.
+        """Reads the settings file, topping it up from the shipped template.
+
+        A settings file written by an earlier version of the application has no
+        entry for any setting added since. Rather than reject it, or leave the
+        engine reading an attribute that does not exist, the template is loaded
+        first and the user's file layered over it. Old files therefore keep
+        every value the operator chose and silently gain the defaults for
+        whatever is new. Which settings had to be restored is recorded in
+        restored_settings so the caller can report the upgrade.
 
         Raises:
             FileNotFoundError: If neither the settings file nor the template
                 can be found.
         """
-        if os.path.exists(self.filepath):
-            data = _read_json(self.filepath)
-        elif os.path.exists(self.default_filepath):
-            data = _read_json(self.default_filepath)
-        else:
+        has_settings = os.path.exists(self.filepath)
+        has_template = os.path.exists(self.default_filepath)
+        if not has_settings and not has_template:
             raise FileNotFoundError(
                 f"CRITICAL: Missing both '{self.filepath}' and '{self.default_filepath}'."
             )
 
-        for key, value in self._flatten(data):
+        defaults = (dict(self._flatten(_read_json(self.default_filepath)))
+                    if has_template else {})
+        stored = (dict(self._flatten(_read_json(self.filepath)))
+                  if has_settings else {})
+
+        # Underscored so save_settings leaves it out of the file it writes. An
+        # absent settings file is a first run rather than an upgrade, so there
+        # is nothing to report in that case even though everything is new.
+        self._restored_settings = (sorted(set(defaults) - set(stored))
+                                   if has_settings else [])
+
+        # The user's own values win; the template only fills the gaps. Settings
+        # the template no longer lists are kept, so nothing is lost either way.
+        for key, value in {**defaults, **stored}.items():
             setattr(self, key, value)
 
-        # Write straight back so a first run materialises the user's own copy.
+        # Write straight back so a first run materialises the user's own copy
+        # and an upgraded one keeps the settings it has just gained.
         self.save_settings()
 
     def save_settings(self) -> None:
@@ -312,6 +348,17 @@ class SimulationConfig:
                 setattr(self, key, value)
 
     @property
+    def restored_settings(self) -> List[str]:
+        """Settings the last load had to take from the shipped template.
+
+        Empty unless the settings file on disk was written by an older version
+        of the application, so a first run, which has no settings file at all,
+        reports nothing. A property rather than a plain attribute so that
+        save_settings, which serialises everything in __dict__, never sees it.
+        """
+        return list(self._restored_settings)
+
+    @property
     def wall_radius_m(self) -> float:
         """Half-width of the simulated wall, from the canvas field of view."""
         return self.target_distance_m * math.tan(math.radians(self.canvas_fov_deg / 2.0))
@@ -337,6 +384,92 @@ class SimulationConfig:
 # ==============================================================================
 
 
+# Every hardware spec that has a default in the settings file, as
+# kind -> {spec: setting}. A catalogue entry written before a spec existed has
+# no entry for it at all, so HardwareLibrary.restore_missing_specs copies the
+# value in from the settings when the application starts. This is also the
+# table get_sim_geometry reads its own fall backs from, so the default for a
+# spec is defined in exactly one place.
+#
+# A spec absent from this table is mandatory: an entry without it describes no
+# real part, so the engine raises KeyError rather than inventing a number.
+# Specs the engine ignores entirely, such as a gasket's outer diameter, are
+# left alone and simply carried along.
+# Die outlines the tracer knows how to sample. "square" fills a plain
+# rectangle, "round" masks a circle out of it, and "polygon" masks an arbitrary
+# outline given by the die_outline spec, which is how anything else is modelled:
+# the chamfered corners of an SFT60, the corner notches of an SFT40, and so on.
+DIE_SHAPES = ("square", "round", "polygon")
+
+# Reflector surface treatments. The finish selects which of the
+# reflector's two reflectivity figures applies to the parabola.
+SURFACE_FINISHES = ("smooth", "orange_peel")
+
+# Specs a later version renamed, as kind -> {old name: (new name, factor)}.
+# thickness_diameter_mm was the total reduction in diameter, both walls at
+# once. wall_thickness_mm is a single wall, so a catalogue written before the
+# change holds a number that has to be halved as it is carried across.
+# Without this the same figure would quietly model a wall twice as thick.
+RENAMED_SPECS = {
+    "reflector": {"thickness_diameter_mm": ("wall_thickness_mm", 0.5)},
+}
+
+# Probes per axis used to work out how much of a boundary cell lies on the die.
+# Eight gives sixty four probes per cell, which places the emitting area of a
+# circle or a chamfered die within about 0.2% of its true value. The cost is a
+# few milliseconds once per simulation, so accuracy is worth more than speed
+# here. Raising it further converges roughly in proportion to 1 / probes.
+DIE_SUBSAMPLES = 8
+
+SPEC_DEFAULT_SETTINGS = {
+    "reflector": {
+        "opening_diameter_mm": "default_opening_diameter_mm",
+        "focus_offset_mm": "default_focus_offset_mm",
+        "wall_thickness_mm": "default_reflector_wall_thickness_mm",
+        "thickness_height_mm": "default_reflector_base_thickness_mm",
+        "reflectivity_smooth": "default_reflectivity_smooth",
+        "reflectivity_op": "default_reflectivity_op",
+        "reflectivity_cylinder": "default_reflectivity_cylinder",
+        "gasket_reflectivity": "default_gasket_reflectivity",
+        "OP_Factor": "default_op_factor",
+        "transmissivity_lens": "default_transmissivity_lens",
+        "surface_finish": "default_surface_finish",
+    },
+    "emitter": {
+        "dome_size_mm": "default_dome_size_mm",
+        "refractive_index": "default_refractive_index",
+        "shape": "default_emitter_shape",
+    },
+    "gasket": {
+        "gasket_thickness_mm": "default_gasket_thickness_mm",
+        "gasket_total_height_mm": "default_gasket_total_height_mm",
+        "gasket_opening_mm": "default_gasket_opening_mm",
+    },
+}
+
+
+def spec_or_default(specs: dict, kind: str, name: str, config: "SimulationConfig"):
+    """Reads one hardware spec, falling back to its default in the settings.
+
+    Args:
+        specs: Specs of one catalogue entry.
+        kind: One of HARDWARE_KINDS.
+        name: Spec to read.
+        config: Active configuration, holding the defaults.
+
+    Returns:
+        The stored value, or the settings default when the entry predates the
+        spec.
+
+    Raises:
+        KeyError: If the spec is mandatory, meaning it has no default in
+            SPEC_DEFAULT_SETTINGS, and the entry does not carry it.
+    """
+    if name in specs:
+        return specs[name]
+    return getattr(config, SPEC_DEFAULT_SETTINGS[kind][name])
+
+
 class HardwareLibrary:
     """The catalogue of emitters, reflectors and gaskets, backed by JSON.
 
@@ -344,7 +477,8 @@ class HardwareLibrary:
     catalogues behave identically and differ only in which specs they hold.
 
     Attributes:
-        filepath: Writable JSON file holding the catalogue.
+        filepath: Writable JSON file holding the catalogue, or None on a
+            detached copy from copy_for_run(), which is never written.
         default_filepath: Read-only catalogue shipped with the application.
     """
 
@@ -400,7 +534,17 @@ class HardwareLibrary:
             self._catalogues[kind] = data.get(_JSON_SECTION_BY_KIND[kind], {})
 
     def save_database(self) -> None:
-        """Writes all three catalogues back to disk."""
+        """Writes all three catalogues back to disk.
+
+        Raises:
+            RuntimeError: If this is a detached copy from copy_for_run(),
+                which exists only to be read by one simulation.
+        """
+        if self.filepath is None:
+            raise RuntimeError(
+                "This catalogue is a detached copy made for a single simulation "
+                "run and has no file to be written to.")
+
         _write_json(self.filepath, {
             _JSON_SECTION_BY_KIND[kind]: self._catalogues[kind] for kind in HARDWARE_KINDS
         })
@@ -429,8 +573,20 @@ class HardwareLibrary:
         return self._catalogue(kind)[name]
 
     def save(self, kind: str, name: str, specs: dict) -> None:
-        """Adds or replaces one entry and writes the catalogue to disk."""
-        self._catalogue(kind)[name] = specs
+        """Adds or updates one entry and writes the catalogue to disk.
+
+        The given specs are merged over whatever is stored, rather than
+        replacing it. The editing form only shows the specs it knows about, so
+        a straight replacement would silently drop anything else the entry
+        carries, including specs restored by restore_missing_specs and specs
+        the engine does not read at all.
+
+        Args:
+            kind: One of HARDWARE_KINDS.
+            name: Name of the entry to add or update.
+            specs: Specs to store.
+        """
+        self._catalogue(kind).setdefault(name, {}).update(specs)
         self.save_database()
 
     def delete(self, kind: str, name: str) -> None:
@@ -440,17 +596,156 @@ class HardwareLibrary:
             del catalogue[name]
             self.save_database()
 
+    def import_new_entries(self) -> Dict[str, List[str]]:
+        """Adds catalogue entries the shipped library has gained, by name.
+
+        restore_missing_specs only tops up variables inside entries that
+        already exist under a given name; it has no way to notice a whole new
+        reflector, emitter or gasket that a later release adds to
+        hardware_library.json, because the user's catalogue has never heard of
+        that name. This is the counterpart that closes that gap: every name
+        present in the shipped copy but absent from the live one is copied
+        across whole. An entry the operator already has, whether shipped or
+        their own, is never touched, so nothing they have customised is
+        overwritten.
+
+        Run once at start up, immediately before restore_missing_specs so a
+        newly imported entry is caught by that pass too, in case the shipped
+        copy is ever a version or two behind the running code.
+
+        Returns:
+            Names added, keyed by kind. Empty when the catalogue already has
+            every name the shipped library does, or when there is no separate
+            shipped copy to compare against.
+        """
+        if not os.path.exists(self.default_filepath):
+            return {}
+        if os.path.abspath(self.filepath) == os.path.abspath(self.default_filepath):
+            return {}  # Running from source: both paths are the same file.
+
+        shipped = _read_json(self.default_filepath)
+        added = {}
+        for kind in HARDWARE_KINDS:
+            shipped_entries = shipped.get(_JSON_SECTION_BY_KIND[kind], {})
+            live = self._catalogue(kind)
+            new_names = sorted(name for name in shipped_entries if name not in live)
+            for name in new_names:
+                live[name] = copy.deepcopy(shipped_entries[name])
+            if new_names:
+                added[kind] = new_names
+
+        if added:
+            self.save_database()
+        return added
+
+    def rename_legacy_specs(self) -> Dict[str, List[str]]:
+        """Carries specs a later version renamed across to their new names.
+
+        Run once at start up, before restore_missing_specs, because a spec that
+        has been carried across must not then be treated as missing and filled
+        with a default. Where the meaning changed as well as the name the
+        stored value is converted, which is the whole point: a wall thickness
+        that used to mean both walls at once would otherwise be read as one
+        wall and quietly double the thickness of every reflector.
+
+        The old key is removed, so the rename happens once and a second start
+        up finds nothing to do.
+
+        Returns:
+            The renames applied, as "kind/name" -> ["old -> new", ...]. Empty
+            when the catalogue is already current.
+        """
+        renamed = {}
+        for kind, replacements in RENAMED_SPECS.items():
+            for name, specs in self._catalogue(kind).items():
+                applied = []
+                for old_name, (new_name, factor) in replacements.items():
+                    if old_name not in specs:
+                        continue
+                    value = specs.pop(old_name)
+                    # An explicit value already under the new name wins; the
+                    # old one is just dropped.
+                    if new_name not in specs:
+                        specs[new_name] = round(value * factor, 6)
+                    applied.append(f"{old_name} -> {new_name}")
+                if applied:
+                    renamed[f"{kind}/{name}"] = applied
+
+        if renamed:
+            self.save_database()
+        return renamed
+
+    def restore_missing_specs(self, config: "SimulationConfig") -> Dict[str, List[str]]:
+        """Fills in every spec any catalogue entry is missing, from the settings.
+
+        Run once at start up, this compares every entry against
+        SPEC_DEFAULT_SETTINGS rather than only checking whether the catalogue
+        file exists, so an entry written by an older version quietly gains the
+        specs added since instead of falling back to a default on every read.
+        The catalogue is written back only when something actually changed.
+
+        Args:
+            config: Active configuration, holding the defaults.
+
+        Returns:
+            The specs restored, keyed by "kind/name". Empty when the catalogue
+            already carries every spec.
+        """
+        restored = {}
+        for kind, spec_settings in SPEC_DEFAULT_SETTINGS.items():
+            for name, specs in self._catalogue(kind).items():
+                added = [spec for spec in spec_settings if spec not in specs]
+                for spec in added:
+                    specs[spec] = getattr(config, spec_settings[spec])
+                if added:
+                    restored[f"{kind}/{name}"] = added
+
+        if restored:
+            self.save_database()
+        return restored
+
+    def copy_for_run(self) -> "HardwareLibrary":
+        """Returns a detached copy of the catalogue for one simulation run.
+
+        Unsaved edits typed into the form apply to the run that is starting and
+        to nothing else. Patching the live catalogue would arm the next
+        save_database() to write them out, so a run works on its own deep copy
+        instead. The copy carries no file path, which makes it an error for
+        anything holding it to try to write it.
+
+        Returns:
+            A HardwareLibrary holding a deep copy of every entry, suitable for
+            apply_overrides and for reading, but not for saving.
+        """
+        detached = HardwareLibrary.__new__(HardwareLibrary)
+        detached.filepath = None
+        detached.default_filepath = None
+        detached._catalogues = copy.deepcopy(self._catalogues)
+        return detached
+
     def apply_overrides(self, kind: str, name: str, specs: dict) -> None:
-        """Merges edited specs into one entry without writing to disk.
+        """Merges edited specs into one entry of a detached run copy.
 
         This is how the GUI lets an operator tweak a value for a single run
-        without permanently editing the catalogue.
+        without editing the catalogue. It refuses to touch the live catalogue,
+        because an override left there is indistinguishable from a saved value
+        and would be written out by the next save of any entry, of any kind.
 
         Args:
             kind: One of HARDWARE_KINDS.
             name: Name of the entry to patch.
             specs: Specs to merge over the stored ones.
+
+        Raises:
+            RuntimeError: If called on the live catalogue rather than on a
+                detached copy from copy_for_run().
         """
+        if self.filepath is not None:
+            raise RuntimeError(
+                "apply_overrides() works only on a detached copy from "
+                "copy_for_run(); overriding the live catalogue would leak "
+                "unsaved edits into the next save.")
+
         self._catalogue(kind)[name].update(specs)
 
 
@@ -492,8 +787,49 @@ def calculate_lumens(emitter: dict, current_amps: float) -> float:
     return power_watts * efficacy
 
 
+class EmitterOffset(NamedTuple):
+    """How far the emitter sits off the reflector's optical axis, in polar form.
+
+    A centring error is read off a beam shot as a direction and a distance, so
+    that is how it is described here. The angle is measured in the plane of the
+    wall image: 0 degrees points straight up and the angle increases clockwise,
+    which puts 90 degrees to the right.
+
+    This is a property of the build being simulated rather than of any catalogue
+    part, so it is passed into a run and never stored with the reflector.
+
+    Attributes:
+        distance_mm: Distance from the axis in millimetres; 0 is centred.
+        angle_deg: Direction of the offset in degrees clockwise from straight up.
+    """
+
+    distance_mm: float = 0.0
+    angle_deg: float = 0.0
+
+    @property
+    def x_mm(self) -> float:
+        """Horizontal component of the offset, positive towards +x."""
+        return self.distance_mm * math.sin(math.radians(self.angle_deg))
+
+    @property
+    def y_mm(self) -> float:
+        """Vertical component of the offset, positive towards +y."""
+        return self.distance_mm * math.cos(math.radians(self.angle_deg))
+
+    def describe(self) -> str:
+        """Summarises the offset for a plot title, or "" when it is centred."""
+        if self.distance_mm == 0.0:
+            return ""
+        return f"Emitter Offset: {self.distance_mm:.2f}mm @ {self.angle_deg:.1f}°"
+
+
+# A perfectly centred emitter: the default wherever an offset is not supplied.
+NO_EMITTER_OFFSET = EmitterOffset()
+
+
 def get_sim_geometry(reflector: dict, emitter: dict, gasket: dict, finish: str,
-                     config: SimulationConfig) -> dict:
+                     config: SimulationConfig,
+                     emitter_offset: EmitterOffset = NO_EMITTER_OFFSET) -> dict:
     """Derives the ray-tracing geometry from a hardware combination.
 
     Everything is expressed in millimetres in a coordinate system whose origin
@@ -506,28 +842,34 @@ def get_sim_geometry(reflector: dict, emitter: dict, gasket: dict, finish: str,
         finish: Either "smooth" or "orange_peel"; selects which reflectivity of
             the reflector applies.
         config: Active configuration, used for any spec the hardware omits.
+        emitter_offset: Centring error of the emitter. Only the emitter package
+            moves: the reflector and the gasket stay on the axis, because both
+            are located by the head rather than by the emitter.
 
     Returns:
         A dict of scalars consumed by the tracing kernels, plus three values
         used for reporting: effective_d_hole, focus_delta and op_multiplier.
     """
-    # Inner diameter of the reflector, i.e. the reflective surface itself.
-    inner_diameter = reflector["diameter_mm"] - reflector.get(
-        "thickness_diameter_mm", config.default_reflector_wall_thickness_mm)
+    # Inner diameter of the reflective surface. The spec is one wall, so it
+    # comes off the diameter twice, once on each side.
+    inner_diameter = reflector["diameter_mm"] - 2.0 * spec_or_default(
+        reflector, "reflector", "wall_thickness_mm", config)
     radius_max = inner_diameter / 2.0
     total_height = reflector["height_mm"]
 
-    bore_diameter = reflector.get("opening_diameter_mm", 0.0)
-    focus_offset_mm = reflector.get("focus_offset_mm", config.default_focus_offset_mm)
-    base_thickness_mm = reflector.get(
-        "thickness_height_mm", config.default_reflector_base_thickness_mm)
+    bore_diameter = spec_or_default(
+        reflector, "reflector", "opening_diameter_mm", config)
+    focus_offset_mm = spec_or_default(
+        reflector, "reflector", "focus_offset_mm", config)
+    base_thickness_mm = spec_or_default(
+        reflector, "reflector", "thickness_height_mm", config)
 
-    gasket_thickness_mm = gasket.get(
-        "gasket_thickness_mm", config.default_gasket_thickness_mm)
-    gasket_total_height_mm = gasket.get(
-        "gasket_total_height_mm", config.default_gasket_total_height_mm)
-    gasket_opening_mm = gasket.get(
-        "gasket_opening_mm", config.default_gasket_opening_mm)
+    gasket_thickness_mm = spec_or_default(
+        gasket, "gasket", "gasket_thickness_mm", config)
+    gasket_total_height_mm = spec_or_default(
+        gasket, "gasket", "gasket_total_height_mm", config)
+    gasket_opening_mm = spec_or_default(
+        gasket, "gasket", "gasket_opening_mm", config)
 
     # Unless the operator forces the catalogue value, the bore has to be at
     # least as wide as the diagonal of the emitter's footprint.
@@ -570,14 +912,14 @@ def get_sim_geometry(reflector: dict, emitter: dict, gasket: dict, finish: str,
     ez_base = z_bottom + (emitter["height_mm"] - gasket_thickness_mm)
 
     # dome_size_mm of -1 means "as wide as the narrowest footprint edge".
-    dome_input = emitter.get("dome_size_mm", 0.0)
+    dome_input = spec_or_default(emitter, "emitter", "dome_size_mm", config)
     dome_diameter = (min(emitter["footprint_x_mm"], emitter["footprint_y_mm"])
                      if dome_input == -1 else max(0.0, dome_input))
 
-    reflectivity_parabola = (
-        reflector.get("reflectivity_op", config.default_reflectivity_op)
-        if finish == "orange_peel"
-        else reflector.get("reflectivity_smooth", config.default_reflectivity_smooth))
+    reflectivity_parabola = spec_or_default(
+        reflector, "reflector",
+        "reflectivity_op" if finish == "orange_peel" else "reflectivity_smooth",
+        config)
 
     return {
         "focal_length": focal_length,
@@ -594,15 +936,22 @@ def get_sim_geometry(reflector: dict, emitter: dict, gasket: dict, finish: str,
         "is_cylindrical_gasket": is_cylindrical_gasket,
         "ez_base": ez_base,
         "dome_radius": dome_diameter / 2.0,
-        "refractive_index": emitter.get("refractive_index", 1.0),
+        "refractive_index": spec_or_default(
+            emitter, "emitter", "refractive_index", config),
         "refl_para": reflectivity_parabola,
-        "refl_cyl": reflector.get(
-            "reflectivity_cylinder", config.default_reflectivity_cylinder),
-        "refl_gask": reflector.get("gasket_reflectivity", 0.0),
+        "refl_cyl": spec_or_default(
+            reflector, "reflector", "reflectivity_cylinder", config),
+        "refl_gask": spec_or_default(
+            reflector, "reflector", "gasket_reflectivity", config),
+        # Fraction of flux surviving the lens.
+        "transmissivity_lens": spec_or_default(
+            reflector, "reflector", "transmissivity_lens", config),
+        "emitter_offset_x": emitter_offset.x_mm,
+        "emitter_offset_y": emitter_offset.y_mm,
         # Reported, not traced:
         "effective_d_hole": effective_d_hole,
         "focus_delta": ez_base - focal_length,
-        "op_multiplier": reflector.get("OP_Factor", 1.0),
+        "op_multiplier": spec_or_default(reflector, "reflector", "OP_Factor", config),
     }
 
 
@@ -717,7 +1066,8 @@ def process_single_ray(ex, ey, ez_base, vx, vy, vz, flux,
                        reflectivity_parabola, reflectivity_cylinder, reflectivity_gasket,
                        dome_radius, refractive_index, max_multiple_reflections,
                        z_gasket_top, r_gasket, gasket_x_half, gasket_y_half,
-                       is_cylindrical_gasket):
+                       is_cylindrical_gasket,
+                       emitter_offset_x, emitter_offset_y, transmissivity_lens):
     """Traces one ray from the die until it lands on the wall or is absorbed.
 
     Each pass through the loop finds the nearest surface along the ray, then
@@ -745,6 +1095,9 @@ def process_single_ray(ex, ey, ez_base, vx, vy, vz, flux,
         r_gasket: Aperture radius for a round gasket.
         gasket_x_half, gasket_y_half: Half extents for a rectangular gasket.
         is_cylindrical_gasket: 1 for a round aperture, 0 for a rectangular one.
+        emitter_offset_x, emitter_offset_y: Centring error of the emitter
+            package in millimetres, as Cartesian components.
+        transmissivity_lens: Fraction of flux surviving the lens.
 
     Returns:
         (flux, row, col, bounces) for a ray that reaches the wall, otherwise
@@ -757,8 +1110,11 @@ def process_single_ray(ex, ey, ez_base, vx, vy, vz, flux,
         blocked, ex, ey, ez_base, vx, vy, vz = apply_dome_refraction(
             ex, ey, ez_base, vx, vy, vz, dome_radius, refractive_index)
 
-    # Running ray state: position, direction and remaining flux.
-    px, py, pz = ex, ey, ez_base
+    # Running ray state: position, direction and remaining flux. The centring
+    # error moves the whole emitter package, dome included, so the shift is
+    # applied after refraction, which is solved in emitter-local coordinates.
+    # Translating a ray moves where it starts and leaves its direction alone.
+    px, py, pz = ex + emitter_offset_x, ey + emitter_offset_y, ez_base
     dx, dy, dz = vx, vy, vz
     remaining_flux = flux
 
@@ -892,6 +1248,14 @@ def process_single_ray(ex, ey, ez_base, vx, vy, vz, flux,
                 exit_y = py + t_mouth * dy
 
                 if math.sqrt(exit_x ** 2 + exit_y ** 2) <= radius_max + 1e-4:
+                    # Every ray leaving the head crosses the lens, whether it
+                    # bounced off the reflector or is spill straight from the
+                    # die, so both are attenuated at this single point. The
+                    # loss is a plain scalar for now; making it depend on the
+                    # path length through the glass means using the direction
+                    # (dx, dy, dz), which is in hand right here.
+                    remaining_flux *= transmissivity_lens
+
                     t_wall = (target_z_mm - pz) / dz
                     col = int((((px + t_wall * dx) / 1000.0) + wall_radius_m) / bin_size)
                     row = int((((py + t_wall * dy) / 1000.0) + wall_radius_m) / bin_size)
@@ -905,13 +1269,14 @@ def process_single_ray(ex, ey, ez_base, vx, vy, vz, flux,
 
 @cuda.jit
 def ray_trace_kernel_gpu(start_idx, end_idx, element_x, element_y,
-                         ray_vx, ray_vy, ray_vz, ray_flux,
+                         element_weight, ray_vx, ray_vy, ray_vz, ray_flux,
                          focal_length, ez_base, z_bottom, z_min_cut, z_hole_top,
                          z_max_cut, radius_max, r_hole, target_z_mm, grid_res,
                          wall_radius_m, reflectivity_parabola, reflectivity_cylinder,
                          reflectivity_gasket, dome_radius, refractive_index,
                          max_multiple_reflections, z_gasket_top, r_gasket,
                          gasket_x_half, gasket_y_half, is_cylindrical_gasket,
+                         emitter_offset_x, emitter_offset_y, transmissivity_lens,
                          hotspot_grid, spill_grid):
     """Traces one (die element, ray direction) pair per CUDA thread.
 
@@ -924,6 +1289,8 @@ def ray_trace_kernel_gpu(start_idx, end_idx, element_x, element_y,
         start_idx: First flat work index this launch is responsible for.
         end_idx: One past the last work index.
         element_x, element_y: Die element coordinates in millimetres.
+        element_weight: Share of the emitter's flux carried by each
+            element, proportional to the die area it stands for. Sums to 1.
         ray_vx, ray_vy, ray_vz: Unit ray directions.
         ray_flux: Flux carried by each direction, in lumens.
         hotspot_grid: Accumulator for rays that bounced at least once.
@@ -940,12 +1307,14 @@ def ray_trace_kernel_gpu(start_idx, end_idx, element_x, element_y,
 
     final_flux, row, col, bounces = process_single_ray(
         element_x[element_idx], element_y[element_idx], ez_base,
-        ray_vx[ray_idx], ray_vy[ray_idx], ray_vz[ray_idx], ray_flux[ray_idx],
+        ray_vx[ray_idx], ray_vy[ray_idx], ray_vz[ray_idx],
+        ray_flux[ray_idx] * element_weight[element_idx],
         focal_length, z_bottom, z_min_cut, z_hole_top, z_max_cut,
         radius_max, r_hole, target_z_mm, grid_res, wall_radius_m,
         reflectivity_parabola, reflectivity_cylinder, reflectivity_gasket,
         dome_radius, refractive_index, max_multiple_reflections,
-        z_gasket_top, r_gasket, gasket_x_half, gasket_y_half, is_cylindrical_gasket)
+        z_gasket_top, r_gasket, gasket_x_half, gasket_y_half, is_cylindrical_gasket,
+        emitter_offset_x, emitter_offset_y, transmissivity_lens)
 
     if row != -1 and col != -1:
         cuda.atomic.add(hotspot_grid if bounces > 0 else spill_grid, (row, col), final_flux)
@@ -953,13 +1322,14 @@ def ray_trace_kernel_gpu(start_idx, end_idx, element_x, element_y,
 
 @njit
 def ray_trace_kernel_cpu(start_idx, end_idx, element_x, element_y,
-                         ray_vx, ray_vy, ray_vz, ray_flux,
+                         element_weight, ray_vx, ray_vy, ray_vz, ray_flux,
                          focal_length, ez_base, z_bottom, z_min_cut, z_hole_top,
                          z_max_cut, radius_max, r_hole, target_z_mm, grid_res,
                          wall_radius_m, reflectivity_parabola, reflectivity_cylinder,
                          reflectivity_gasket, dome_radius, refractive_index,
                          max_multiple_reflections, z_gasket_top, r_gasket,
                          gasket_x_half, gasket_y_half, is_cylindrical_gasket,
+                         emitter_offset_x, emitter_offset_y, transmissivity_lens,
                          hotspot_grid, spill_grid):
     """CPU twin of ray_trace_kernel_gpu; walks the index range in a loop.
 
@@ -973,12 +1343,14 @@ def ray_trace_kernel_cpu(start_idx, end_idx, element_x, element_y,
 
         final_flux, row, col, bounces = process_single_ray(
             element_x[element_idx], element_y[element_idx], ez_base,
-            ray_vx[ray_idx], ray_vy[ray_idx], ray_vz[ray_idx], ray_flux[ray_idx],
+            ray_vx[ray_idx], ray_vy[ray_idx], ray_vz[ray_idx],
+        ray_flux[ray_idx] * element_weight[element_idx],
             focal_length, z_bottom, z_min_cut, z_hole_top, z_max_cut,
             radius_max, r_hole, target_z_mm, grid_res, wall_radius_m,
             reflectivity_parabola, reflectivity_cylinder, reflectivity_gasket,
             dome_radius, refractive_index, max_multiple_reflections,
-            z_gasket_top, r_gasket, gasket_x_half, gasket_y_half, is_cylindrical_gasket)
+            z_gasket_top, r_gasket, gasket_x_half, gasket_y_half, is_cylindrical_gasket,
+            emitter_offset_x, emitter_offset_y, transmissivity_lens)
 
         if row != -1 and col != -1:
             if bounces > 0:
@@ -987,7 +1359,8 @@ def ray_trace_kernel_cpu(start_idx, end_idx, element_x, element_y,
                 spill_grid[row, col] += final_flux
 
 
-def _build_kernel_args(element_x, element_y, ray_vx, ray_vy, ray_vz, ray_flux,
+def _build_kernel_args(element_x, element_y, element_weight,
+                      ray_vx, ray_vy, ray_vz, ray_flux,
                        geom: dict, config: SimulationConfig, target_z_mm: float,
                        hotspot_grid, spill_grid) -> tuple:
     """Packs every kernel argument into one tuple, in the kernels' parameter order.
@@ -999,6 +1372,7 @@ def _build_kernel_args(element_x, element_y, ray_vx, ray_vy, ray_vz, ray_flux,
 
     Args:
         element_x, element_y: Die element coordinates, C-contiguous float64.
+        element_weight: Flux share per element, C-contiguous float64.
         ray_vx, ray_vy, ray_vz: Unit ray directions, C-contiguous float64.
         ray_flux: Flux per ray direction, C-contiguous float64.
         geom: Output of get_sim_geometry.
@@ -1010,7 +1384,7 @@ def _build_kernel_args(element_x, element_y, ray_vx, ray_vy, ray_vz, ray_flux,
         The argument tuple to splat into a kernel launch.
     """
     return (
-        element_x, element_y, ray_vx, ray_vy, ray_vz, ray_flux,
+        element_x, element_y, element_weight, ray_vx, ray_vy, ray_vz, ray_flux,
         float(geom["focal_length"]), float(geom["ez_base"]), float(geom["z_bottom"]),
         float(geom["z_min_cut"]), float(geom["z_hole_top"]), float(geom["z_max_cut"]),
         float(geom["radius_max"]), float(geom["r_hole"]), float(target_z_mm),
@@ -1021,6 +1395,8 @@ def _build_kernel_args(element_x, element_y, ray_vx, ray_vy, ray_vz, ray_flux,
         float(geom["z_gasket_top"]), float(geom["r_gasket"]),
         float(geom["gasket_x_half"]), float(geom["gasket_y_half"]),
         int(geom["is_cylindrical_gasket"]),
+        float(geom["emitter_offset_x"]), float(geom["emitter_offset_y"]),
+        float(geom["transmissivity_lens"]),
         hotspot_grid, spill_grid,
     )
 
@@ -1140,28 +1516,216 @@ class WallIllumination(NamedTuple):
     total_lumens: float
 
 
-def _build_emitter_elements(emitter: dict, elements_per_side: int):
-    """Subdivides the light emitting surface into point sources.
+def _points_in_polygon(points_x: np.ndarray, points_y: np.ndarray,
+                       vertices: np.ndarray, tolerance: float) -> np.ndarray:
+    """Tests which points fall inside a polygon, counting the boundary as in.
+
+    An even-odd ray cast decides the interior, which handles concave outlines
+    such as a notched die correctly. A ray cast is undefined for a point lying
+    exactly on an edge, and the sampling grid puts points exactly on the edges
+    of an axis-aligned die, so those are detected separately and added back.
+
+    Args:
+        points_x: Flat array of x coordinates.
+        points_y: Flat array of y coordinates, same length as points_x.
+        vertices: (N, 2) array of polygon corners in order. The outline is
+            closed implicitly, so the first corner is not repeated.
+        tolerance: Distance within which a point counts as on the boundary.
+
+    Returns:
+        A boolean array, one entry per point.
+    """
+    px = points_x.reshape(-1, 1)
+    py = points_y.reshape(-1, 1)
+    x0, y0 = vertices[:, 0], vertices[:, 1]
+    x1, y1 = np.roll(x0, -1), np.roll(y0, -1)
+
+    # Even-odd ray cast along +x. Only edges straddling the ray can cross it,
+    # so horizontal edges, where the division would be degenerate, never count.
+    straddles = (y0 > py) != (y1 > py)
+    safe_dy = np.where(y1 != y0, y1 - y0, 1.0)
+    crossing_x = x0 + (py - y0) * (x1 - x0) / safe_dy
+    interior = np.sum(straddles & (px < crossing_x), axis=1) % 2 == 1
+
+    # Shortest distance to each edge, for the points sitting on the outline.
+    edge_dx, edge_dy = x1 - x0, y1 - y0
+    length_sq = edge_dx ** 2 + edge_dy ** 2
+    safe_length_sq = np.where(length_sq > 0.0, length_sq, 1.0)
+    along = np.clip(((px - x0) * edge_dx + (py - y0) * edge_dy) / safe_length_sq,
+                    0.0, 1.0)
+    on_edge = np.min(np.hypot(px - (x0 + along * edge_dx),
+                              py - (y0 + along * edge_dy)), axis=1) <= tolerance
+
+    return interior | on_edge
+
+
+def emitter_die_outline(emitter: dict, shape: str) -> Optional[np.ndarray]:
+    """Returns the validated die outline for a polygon emitter.
+
+    Args:
+        emitter: Emitter specs.
+        shape: Die shape, already resolved against the settings default.
+
+    Returns:
+        An (N, 2) array of vertices in millimetres relative to the die centre,
+        or None for a shape that does not need one.
+
+    Raises:
+        ValueError: If the shape is not one of DIE_SHAPES, or if a polygon die
+            has an outline that is missing, malformed or too small to enclose
+            an area.
+    """
+    if shape not in DIE_SHAPES:
+        raise ValueError(
+            f"Unknown emitter die shape {shape!r}. Use one of "
+            f"{', '.join(DIE_SHAPES)}. Anything that is not a plain rectangle "
+            f"or circle is modelled as 'polygon' with a die_outline.")
+
+    if shape != "polygon":
+        return None
+
+    outline = emitter.get("die_outline")
+    if isinstance(outline, str):
+        # Hand-edited catalogues, and the GUI's input box, hold pasted JSON.
+        try:
+            outline = json.loads(outline)
+        except json.JSONDecodeError as error:
+            raise ValueError(f"die_outline is not valid JSON: {error}") from error
+
+    vertices = np.asarray(outline if outline else [], dtype=np.float64)
+    if vertices.ndim != 2 or vertices.shape[0] < 3 or vertices.shape[1] != 2:
+        raise ValueError(
+            "A polygon die needs die_outline set to at least three [x, y] "
+            "vertex pairs, in millimetres relative to the die centre.")
+    return vertices
+
+
+def _cell_bounds(samples: np.ndarray, low: float, high: float):
+    """Returns the span of the grid cell each sample point stands for.
+
+    Cell edges sit halfway between neighbouring samples, so the cells tile the
+    die's bounding box exactly. A sample on the perimeter therefore owns only
+    the half cell that lies inside the die, which is what stops the edge of a
+    die from being over weighted.
+
+    Args:
+        samples: Sorted sample coordinates along one axis.
+        low: Lower edge of the bounding box on this axis.
+        high: Upper edge of the bounding box on this axis.
+
+    Returns:
+        (lower, upper) arrays, one entry per sample.
+    """
+    if samples.size == 1:
+        return np.array([low]), np.array([high])
+
+    midpoints = (samples[:-1] + samples[1:]) / 2.0
+    return (np.concatenate(([low], midpoints)),
+            np.concatenate((midpoints, [high])))
+
+
+def _cell_coverage(x_lo, x_hi, y_lo, y_hi, inside_test, subsamples: int):
+    """Measures what fraction of each grid cell lies on the emitting surface.
+
+    Every cell is probed on a regular sub grid and the hits are counted. Doing
+    it by sampling rather than by clipping the outline analytically means one
+    piece of code covers circles, convex outlines and concave ones alike, and
+    the answer converges predictably as subsamples rises.
+
+    Args:
+        x_lo, x_hi: Cell edges along x, one entry per column.
+        y_lo, y_hi: Cell edges along y, one entry per row.
+        inside_test: Callable taking flat x and y arrays and returning a
+            boolean array.
+        subsamples: Probes per axis within each cell.
+
+    Returns:
+        A (rows, columns) array of fractions between 0 and 1.
+    """
+    steps = (np.arange(subsamples) + 0.5) / subsamples
+    probe_x = (x_lo[:, None] + steps[None, :] * (x_hi - x_lo)[:, None]).ravel()
+    probe_y = (y_lo[:, None] + steps[None, :] * (y_hi - y_lo)[:, None]).ravel()
+
+    mesh_x, mesh_y = np.meshgrid(probe_x, probe_y)
+    inside = inside_test(mesh_x.ravel(), mesh_y.ravel())
+    return inside.reshape(len(y_lo), subsamples,
+                          len(x_lo), subsamples).mean(axis=(1, 3))
+
+
+def _build_emitter_elements(emitter: dict, elements_per_side: int, shape: str,
+                            outline: Optional[np.ndarray] = None,
+                            subsamples: int = DIE_SUBSAMPLES):
+    """Subdivides the light emitting surface into area weighted point sources.
+
+    The die's bounding box is covered with a grid of sample points, the
+    outermost of which sit exactly on the perimeter. Each point stands for the
+    cell around it and carries the share of the emitter's flux that the area of
+    its cell deserves. An edge point owns half a cell and a corner point a
+    quarter, so the perimeter is sampled without being over weighted, and where
+    a curved or angled edge cuts through a cell only the part inside the die
+    counts. This is the same rule for every shape: a rectangle, a circle and an
+    arbitrary outline differ only in how much of each cell is covered.
 
     Args:
         emitter: Emitter specs.
         elements_per_side: Grid resolution across the die.
+        shape: Die shape, already resolved against the settings default.
+        outline: Vertices from emitter_die_outline, required for "polygon".
+            The outline is authoritative for a polygon die, so the grid spans
+            its bounding box and die_length_mm and die_width_mm are ignored.
+        subsamples: Probes per axis used to measure a partly covered cell.
 
     Returns:
-        (x, y) coordinate arrays in millimetres. Round dies are masked out of
-        the square grid, so the arrays are shorter than elements_per_side^2.
+        (x, y, weight) arrays. The weights are areas in square millimetres and
+        sum to the area of the emitting surface. Cells lying entirely off the
+        die are dropped, so the arrays are shorter than elements_per_side^2 for
+        any shape that does not fill its bounding box.
+
+    Raises:
+        ValueError: If the outline covers none of the sample cells, which means
+            it is too thin to resolve at this grid resolution.
     """
-    die_length = emitter["die_length_mm"]
-    die_width = die_length if emitter.get("shape") == "round" else emitter["die_width_mm"]
+    if shape == "polygon":
+        min_x, min_y = outline.min(axis=0)
+        max_x, max_y = outline.max(axis=0)
+        tolerance = 1e-9 * max(max_x - min_x, max_y - min_y, 1.0)
 
-    grid_x, grid_y = np.meshgrid(
-        np.linspace(-die_length / 2, die_length / 2, elements_per_side),
-        np.linspace(-die_width / 2, die_width / 2, elements_per_side))
+        def inside_test(probe_x, probe_y):
+            """True where a probe lies on the polygon die."""
+            return _points_in_polygon(probe_x, probe_y, outline, tolerance)
+    else:
+        die_length = emitter["die_length_mm"]
+        die_width = die_length if shape == "round" else emitter["die_width_mm"]
+        min_x, max_x = -die_length / 2.0, die_length / 2.0
+        min_y, max_y = -die_width / 2.0, die_width / 2.0
 
-    if emitter.get("shape") == "round":
-        inside = (grid_x ** 2 + grid_y ** 2) <= (die_length / 2.0) ** 2
-        return grid_x[inside], grid_y[inside]
-    return grid_x.flatten(), grid_y.flatten()
+        if shape == "round":
+            radius_sq = (die_length / 2.0) ** 2
+
+            def inside_test(probe_x, probe_y):
+                """True where a probe lies on the circular die."""
+                return probe_x ** 2 + probe_y ** 2 <= radius_sq
+        else:
+            inside_test = None  # A rectangle fills its own bounding box.
+
+    sample_x = np.linspace(min_x, max_x, elements_per_side)
+    sample_y = np.linspace(min_y, max_y, elements_per_side)
+    x_lo, x_hi = _cell_bounds(sample_x, min_x, max_x)
+    y_lo, y_hi = _cell_bounds(sample_y, min_y, max_y)
+
+    coverage = (np.ones((len(y_lo), len(x_lo))) if inside_test is None
+                else _cell_coverage(x_lo, x_hi, y_lo, y_hi, inside_test, subsamples))
+    weight = (np.outer(y_hi - y_lo, x_hi - x_lo) * coverage).ravel()
+
+    grid_x, grid_y = np.meshgrid(sample_x, sample_y)
+    emitting = weight > 0.0
+    if not emitting.any():
+        raise ValueError(
+            f"The die outline covers none of the {elements_per_side} x "
+            f"{elements_per_side} sample cells. Raise sim_emitter_elements, or "
+            f"check the outline is in millimetres.")
+
+    return grid_x.ravel()[emitting], grid_y.ravel()[emitting], weight[emitting]
 
 
 def _build_ray_directions(config: SimulationConfig):
@@ -1226,15 +1790,26 @@ def simulate_wall_illuminance(geom: dict, emitter: dict, current_amps: float, fi
                                  * np.radians(config.lumen_calc_step_deg))
     peak_intensity = total_lumens / (2 * np.pi * hemisphere_integral)
 
-    element_x, element_y = _build_emitter_elements(emitter, config.sim_emitter_elements)
+    die_shape = spec_or_default(emitter, "emitter", "shape", config)
+    element_x, element_y, element_area = _build_emitter_elements(
+        emitter, config.sim_emitter_elements, die_shape,
+        emitter_die_outline(emitter, die_shape))
     element_count = len(element_x)
 
+    # Flux follows emitting area, not element count: a point on the perimeter
+    # stands for half or a quarter of the area an interior point does, and a
+    # cell only partly covered by the die stands for less again. Normalising
+    # here keeps the emitter's total output exactly as rated whatever the die
+    # shape or the grid resolution.
+    element_weight = element_area / element_area.sum()
+
     ray_vx, ray_vy, ray_vz, ray_intensity, solid_angle = _build_ray_directions(config)
-    ray_flux = (peak_intensity * ray_intensity * solid_angle) / element_count
+    ray_flux = peak_intensity * ray_intensity * solid_angle
 
     # One contiguous float64 copy of each array, shared by both back ends.
     element_x = np.ascontiguousarray(element_x, dtype=np.float64)
     element_y = np.ascontiguousarray(element_y, dtype=np.float64)
+    element_weight = np.ascontiguousarray(element_weight, dtype=np.float64)
     ray_vx = np.ascontiguousarray(ray_vx, dtype=np.float64)
     ray_vy = np.ascontiguousarray(ray_vy, dtype=np.float64)
     ray_vz = np.ascontiguousarray(ray_vz, dtype=np.float64)
@@ -1265,6 +1840,7 @@ def simulate_wall_illuminance(geom: dict, emitter: dict, current_amps: float, fi
             device_spill = cuda.to_device(spill_grid)
             args = _build_kernel_args(
                 cuda.to_device(element_x), cuda.to_device(element_y),
+                cuda.to_device(element_weight),
                 cuda.to_device(ray_vx), cuda.to_device(ray_vy), cuda.to_device(ray_vz),
                 cuda.to_device(ray_flux),
                 geom, config, target_z_mm, device_hotspot, device_spill)
@@ -1294,7 +1870,8 @@ def simulate_wall_illuminance(geom: dict, emitter: dict, current_amps: float, fi
             log_callback(f"[CPU FEA Engine] Processing {total_threads:,} "
                          f"ray-element pairs on logical cores...")
 
-        args = _build_kernel_args(element_x, element_y, ray_vx, ray_vy, ray_vz, ray_flux,
+        args = _build_kernel_args(element_x, element_y, element_weight,
+                                  ray_vx, ray_vy, ray_vz, ray_flux,
                                   geom, config, target_z_mm, hotspot_grid, spill_grid)
 
         execute_tracers(False, ray_trace_kernel_cpu, total_threads, args,
@@ -1572,18 +2149,21 @@ def _render_wall_shot(render_data: np.ndarray, title_str: str, geometry_text: st
 
     overlay = dict(facecolor="black", alpha=0.7, edgecolor="none", pad=6)
     ax.text(0.02, 0.02, geometry_text.strip(), transform=ax.transAxes,
-            color="#CCCCCC", fontsize=10, va="bottom", bbox=overlay)
-    ax.text(0.98, 0.02, modes_text.strip(), transform=ax.transAxes, color="#CCCCCC",
-            fontsize=10, family="monospace", ha="right", va="bottom", bbox=overlay)
+            color="#CCCCCC", fontsize=9, va="bottom", bbox=overlay)
+    ax.text(0.98, 0.02, modes_text.strip(), transform=ax.transAxes,
+            color="#CCCCCC", fontsize=9, family="monospace",
+            ha="right", va="bottom", bbox=overlay)
 
     mm_per_pixel = ((2.0 * config.wall_radius_m) / config.sim_grid_res) * 1000.0
     plt.figtext(0.5, 0.015,
                 f"Canvas FOV: {config.canvas_fov_deg}° | Plot FOV: {config.plot_fov_deg}° | "
                 f"Grid Res: {mm_per_pixel:.1f} mm/px | [{_format_exposure_caption(config)}]",
-                color="#CCCCCC", fontsize=10, ha="center", va="bottom",
+                color="#CCCCCC", fontsize=9, ha="center", va="bottom",
                 bbox=dict(facecolor="black", alpha=0.7, edgecolor="none", pad=4))
-    plt.title(title_str, color="#CCCCCC", pad=15)
-    plt.tight_layout(rect=[0, 0.05, 1, 1])
+    # The header runs to two lines and the hardware names can be long,
+    # so the axes give up a strip at the top rather than let it clip.
+    plt.title(title_str, color="#CCCCCC", fontsize=10, pad=12)
+    plt.tight_layout(rect=[0.01, 0.05, 0.99, 0.95])
 
     if save_path and config.export_plots:
         plt.savefig(save_path, facecolor="black", edgecolor="none",
@@ -1598,7 +2178,8 @@ def generate_flashlight_plot(emitter_name: str, reflector_name: str, gasket_name
                              log_callback: LogCallback = None,
                              progress_callback: ProgressCallback = None,
                              is_cancelled_callback: CancelCallback = None,
-                             save_path: str = None):
+                             save_path: str = None,
+                             emitter_offset: EmitterOffset = NO_EMITTER_OFFSET):
     """Simulates one hardware combination and renders the requested plots.
 
     Args:
@@ -1613,6 +2194,9 @@ def generate_flashlight_plot(emitter_name: str, reflector_name: str, gasket_name
         is_cancelled_callback: Polled during tracing; returns True to stop.
         save_path: PNG path for the wall shot. Intensity profiles derive their
             filenames from it. None renders without saving.
+        emitter_offset: Centring error of the emitter for this run. It belongs
+            to the build rather than to any catalogue part, so it is passed in
+            here instead of being read from the reflector specs.
 
     Returns:
         (figure, results): the wall shot figure (None when plot_wall_shot is
@@ -1623,7 +2207,8 @@ def generate_flashlight_plot(emitter_name: str, reflector_name: str, gasket_name
     gasket = library.get("gasket", gasket_name)
     max_amps = emitter["max_current_amps"]
 
-    geom = get_sim_geometry(reflector, emitter, gasket, finish_type, config)
+    geom = get_sim_geometry(reflector, emitter, gasket, finish_type, config,
+                            emitter_offset)
     illumination = simulate_wall_illuminance(
         geom, emitter, max_amps, finish_type, config,
         log_callback, progress_callback, is_cancelled_callback)
@@ -1639,13 +2224,21 @@ def generate_flashlight_plot(emitter_name: str, reflector_name: str, gasket_name
                                illumination.spill_lux, max_cd,
                                illumination.total_lumens, config)
 
+    # The hardware line carries the three names and nothing else: which part is
+    # which is obvious from the names themselves. The finish stays with the
+    # reflector it belongs to, because it changes the result.
     title_str = (
-        f"Hardware: {emitter_name} | Reflector: {reflector_name} "
-        f"({finish_type.upper()}) | Gasket: {gasket_name}\n"
-        f"Distance to Wall: {config.target_distance_m}m | "
+        f"{reflector_name} ({finish_type.replace('_', ' ').title()}) | "
+        f"{emitter_name} | {gasket_name}\n"
+        f"Distance: {config.target_distance_m}m | "
         f"Bore: {geom['effective_d_hole']:.1f}mm | "
-        f"Focus Delta: {geom['focus_delta']:+.2f}mm | "
+        f"Focus: {geom['focus_delta']:+.2f}mm | "
         f"Max Intensity: {int(max_cd):,} cd | Throw: {throw_m:,}m")
+
+    # A centred emitter is the normal case, so it is left out of the title.
+    offset_text = emitter_offset.describe()
+    if offset_text:
+        title_str += f" | {offset_text}"
 
     figure = None
     if config.plot_wall_shot:
@@ -1786,7 +2379,8 @@ def run_simulation_job(config: SimulationConfig, library: HardwareLibrary,
                        finish: str,
                        log_callback: LogCallback = None,
                        progress_callback: ProgressCallback = None,
-                       is_cancelled_callback: CancelCallback = None):
+                       is_cancelled_callback: CancelCallback = None,
+                       emitter_offset: EmitterOffset = NO_EMITTER_OFFSET):
     """Runs the simulator: one hardware combination, or the whole batch.
 
     config.generate_all_plots selects between rendering the given combination
@@ -1803,6 +2397,9 @@ def run_simulation_job(config: SimulationConfig, library: HardwareLibrary,
         log_callback: Receives progress text.
         progress_callback: Receives completion percentage.
         is_cancelled_callback: Polled during tracing; returns True to stop.
+        emitter_offset: Centring error of the emitter. It describes the build
+            rather than any one part, so in batch mode it applies to every
+            combination swept.
 
     Returns:
         (figure, results): the wall shot figure for a single render (None in
@@ -1839,7 +2436,8 @@ def run_simulation_job(config: SimulationConfig, library: HardwareLibrary,
                 emitter, reflector, gasket, combo_finish, config, library,
                 log_callback, progress_callback, is_cancelled_callback,
                 os.path.join(output_dir,
-                             _plot_filename(reflector, emitter, gasket, combo_finish)))
+                             _plot_filename(reflector, emitter, gasket, combo_finish)),
+                emitter_offset)
             if metrics:
                 results[_results_key(metrics)] = metrics
 
@@ -1860,7 +2458,8 @@ def run_simulation_job(config: SimulationConfig, library: HardwareLibrary,
             active_emitter, active_reflector, active_gasket, finish, config, library,
             log_callback, progress_callback, is_cancelled_callback,
             os.path.join(output_dir, _plot_filename(
-                active_reflector, active_emitter, active_gasket, finish)))
+                active_reflector, active_emitter, active_gasket, finish)),
+            emitter_offset)
         if metrics:
             results[_results_key(metrics)] = metrics
             if log_callback:

@@ -6,8 +6,8 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>1400</width>
-    <height>850</height>
+    <width>1800</width>
+    <height>950</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -34,17 +34,27 @@
          <property name="title"><string>Reflector Library</string></property>
          <layout class="QVBoxLayout" name="verticalLayout_Reflector">
           <item>
-           <widget class="QComboBox" name="cmbReflector"/>
+           <widget class="QWidget" name="widgetReflectorPreview" native="true">
+            <property name="sizePolicy">
+             <sizepolicy hsizetype="Ignored" vsizetype="Fixed">
+              <horstretch>0</horstretch>
+              <verstretch>0</verstretch>
+             </sizepolicy>
+            </property>
+            <property name="minimumSize">
+             <size><width>0</width><height>0</height></size>
+            </property>
+            <property name="toolTip"><string>Reflector cross section, revolved. Drag to rotate.</string></property>
+            <layout class="QVBoxLayout" name="layoutReflectorPreview">
+             <property name="leftMargin"><number>0</number></property>
+             <property name="topMargin"><number>0</number></property>
+             <property name="rightMargin"><number>0</number></property>
+             <property name="bottomMargin"><number>0</number></property>
+            </layout>
+           </widget>
           </item>
           <item>
-           <widget class="QComboBox" name="cmbReflectorFinish">
-            <item>
-             <property name="text"><string>Smooth</string></property>
-            </item>
-            <item>
-             <property name="text"><string>Orange Peel</string></property>
-            </item>
-           </widget>
+           <widget class="QComboBox" name="cmbReflector"/>
           </item>
           <item>
            <widget class="QScrollArea" name="scrollReflector">
@@ -59,29 +69,50 @@
               <item row="2" column="1"><widget class="QLineEdit" name="txtRef_opening_diameter_mm"><property name="maximumSize"><size><width>100</width><height>16777215</height></size></property></widget></item>
               <item row="3" column="0"><widget class="QLabel"><property name="text"><string>Focus Offset (mm)</string></property></widget></item>
               <item row="3" column="1"><widget class="QLineEdit" name="txtRef_focus_offset_mm"><property name="maximumSize"><size><width>100</width><height>16777215</height></size></property></widget></item>
-              <item row="4" column="0"><widget class="QLabel"><property name="text"><string>Base Thickness (mm)</string></property></widget></item>
-              <item row="4" column="1"><widget class="QLineEdit" name="txtRef_thickness_height_mm"><property name="maximumSize"><size><width>100</width><height>16777215</height></size></property></widget></item>
-              <item row="5" column="0"><widget class="QLabel"><property name="text"><string>Smooth Reflectivity</string></property></widget></item>
-              <item row="5" column="1"><widget class="QLineEdit" name="txtRef_reflectivity_smooth"><property name="maximumSize"><size><width>100</width><height>16777215</height></size></property></widget></item>
-              <item row="6" column="0"><widget class="QLabel"><property name="text"><string>OP Reflectivity</string></property></widget></item>
-              <item row="6" column="1"><widget class="QLineEdit" name="txtRef_reflectivity_op"><property name="maximumSize"><size><width>100</width><height>16777215</height></size></property></widget></item>
-              <item row="7" column="0"><widget class="QLabel"><property name="text"><string>Hole Reflectivity</string></property></widget></item>
-              <item row="7" column="1"><widget class="QLineEdit" name="txtRef_reflectivity_cylinder"><property name="maximumSize"><size><width>100</width><height>16777215</height></size></property></widget></item>
-              <item row="8" column="0"><widget class="QLabel"><property name="text"><string>Gasket Reflectivity</string></property></widget></item>
-              <item row="8" column="1"><widget class="QLineEdit" name="txtRef_gasket_reflectivity"><property name="maximumSize"><size><width>100</width><height>16777215</height></size></property></widget></item>
-              <item row="9" column="0"><widget class="QLabel"><property name="text"><string>OP Factor Blur</string></property></widget></item>
-              <item row="9" column="1"><widget class="QLineEdit" name="txtRef_OP_Factor"><property name="maximumSize"><size><width>100</width><height>16777215</height></size></property></widget></item>
+              <item row="4" column="0"><widget class="QLabel"><property name="text"><string>Wall Thickness (mm)</string></property></widget></item>
+              <item row="4" column="1"><widget class="QLineEdit" name="txtRef_wall_thickness_mm"><property name="toolTip"><string>Thickness of one reflector wall. Taken off the outer diameter twice, once per side, to give the reflective surface.</string></property><property name="maximumSize"><size><width>100</width><height>16777215</height></size></property></widget></item>
+              <item row="5" column="0"><widget class="QLabel"><property name="text"><string>Base Thickness (mm)</string></property></widget></item>
+              <item row="5" column="1"><widget class="QLineEdit" name="txtRef_thickness_height_mm"><property name="maximumSize"><size><width>100</width><height>16777215</height></size></property></widget></item>
+              <item row="6" column="0"><widget class="QLabel"><property name="text"><string>Surface Finish</string></property></widget></item>
+              <item row="6" column="1"><widget class="QComboBox" name="txtRef_surface_finish"><property name="toolTip"><string>Which reflectivity applies: the smooth figure or the orange peel one. Stored with the reflector like any other spec.</string></property><property name="maximumSize"><size><width>100</width><height>16777215</height></size></property></widget></item>
+              <item row="7" column="0"><widget class="QLabel"><property name="text"><string>Smooth Reflectivity</string></property></widget></item>
+              <item row="7" column="1"><widget class="QLineEdit" name="txtRef_reflectivity_smooth"><property name="maximumSize"><size><width>100</width><height>16777215</height></size></property></widget></item>
+              <item row="8" column="0"><widget class="QLabel"><property name="text"><string>OP Reflectivity</string></property></widget></item>
+              <item row="8" column="1"><widget class="QLineEdit" name="txtRef_reflectivity_op"><property name="maximumSize"><size><width>100</width><height>16777215</height></size></property></widget></item>
+              <item row="9" column="0"><widget class="QLabel"><property name="text"><string>Hole Reflectivity</string></property></widget></item>
+              <item row="9" column="1"><widget class="QLineEdit" name="txtRef_reflectivity_cylinder"><property name="maximumSize"><size><width>100</width><height>16777215</height></size></property></widget></item>
+              <item row="10" column="0"><widget class="QLabel"><property name="text"><string>Gasket Reflectivity</string></property></widget></item>
+              <item row="10" column="1"><widget class="QLineEdit" name="txtRef_gasket_reflectivity"><property name="maximumSize"><size><width>100</width><height>16777215</height></size></property></widget></item>
+              <item row="11" column="0"><widget class="QLabel"><property name="text"><string>OP Factor Blur</string></property></widget></item>
+              <item row="11" column="1"><widget class="QLineEdit" name="txtRef_OP_Factor"><property name="maximumSize"><size><width>100</width><height>16777215</height></size></property></widget></item>
+              <item row="12" column="0"><widget class="QLabel"><property name="text"><string>Lens Transmissivity</string></property></widget></item>
+              <item row="12" column="1"><widget class="QLineEdit" name="txtRef_transmissivity_lens"><property name="toolTip"><string>Fraction of flux surviving the lens, 0 to 1. Applied to spill and reflected rays alike.</string></property><property name="maximumSize"><size><width>100</width><height>16777215</height></size></property></widget></item>
+
+              <!-- Emitter centring describes the build being simulated, not the
+                   reflector. Saving a reflector discards it, and reloading the
+                   form resets it to zero. -->
+              <item row="13" column="0" colspan="2">
+               <widget class="QLabel" name="lblEmitterCentring">
+                <property name="text"><string>Emitter Centring (this run only)</string></property>
+                <property name="font"><font><bold>true</bold></font></property>
+                <property name="toolTip"><string>Never saved with the reflector. Resets to zero when the reflector selection changes or is reset.</string></property>
+               </widget>
+              </item>
+              <item row="14" column="0"><widget class="QLabel"><property name="text"><string>Offset Distance (mm)</string></property></widget></item>
+              <item row="14" column="1"><widget class="QLineEdit" name="txtRef_emitter_offset_distance_mm"><property name="text"><string>0.0</string></property><property name="toolTip"><string>How far the emitter sits off the reflector axis, in millimetres. 0 is centred.</string></property><property name="maximumSize"><size><width>100</width><height>16777215</height></size></property></widget></item>
+              <item row="15" column="0"><widget class="QLabel"><property name="text"><string>Offset Angle (°)</string></property></widget></item>
+              <item row="15" column="1"><widget class="QLineEdit" name="txtRef_emitter_offset_angle_deg"><property name="text"><string>0.0</string></property><property name="toolTip"><string>Direction of the offset: 0° is straight up, increasing clockwise, so 90° is to the right.</string></property><property name="maximumSize"><size><width>100</width><height>16777215</height></size></property></widget></item>
              </layout>
             </widget>
            </widget>
           </item>
           <item>
-           <widget class="QPushButton" name="btnResetReflector">
-            <property name="text"><string>Reset Reflector to Defaults</string></property>
-           </widget>
-          </item>
-          <item>
            <layout class="QHBoxLayout" name="horizontalLayout_ReflectorButtons">
+            <item>
+             <widget class="QPushButton" name="btnResetReflector">
+              <property name="text"><string>Reset</string></property>
+             </widget>
+            </item>
             <item>
              <widget class="QPushButton" name="btnSaveReflector">
               <property name="text"><string>Save</string></property>
@@ -106,6 +137,26 @@
          <property name="title"><string>Emitter Library</string></property>
          <layout class="QVBoxLayout" name="verticalLayout_Emitter">
           <item>
+           <widget class="QWidget" name="widgetEmitterPreview" native="true">
+            <property name="sizePolicy">
+             <sizepolicy hsizetype="Ignored" vsizetype="Fixed">
+              <horstretch>0</horstretch>
+              <verstretch>0</verstretch>
+             </sizepolicy>
+            </property>
+            <property name="minimumSize">
+             <size><width>0</width><height>0</height></size>
+            </property>
+            <property name="toolTip"><string>Package footprint seen from above, with the light emitting surface on top.</string></property>
+            <layout class="QVBoxLayout" name="layoutEmitterPreview">
+             <property name="leftMargin"><number>0</number></property>
+             <property name="topMargin"><number>0</number></property>
+             <property name="rightMargin"><number>0</number></property>
+             <property name="bottomMargin"><number>0</number></property>
+            </layout>
+           </widget>
+          </item>
+          <item>
            <widget class="QComboBox" name="cmbEmitter"/>
           </item>
           <item>
@@ -119,7 +170,7 @@
               <item row="1" column="1"><widget class="QLineEdit" name="txtEmi_vf_turn_on_v"><property name="maximumSize"><size><width>100</width><height>16777215</height></size></property></widget></item>
               <item row="2" column="0"><widget class="QLabel"><property name="text"><string>VF Scale</string></property></widget></item>
               <item row="2" column="1"><widget class="QLineEdit" name="txtEmi_vf_scale"><property name="maximumSize"><size><width>100</width><height>16777215</height></size></property></widget></item>
-              <item row="3" column="0"><widget class="QLabel"><property name="text"><string>Base Efficacy</string></property></widget></item>
+              <item row="3" column="0"><widget class="QLabel"><property name="text"><string>Base Efficiency (lm/W)</string></property></widget></item>
               <item row="3" column="1"><widget class="QLineEdit" name="txtEmi_base_efficacy_lm_w"><property name="maximumSize"><size><width>100</width><height>16777215</height></size></property></widget></item>
               <item row="4" column="0"><widget class="QLabel"><property name="text"><string>Droop Factor</string></property></widget></item>
               <item row="4" column="1"><widget class="QLineEdit" name="txtEmi_droop_factor"><property name="maximumSize"><size><width>100</width><height>16777215</height></size></property></widget></item>
@@ -138,18 +189,20 @@
               <item row="11" column="0"><widget class="QLabel"><property name="text"><string>Die Width (mm)</string></property></widget></item>
               <item row="11" column="1"><widget class="QLineEdit" name="txtEmi_die_width_mm"><property name="maximumSize"><size><width>100</width><height>16777215</height></size></property></widget></item>
               <item row="12" column="0"><widget class="QLabel"><property name="text"><string>Shape</string></property></widget></item>
-              <item row="12" column="1"><widget class="QLineEdit" name="txtEmi_shape"><property name="maximumSize"><size><width>100</width><height>16777215</height></size></property></widget></item>
+              <item row="12" column="1"><widget class="QComboBox" name="txtEmi_shape"><property name="toolTip"><string>Outline of the light emitting surface. Use polygon for anything that is not a plain rectangle or circle, and fill in the Die Outline below.</string></property><property name="maximumSize"><size><width>100</width><height>16777215</height></size></property></widget></item>
+              <item row="13" column="0"><widget class="QLabel"><property name="text"><string>Die Outline (mm)</string></property></widget></item>
+              <item row="13" column="1"><widget class="QLineEdit" name="txtEmi_die_outline"><property name="toolTip"><string>Only used when Shape is polygon. A JSON list of [x,y] corners in mm, measured from the die centre, in order around the outline. Paste the output of emitter_shapes.py here. Leave blank for square or round dies.</string></property><property name="placeholderText"><string>[[-1,-1],[1,-1],[1,1],[-1,1]]</string></property><property name="maximumSize"><size><width>100</width><height>16777215</height></size></property></widget></item>
              </layout>
             </widget>
            </widget>
           </item>
           <item>
-           <widget class="QPushButton" name="btnResetEmitter">
-            <property name="text"><string>Reset Emitter to Defaults</string></property>
-           </widget>
-          </item>
-          <item>
            <layout class="QHBoxLayout" name="horizontalLayout_EmitterButtons">
+            <item>
+             <widget class="QPushButton" name="btnResetEmitter">
+              <property name="text"><string>Reset</string></property>
+             </widget>
+            </item>
             <item>
              <widget class="QPushButton" name="btnSaveEmitter">
               <property name="text"><string>Save</string></property>
@@ -192,12 +245,12 @@
            </widget>
           </item>
           <item>
-           <widget class="QPushButton" name="btnResetGasket">
-            <property name="text"><string>Reset Gasket to Defaults</string></property>
-           </widget>
-          </item>
-          <item>
            <layout class="QHBoxLayout" name="horizontalLayout_GasketButtons">
+            <item>
+             <widget class="QPushButton" name="btnResetGasket">
+              <property name="text"><string>Reset</string></property>
+             </widget>
+            </item>
             <item>
              <widget class="QPushButton" name="btnSaveGasket">
               <property name="text"><string>Save</string></property>

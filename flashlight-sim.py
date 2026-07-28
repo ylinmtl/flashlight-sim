@@ -7,35 +7,45 @@ Matplotlib canvas for the rendered beam. Simulations run on a worker thread so
 the interface stays responsive and remains cancellable.
 """
 
+import json
+import math
 import os
 import sys
 import traceback
 
 from PyQt6 import uic
 from PyQt6.QtCore import QThread, pyqtSignal
-from PyQt6.QtWidgets import (QApplication, QCheckBox, QDialog, QFormLayout,
-                             QGroupBox, QHBoxLayout, QInputDialog, QLineEdit,
+from PyQt6.QtWidgets import (QApplication, QCheckBox, QComboBox, QDialog,
+                             QFormLayout, QGroupBox, QHBoxLayout, QInputDialog,
+                             QLineEdit,
                              QMainWindow, QMessageBox, QPushButton, QScrollArea,
-                             QVBoxLayout, QWidget)
+                             QSizePolicy, QVBoxLayout, QWidget)
 
 # Matplotlib's Qt canvas, used to embed the engine's figure in the window.
 from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg as FigureCanvas
+from matplotlib.colors import to_rgba_array
+from matplotlib.figure import Figure
+import numpy as np
+from mpl_toolkits.mplot3d.art3d import Poly3DCollection
 
-from fea_engine import (HardwareLibrary, SimulationConfig, resource_path,
-                        run_simulation_job)
+from fea_engine import (DIE_SHAPES, SURFACE_FINISHES, EmitterOffset,
+                        HardwareLibrary, SimulationConfig,
+                        emitter_die_outline, get_sim_geometry, resource_path,
+                        run_simulation_job, spec_or_default)
 
 # Specs shown for each hardware kind, in the order they appear in the form. Each
 # one maps to a QLineEdit in mainwindow.ui named <prefix><spec>, for example
 # reflector "diameter_mm" -> txtRef_diameter_mm.
 SPEC_FIELDS = {
     "reflector": ("diameter_mm", "height_mm", "opening_diameter_mm",
-                  "focus_offset_mm", "thickness_height_mm", "reflectivity_smooth",
-                  "reflectivity_op", "reflectivity_cylinder", "gasket_reflectivity",
-                  "OP_Factor"),
+                  "focus_offset_mm", "wall_thickness_mm", "thickness_height_mm",
+                  "surface_finish", "reflectivity_smooth", "reflectivity_op",
+                  "reflectivity_cylinder", "gasket_reflectivity", "OP_Factor",
+                  "transmissivity_lens"),
     "emitter": ("max_current_amps", "vf_turn_on_v", "vf_scale", "base_efficacy_lm_w",
                 "droop_factor", "footprint_x_mm", "footprint_y_mm", "height_mm",
                 "dome_size_mm", "refractive_index", "die_length_mm", "die_width_mm",
-                "shape"),
+                "shape", "die_outline"),
     "gasket": ("gasket_thickness_mm", "gasket_total_height_mm", "gasket_opening_mm"),
 }
 
@@ -47,6 +57,58 @@ FIELD_WIDGET_PREFIX = {
 
 # Specs that stay strings; every other field is parsed as a float.
 TEXT_SPECS = frozenset({"shape"})
+
+# Emitter palette, shared by both previews so the emitter looks identical
+# whether it is shown on its own or sitting inside the reflector.
+EMITTER_BODY_COLOUR = "#3F3F3F"    # sides of the package
+EMITTER_BASE_COLOUR = "#C6C8CC"    # underside, the silver solder pad face
+EMITTER_TOP_COLOUR = "#FFFFFF"     # top face, around the emitting surface
+EMITTER_TOP_EDGE_COLOUR = "#7A7A7A"
+EMITTER_DIE_COLOUR = "#FF9E1B"     # the light emitting surface itself
+EMITTER_DIE_EDGE_COLOUR = "#C77B14"
+EMITTER_DOME_COLOUR = "#CBE7F5"
+
+# The reflector is drawn as a single silver body. It stays translucent
+# so the shelf and the bore behind it still read, and the emitter is
+# drawn last so it shows through regardless.
+REFLECTOR_COLOUR = "#C6C8CC"
+REFLECTOR_ALPHA = 0.85
+
+# Both previews sit on black, like the simulated beam shot does.
+PREVIEW_BACKGROUND = "#000000"
+PREVIEW_TEXT_COLOUR = "#FFFFFF"
+
+# Zoom applied per mouse wheel step in a 3D preview.
+PREVIEW_ZOOM_STEP = 1.15
+
+# Specs the form offers as a drop down, mapped to the values the engine
+# accepts. The box shows each value capitalised, with underscores as spaces,
+# while the catalogue keeps the plain value listed here.
+CHOICE_SPECS = {
+    "shape": DIE_SHAPES,
+    "surface_finish": SURFACE_FINISHES,
+}
+
+# Specs only meaningful for certain choices, as spec -> (deciding spec,
+# values that need it). The row is hidden when it does not apply, so an
+# outline box is not offered for a die that has no outline.
+CONDITIONAL_SPECS = {
+    "die_outline": ("shape", frozenset({"polygon"})),
+}
+
+# Specs held as a JSON array rather than a single value. The input box takes
+# the text an outline generator produces, so a die shape can be pasted in.
+LIST_SPECS = frozenset({"die_outline"})
+
+# Reflector inputs that describe the build being simulated rather than the
+# reflector itself, as (field, label). Each one is a QLineEdit in
+# mainwindow.ui named <prefix><field>, exactly like a spec, but they are
+# deliberately absent from SPEC_FIELDS so that saving a reflector discards
+# them, and they reset to zero whenever the form is reloaded.
+RUN_ONLY_REFLECTOR_FIELDS = (
+    ("emitter_offset_distance_mm", "Emitter Offset Distance (mm)"),
+    ("emitter_offset_angle_deg", "Emitter Offset Angle (° CW from up)"),
+)
 
 # Settings offered by the settings dialog, grouped exactly as they are stored,
 # mapping each attribute of SimulationConfig to its human readable label.
@@ -92,7 +154,11 @@ SETTING_LABELS = {
         "default_reflectivity_smooth": "Default Reflectivity (Smooth)",
         "default_reflectivity_op": "Default Reflectivity (Orange Peel)",
         "default_reflectivity_cylinder": "Default Reflectivity (Cylinder)",
+        "default_gasket_reflectivity": "Default Reflectivity (Gasket)",
         "default_op_blur_strength": "Orange Peel Blur Strength",
+        "default_op_factor": "Default OP Factor",
+        "default_transmissivity_lens": "Default Lens Transmissivity",
+        "default_surface_finish": "Default Surface Finish",
         "spill_visible_threshold_lux": "Spill Visible Threshold (Lux)",
         "corona_visible_threshold": "Corona Visible Threshold",
         "hotspot_fwhm_threshold": "Hotspot FWHM Threshold",
@@ -102,8 +168,282 @@ SETTING_LABELS = {
         "default_reflector_wall_thickness_mm": "Default Reflector Wall Thickness (mm)",
         "default_reflector_base_thickness_mm": "Default Reflector Base Thickness (mm)",
         "default_focus_offset_mm": "Default Focus Offset (mm)",
+        "default_opening_diameter_mm": "Default Reflector Opening Diameter (mm)",
+        "default_dome_size_mm": "Default Emitter Dome Size (mm)",
+        "default_refractive_index": "Default Emitter Refractive Index",
+        "default_emitter_shape": "Default Emitter Die Shape",
     },
 }
+
+
+def _choice_label(value):
+    """Renders a stored choice for display.
+
+    Args:
+        value: The value as the catalogue stores it, such as "orange_peel".
+
+    Returns:
+        The caption to show, such as "Orange Peel".
+    """
+    return value.replace("_", " ").title()
+
+
+def _polygon_normal(face):
+    """Returns a polygon's unit normal, by Newell's method.
+
+    Newell's method works for any planar polygon, convex or not, and gives
+    the outward normal when the vertices run anticlockwise seen from
+    outside the solid.
+
+    Args:
+        face: Sequence of (x, y, z) vertices in order around the polygon.
+
+    Returns:
+        A unit normal as a length 3 array, or zeros for a degenerate face.
+    """
+    vertices = np.asarray(face, dtype=float)
+    following = np.roll(vertices, -1, axis=0)
+    normal = np.array([
+        np.sum((vertices[:, 1] - following[:, 1])
+               * (vertices[:, 2] + following[:, 2])),
+        np.sum((vertices[:, 2] - following[:, 2])
+               * (vertices[:, 0] + following[:, 0])),
+        np.sum((vertices[:, 0] - following[:, 0])
+               * (vertices[:, 1] + following[:, 1]))])
+    length = float(np.linalg.norm(normal))
+    return normal / length if length else normal
+
+
+class _SolidFaces(Poly3DCollection):
+    """Polygon collection that hides the faces turned away from the viewer.
+
+    Depth sorting cannot order the faces of a thin box reliably: the top and
+    the underside of a sub-millimetre package overlap in depth at a shallow
+    angle, so the die shows through from below however the sort is tuned.
+    For a closed solid that question never has to be answered, because a
+    face pointing away from the viewer cannot be seen. Those are blanked
+    instead, which is exact rather than approximate and follows the view as
+    it is rotated.
+    """
+
+    def __init__(self, faces, facecolours, edgecolours, **kwargs):
+        """Builds the collection and records each face's outward normal.
+
+        Args:
+            faces: List of polygons, each a sequence of (x, y, z) vertices
+                wound anticlockwise seen from outside the solid.
+            facecolours: One fill colour per face.
+            edgecolours: One edge colour per face.
+            **kwargs: Passed to Poly3DCollection.
+        """
+        super().__init__(faces, **kwargs)
+        self._face_normals = np.array([_polygon_normal(f) for f in faces])
+        self._solid_facecolours = to_rgba_array(facecolours)
+        self._solid_edgecolours = to_rgba_array(edgecolours)
+
+    def do_3d_projection(self):
+        """Blanks the back faces for the current view, then projects.
+
+        Returns:
+            The depth Matplotlib should sort this artist by.
+        """
+        elevation = math.radians(self.axes.elev)
+        azimuth = math.radians(self.axes.azim)
+        towards_viewer = np.array([
+            math.cos(elevation) * math.cos(azimuth),
+            math.cos(elevation) * math.sin(azimuth),
+            math.sin(elevation)])
+
+        facing = self._face_normals @ towards_viewer > 0.0
+        for colours, apply in ((self._solid_facecolours, self.set_facecolor),
+                               (self._solid_edgecolours, self.set_edgecolor)):
+            shown = colours.copy()
+            shown[~facing, 3] = 0.0
+            apply(shown)
+        return super().do_3d_projection()
+
+
+def _revolved_surface(radii, heights, segments=72):
+    """Turns a profile in the radius/height plane into a surface of revolution.
+
+    Args:
+        radii: Radius at each point along the profile, in millimetres.
+        heights: Height at each point along the profile, in millimetres.
+        segments: Steps around the full turn.
+
+    Returns:
+        (x, y, z) arrays shaped for plot_surface.
+    """
+    angle = np.linspace(0.0, 2.0 * np.pi, segments)[:, None]
+    radii = np.asarray(radii, dtype=float)[None, :]
+    heights = np.asarray(heights, dtype=float)[None, :]
+    return (radii * np.cos(angle), radii * np.sin(angle),
+            np.repeat(heights, segments, axis=0))
+
+
+def _dome_surface(radius, centre_z, segments=32):
+    """Builds the upper half of a sphere, the shape of a silicone dome.
+
+    The tracer treats the dome as a sphere centred on the die, so only the half
+    above the die is drawn: that is the part light actually crosses.
+
+    Args:
+        radius: Dome radius in millimetres.
+        centre_z: Height of the die, which is the centre of the sphere.
+        segments: Steps around the turn; half as many are used up the dome.
+
+    Returns:
+        (x, y, z) arrays shaped for plot_surface.
+    """
+    polar = np.linspace(0.0, np.pi / 2.0, max(segments // 2, 4))[None, :]
+    azimuth = np.linspace(0.0, 2.0 * np.pi, segments)[:, None]
+    return (radius * np.sin(polar) * np.cos(azimuth),
+            radius * np.sin(polar) * np.sin(azimuth),
+            centre_z + radius * np.cos(polar) + 0.0 * azimuth)
+
+
+def _dimpled_revolution(radii, heights, segments, amplitude, around, along):
+    """Revolves a profile with a dimpled surface, the look of orange peel.
+
+    The dimples come from a product of sines rather than random noise, for
+    two reasons: a whole number of cycles around the axis closes on itself,
+    so there is no seam where the revolution meets, and the same reflector
+    draws identically every time instead of shimmering on each redraw.
+
+    Args:
+        radii: Radius at each point along the profile, in millimetres.
+        heights: Height at each point along the profile, in millimetres.
+        segments: Steps around the full turn.
+        amplitude: Dimple depth as a fraction of the local radius.
+        around: Whole number of dimples around the circumference.
+        along: Number of dimples from the bore to the mouth.
+
+    Returns:
+        (x, y, z) arrays shaped for plot_surface.
+    """
+    angle = np.linspace(0.0, 2.0 * np.pi, segments)[:, None]
+    radii = np.asarray(radii, dtype=float)[None, :]
+    heights = np.asarray(heights, dtype=float)[None, :]
+    position = np.linspace(0.0, 1.0, radii.shape[1])[None, :]
+
+    ripple = np.sin(around * angle) * np.sin(along * np.pi * position)
+    pushed = radii * (1.0 + amplitude * ripple)
+    return (pushed * np.cos(angle), pushed * np.sin(angle),
+            heights + 0.0 * angle)
+
+
+def _filled_outline_surface(corners, height):
+    """Turns a closed outline into a fan of surface patches at one height.
+
+    Every part of the reflector preview is drawn with plot_surface, so the
+    emitter is built the same way rather than as a separate collection.
+    Mixing the two makes mplot3d sort them against each other unreliably,
+    which loses the emitter entirely once the reflector is large.
+
+    Args:
+        corners: (x, y) pairs in order around the outline.
+        height: Height of the plane the outline lies in.
+
+    Returns:
+        (x, y, z) arrays shaped for plot_surface, fanned from the centre.
+    """
+    x = np.array([c[0] for c in corners] + [corners[0][0]], dtype=float)
+    y = np.array([c[1] for c in corners] + [corners[0][1]], dtype=float)
+    return (np.vstack([np.full_like(x, x[:-1].mean()), x]),
+            np.vstack([np.full_like(y, y[:-1].mean()), y]),
+            np.full((2, x.size), float(height)))
+
+
+def _outline_area(vertices):
+    """Returns the area a polygon outline encloses, via the shoelace sum.
+
+    Args:
+        vertices: (N, 2) array of corners in order around the outline.
+
+    Returns:
+        The signed area in square millimetres.
+    """
+    x, y = vertices[:, 0], vertices[:, 1]
+    return 0.5 * float(np.dot(x, np.roll(y, -1)) - np.dot(np.roll(x, -1), y))
+
+
+class SquarePreview(QWidget):
+    """Holds a Matplotlib canvas and stays as tall as it is wide.
+
+    Qt has no aspect ratio constraint, so the height is driven from the width
+    on every resize. The widget asks for no width of its own, which is what
+    keeps a preview from widening the column it sits in: it takes whatever
+    width the column already has and squares itself off against it.
+    """
+
+    def __init__(self, parent=None):
+        """Builds an empty square canvas holder.
+
+        Args:
+            parent: Widget to attach to.
+        """
+        super().__init__(parent)
+        self.figure = Figure(figsize=(2.4, 2.4), facecolor=PREVIEW_BACKGROUND)
+        self.canvas = FigureCanvas(self.figure)
+
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.addWidget(self.canvas)
+
+        self.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Fixed)
+        self.setMinimumWidth(0)
+        self.canvas.mpl_connect("scroll_event", self.on_scroll)
+
+    def on_scroll(self, event):
+        """Zooms a 3D preview about its centre on a mouse wheel step.
+
+        Matplotlib's 3D axes have no scroll zoom of their own, so the axis
+        limits are scaled directly. All three are scaled together, which
+        keeps the proportions of whatever is on screen.
+
+        Args:
+            event: Matplotlib scroll event.
+        """
+        axes = event.inaxes
+        if axes is None and self.figure.axes:
+            axes = self.figure.axes[0]
+        if axes is None or not hasattr(axes, "get_zlim3d"):
+            return
+
+        scale = (1.0 / PREVIEW_ZOOM_STEP if event.button == "up"
+                 else PREVIEW_ZOOM_STEP)
+        for get_limits, set_limits in ((axes.get_xlim3d, axes.set_xlim3d),
+                                       (axes.get_ylim3d, axes.set_ylim3d),
+                                       (axes.get_zlim3d, axes.set_zlim3d)):
+            low, high = get_limits()
+            middle = (low + high) / 2.0
+            half = (high - low) / 2.0 * scale
+            set_limits(middle - half, middle + half)
+        self.canvas.draw_idle()
+
+    def resizeEvent(self, event):
+        """Matches the height to the width so the preview stays square.
+
+        Args:
+            event: The resize event, passed on to the base class.
+        """
+        super().resizeEvent(event)
+        if self.height() != self.width():
+            self.setFixedHeight(self.width())
+
+    def message(self, text):
+        """Clears the preview and shows a short explanation instead.
+
+        Args:
+            text: Why there is nothing to draw.
+        """
+        self.figure.clear()
+        self.figure.patch.set_facecolor(PREVIEW_BACKGROUND)
+        axes = self.figure.add_axes([0.0, 0.0, 1.0, 1.0])
+        axes.axis("off")
+        axes.text(0.5, 0.5, text, ha="center", va="center", wrap=True,
+                  fontsize=7, color=PREVIEW_TEXT_COLOUR)
+        self.canvas.draw_idle()
 
 
 class SimulationWorker(QThread):
@@ -122,16 +462,21 @@ class SimulationWorker(QThread):
     finished_signal = pyqtSignal(object, dict)
     error_signal = pyqtSignal(str)
 
-    def __init__(self, config, library, reflector_name, emitter_name, gasket_name, finish):
+    def __init__(self, config, library, reflector_name, emitter_name, gasket_name,
+                 finish, emitter_offset):
         """Captures everything the job needs; nothing is read from the GUI later.
 
         Args:
             config: Active SimulationConfig.
-            library: Active HardwareLibrary.
+            library: Detached HardwareLibrary copy for this run, already
+                carrying any unsaved edits from the form. It is never written,
+                so nothing the worker does can reach hardware_library.json.
             reflector_name: Reflector to simulate.
             emitter_name: Emitter to simulate.
             gasket_name: Gasket to simulate.
             finish: "smooth" or "orange_peel".
+            emitter_offset: EmitterOffset for this run. It is captured here
+                rather than stored anywhere, so it lasts exactly one job.
         """
         super().__init__()
         self.config = config
@@ -140,6 +485,7 @@ class SimulationWorker(QThread):
         self.emitter_name = emitter_name
         self.gasket_name = gasket_name
         self.finish = finish
+        self.emitter_offset = emitter_offset
         self._is_cancelled = False
 
     def cancel(self):
@@ -154,7 +500,8 @@ class SimulationWorker(QThread):
                 self.reflector_name, self.emitter_name, self.gasket_name, self.finish,
                 log_callback=self.log_signal.emit,
                 progress_callback=self.progress_signal.emit,
-                is_cancelled_callback=lambda: self._is_cancelled)
+                is_cancelled_callback=lambda: self._is_cancelled,
+                emitter_offset=self.emitter_offset)
 
             if self._is_cancelled:
                 self.log_signal.emit("\n[!] Simulation stopped by user.")
@@ -307,6 +654,14 @@ class MainWindow(QMainWindow):
         try:
             self.config = SimulationConfig()
             self.library = HardwareLibrary()
+            # A newer release may have added whole hardware entries, or added
+            # specs to entries the operator already has. Both are compared
+            # against the shipped copies and applied silently.
+            self.imported_entries = self.library.import_new_entries()
+            # Renames run before the restore, so a spec carried across to a new
+            # name is not then mistaken for a missing one and overwritten.
+            self.renamed_specs = self.library.rename_legacy_specs()
+            self.restored_specs = self.library.restore_missing_specs(self.config)
         except Exception as error:
             QMessageBox.critical(self, "Initialization Error", str(error))
             sys.exit(1)
@@ -315,11 +670,44 @@ class MainWindow(QMainWindow):
         self.worker = None
 
         self.setup_canvas()
+        self.setup_previews()
         self.setup_hardware_widgets()
         self.connect_signals()
 
         for kind in SPEC_FIELDS:
             self.reload_fields(kind)
+        self.update_previews()
+
+        # Both files are upgraded silently on load; say so, because the
+        # operator is about to simulate with values they never chose.
+        if self.config.restored_settings:
+            self.log_message(
+                f"Settings file upgraded: {len(self.config.restored_settings)} new "
+                f"setting(s) taken from the template "
+                f"({', '.join(self.config.restored_settings)}).")
+
+        if self.imported_entries:
+            added_count = sum(len(names) for names in self.imported_entries.values())
+            self.log_message(
+                f"Hardware library upgraded: {added_count} new entrie(s) added "
+                f"from the shipped library.")
+            for kind, names in sorted(self.imported_entries.items()):
+                self.log_message(f"  {kind}: {', '.join(names)}")
+
+        if self.renamed_specs:
+            self.log_message(
+                f"Hardware library upgraded: renamed spec(s) on "
+                f"{len(self.renamed_specs)} entrie(s). Wall thickness now means "
+                f"one wall, so stored values were halved.")
+
+        if self.restored_specs:
+            restored_count = sum(len(specs) for specs in self.restored_specs.values())
+            self.log_message(
+                f"Hardware library upgraded: {restored_count} missing spec(s) "
+                f"filled in from the settings across "
+                f"{len(self.restored_specs)} entrie(s).")
+            for entry, specs in sorted(self.restored_specs.items()):
+                self.log_message(f"  {entry}: {', '.join(specs)}")
 
     # --- SETUP ---
 
@@ -328,6 +716,333 @@ class MainWindow(QMainWindow):
         self.lblPlotPlaceholder.hide()
         if self.grpPlot.layout() is None:
             self.grpPlot.setLayout(QVBoxLayout())
+
+    def setup_previews(self):
+        """Puts a square canvas inside each preview placeholder from the .ui."""
+        self.reflector_preview = SquarePreview()
+        self.widgetReflectorPreview.layout().addWidget(self.reflector_preview)
+
+        self.emitter_preview = SquarePreview()
+        self.widgetEmitterPreview.layout().addWidget(self.emitter_preview)
+
+    def current_specs(self, kind):
+        """Returns the stored specs for a kind, overlaid with the form's edits.
+
+        Args:
+            kind: One of the keys of SPEC_FIELDS.
+
+        Returns:
+            A merged specs dict, or None when nothing is selected.
+        """
+        name = self.combo_boxes[kind].currentText()
+        if not name:
+            return None
+        return dict(self.library.get(kind, name), **self.read_fields(kind))
+
+    def update_previews(self):
+        """Redraws both previews from whatever is currently on screen.
+
+        Both are refreshed together because the reflector's geometry depends on
+        the emitter and the gasket as well as on the reflector itself.
+        """
+        self.draw_reflector_preview()
+        self.draw_emitter_preview()
+
+    def draw_reflector_preview(self):
+        """Draws the reflector as a full solid of revolution, emitter included.
+
+        The profile comes from the engine's own geometry, so the preview shows
+        the surface that would actually be traced rather than a second, and
+        possibly divergent, idea of the same shape. The reflective bowl is
+        drawn semi transparent so the emitter sitting down in the bore stays
+        visible from any angle.
+        """
+        preview = self.reflector_preview
+        specs = [self.current_specs(kind) for kind in ("reflector", "emitter", "gasket")]
+        if not all(specs):
+            preview.message("Select a reflector,\nemitter and gasket")
+            return
+
+        reflector, emitter = specs[0], specs[1]
+        finish = spec_or_default(reflector, "reflector", "surface_finish", self.config)
+        emitter_offset = self.read_emitter_offset()
+        try:
+            geom = get_sim_geometry(reflector, emitter, specs[2], finish,
+                                    self.config, emitter_offset)
+            outer_radius = float(reflector["diameter_mm"]) / 2.0
+        except (KeyError, ValueError, ZeroDivisionError) as error:
+            preview.message(f"Cannot draw:\n{error}")
+            return
+
+        focal_length = geom["focal_length"]
+        r_hole, radius_max = geom["r_hole"], geom["radius_max"]
+        z_bottom, z_max_cut = geom["z_bottom"], geom["z_max_cut"]
+        z_min_cut, z_hole_top = geom["z_min_cut"], geom["z_hole_top"]
+        if focal_length <= 0.0 or radius_max <= r_hole:
+            preview.message("Reflector dimensions\ndo not form a bowl")
+            return
+
+        preview.figure.clear()
+        preview.figure.patch.set_facecolor(PREVIEW_BACKGROUND)
+        # computed_zorder=False turns off mplot3d's automatic depth sorting,
+        # which otherwise buries the emitter behind the translucent body no
+        # matter how it is drawn. Artists then render in the order added, so
+        # the emitter goes on last and stays visible from any angle.
+        axes = preview.figure.add_subplot(111, projection="3d",
+                                          computed_zorder=False)
+
+        # Wall thickness is a radial figure, the same way the spec defines it,
+        # so the outer surface is the same parabola pushed out by that much.
+        wall = max(outer_radius - radius_max, 0.0)
+
+        # The bowl starts where the bore or the shelf leaves off, not at the
+        # bore radius, so the parabola is cut off rather than curling back
+        # under the shelf.
+        bowl_start = math.sqrt(max(0.0, 4.0 * focal_length * z_hole_top))
+        bowl_r = np.linspace(bowl_start, radius_max, 120)
+
+        outer_z = np.linspace(z_bottom, z_max_cut, 48)
+        outer_r = np.sqrt(4.0 * focal_length * np.maximum(outer_z, 0.0)) + wall
+
+        # The cross section closes into a solid: up the bore, out across the
+        # shelf, up the bowl, over the rim, down the outer wall and back along
+        # the underside. Order matters because depth sorting is off, so these
+        # run roughly back to front.
+        body = [
+            (outer_r, outer_z),                                    # outer wall
+            ([r_hole, outer_r[0]], [z_bottom, z_bottom]),          # underside
+            ([r_hole, bowl_start], [z_hole_top, z_hole_top]),      # shelf
+            ([r_hole, r_hole], [z_bottom, z_hole_top]),            # bore wall
+            ([radius_max, outer_radius], [z_max_cut, z_max_cut]),  # rim
+        ]
+        for radii, heights in body[:2]:
+            axes.plot_surface(*_revolved_surface(radii, heights),
+                              color=REFLECTOR_COLOUR, alpha=REFLECTOR_ALPHA,
+                              linewidth=0, antialiased=True)
+
+        # The bowl itself, stippled when the reflector is orange peel so the
+        # finish is visible rather than only being a number in the form. The
+        # dimples are scaled by the reflector's own OP factor, and shading is
+        # what makes them read, so the surface is left opaque enough to shade.
+        bowl_z = bowl_r ** 2 / (4.0 * focal_length)
+        if finish == "orange_peel":
+            strength = float(spec_or_default(reflector, "reflector", "OP_Factor",
+                                             self.config))
+            bowl = _dimpled_revolution(bowl_r, bowl_z, 240,
+                                       0.035 * max(strength, 0.1), 40, 8)
+        else:
+            bowl = _revolved_surface(bowl_r, bowl_z)
+        axes.plot_surface(*bowl, color=REFLECTOR_COLOUR,
+                          alpha=REFLECTOR_ALPHA, linewidth=0,
+                          antialiased=True)
+
+        for radii, heights in body[2:]:
+            axes.plot_surface(*_revolved_surface(radii, heights),
+                              color=REFLECTOR_COLOUR, alpha=REFLECTOR_ALPHA,
+                              linewidth=0, antialiased=True)
+
+        extents = self.add_emitter(axes, emitter, geom["ez_base"],
+                                   geom["emitter_offset_x"],
+                                   geom["emitter_offset_y"])
+        emitter_low = None if extents is None else extents["base_z"]
+
+        # True proportions, so a deep reflector looks deep. The emitter can sit
+        # below the reflector's floor once the gasket is compressed, so the
+        # lower limit follows it rather than clipping it away.
+        span = 2.0 * outer_radius
+        z_low = z_bottom if emitter_low is None else min(z_bottom, emitter_low)
+        height = max(z_max_cut - z_low, 1e-6)
+        axes.set_facecolor(PREVIEW_BACKGROUND)
+        axes.set_box_aspect((1.0, 1.0, min(max(height / span, 0.25), 2.5)))
+        axes.set_xlim(-outer_radius, outer_radius)
+        axes.set_ylim(-outer_radius, outer_radius)
+        axes.set_zlim(z_low, z_max_cut)
+        axes.set_axis_off()
+        axes.view_init(elev=28.0, azim=-58.0)
+        preview.figure.subplots_adjust(left=0.0, right=1.0, bottom=0.0, top=1.0)
+        preview.canvas.draw_idle()
+
+    def add_emitter(self, axes, emitter, die_z, offset_x=0.0, offset_y=0.0):
+        """Draws the emitter package, die and dome as an opaque solid.
+
+        Both previews call this, so the emitter looks the same on its own as it
+        does sitting in the reflector. The package is opaque: dark grey sides
+        and underside, a white top face with the emitting surface on it, and a
+        translucent dome over the lot so the die stays readable through it.
+
+        Every face goes into one collection, which is what makes the solid look
+        solid: Matplotlib sorts polygons within a collection by depth, so the
+        sides and underside hide the top face once the view swings below the
+        emitter. Faces spread across several collections cannot be sorted
+        against each other and the top would show through from underneath.
+
+        Args:
+            axes: 3D axes to draw on.
+            emitter: Emitter specs, already merged with the form's edits.
+            die_z: Height of the light emitting surface. The package hangs
+                below it by the emitter's own height.
+            offset_x, offset_y: Centring error of the emitter in
+                millimetres, which moves the whole package off the axis.
+
+        Returns:
+            A dict of the extents drawn, for the caller to frame the view with,
+            or None when the emitter specs are too incomplete to draw.
+        """
+        try:
+            shape = spec_or_default(emitter, "emitter", "shape", self.config)
+            outline = emitter_die_outline(emitter, shape)
+            footprint_x = float(emitter["footprint_x_mm"])
+            footprint_y = float(emitter["footprint_y_mm"])
+            package_height = float(emitter["height_mm"])
+            die_length = float(emitter["die_length_mm"])
+            die_width = die_length if shape == "round" else float(emitter["die_width_mm"])
+            dome_radius = self.dome_radius(emitter)
+        except (KeyError, ValueError, TypeError):
+            return None  # The reflector is still worth showing without it.
+
+        base_z = die_z - package_height
+        die_corners = self.die_corners(shape, outline, die_length, die_width)
+        package = [(offset_x - footprint_x / 2.0, offset_y - footprint_y / 2.0),
+                   (offset_x + footprint_x / 2.0, offset_y - footprint_y / 2.0),
+                   (offset_x + footprint_x / 2.0, offset_y + footprint_y / 2.0),
+                   (offset_x - footprint_x / 2.0, offset_y + footprint_y / 2.0)]
+        die_corners = [(x + offset_x, y + offset_y) for x, y in die_corners]
+
+        faces, colours, edges = [], [], []
+
+        # Sides, one quad per edge of the footprint.
+        for index, (x0, y0) in enumerate(package):
+            x1, y1 = package[(index + 1) % len(package)]
+            faces.append([(x0, y0, base_z), (x1, y1, base_z),
+                          (x1, y1, die_z), (x0, y0, die_z)])
+            colours.append(EMITTER_BODY_COLOUR)
+            edges.append(EMITTER_BODY_COLOUR)
+
+        # Reversed, so the underside's normal points down and out of the
+        # solid the way every other face's does.
+        faces.append([(x, y, base_z) for x, y in reversed(package)])
+        colours.append(EMITTER_BASE_COLOUR)
+        edges.append(EMITTER_BASE_COLOUR)
+
+        # The white top would dissolve into the background along its far edge,
+        # so it is the one face given a contrasting outline.
+        faces.append([(x, y, die_z) for x, y in package])
+        colours.append(EMITTER_TOP_COLOUR)
+        edges.append(EMITTER_TOP_EDGE_COLOUR)
+
+        # The die is coplanar with the top face, which leaves the depth sort to
+        # pick between them arbitrarily. Lifting it by a thousandth of the
+        # package height settles that without being a thickness anyone notices.
+        die_draw_z = die_z + max(package_height, 0.1) * 1e-3
+        faces.append([(x, y, die_draw_z) for x, y in die_corners])
+        colours.append(EMITTER_DIE_COLOUR)
+        edges.append(EMITTER_DIE_EDGE_COLOUR)
+
+        axes.add_collection3d(_SolidFaces(
+            faces, colours, edges, linewidths=0.8, zsort="max"))
+
+        if dome_radius > 0.0:
+            dome_x, dome_y, dome_z = _dome_surface(dome_radius, die_z)
+            axes.plot_surface(dome_x + offset_x, dome_y + offset_y, dome_z,
+                              color=EMITTER_DOME_COLOUR, alpha=0.42,
+                              linewidth=0, antialiased=True)
+
+        return {
+            "base_z": base_z,
+            "top_z": die_z + dome_radius,
+            "reach": max(footprint_x, footprint_y, 2.0 * dome_radius) / 2.0,
+            "die_area": abs(_outline_area(np.asarray(die_corners, dtype=float))),
+            "footprint": (footprint_x, footprint_y),
+        }
+
+    def draw_emitter_preview(self):
+        """Draws the emitter on its own in 3D, free to rotate and zoom.
+
+        The die is built from the same outline the tracer samples, so a chamfer
+        or a notch that is wrong in the catalogue is visible here rather than
+        having to be inferred from a beam shot.
+        """
+        preview = self.emitter_preview
+        specs = self.current_specs("emitter")
+        if specs is None:
+            preview.message("Select an emitter")
+            return
+
+        preview.figure.clear()
+        preview.figure.patch.set_facecolor(PREVIEW_BACKGROUND)
+        # Depth sorting is left on here, unlike the reflector preview: the
+        # package is an opaque solid, so its own sides and underside should
+        # hide the top face when the view is rotated below it.
+        axes = preview.figure.add_subplot(111, projection="3d")
+        try:
+            package_height = float(specs["height_mm"])
+        except (KeyError, ValueError, TypeError) as error:
+            preview.message(f"Cannot draw:\n{error}")
+            return
+
+        # Drawn with the die at the package height, so the board sits at zero.
+        extents = self.add_emitter(axes, specs, package_height)
+        if extents is None:
+            preview.message("Emitter specs are incomplete")
+            return
+
+        reach = max(extents["reach"] * 1.15, 1e-3)
+        top = max(extents["top_z"], package_height * 1.2, reach * 0.6)
+        footprint_x, footprint_y = extents["footprint"]
+        axes.set_xlim(-reach, reach)
+        axes.set_ylim(-reach, reach)
+        axes.set_zlim(0.0, top)
+        axes.set_facecolor(PREVIEW_BACKGROUND)
+        axes.set_box_aspect((1.0, 1.0, min(max(top / (2.0 * reach), 0.3), 1.6)))
+        axes.set_axis_off()
+        axes.view_init(elev=24.0, azim=-58.0)
+        preview.figure.text(0.5, 0.015,
+                            f"{footprint_x:g} x {footprint_y:g} mm package, "
+                            f"{extents['die_area']:.2f} mm\u00b2 die",
+                            color=PREVIEW_TEXT_COLOUR, fontsize=7,
+                            ha="center", va="bottom")
+        preview.figure.subplots_adjust(left=0.0, right=1.0, bottom=0.06, top=1.0)
+        preview.canvas.draw_idle()
+
+    def dome_radius(self, emitter):
+        """Resolves an emitter's dome radius the same way the engine does.
+
+        Args:
+            emitter: Emitter specs.
+
+        Returns:
+            The radius in millimetres; 0 for a flat or domeless emitter.
+        """
+        dome = float(spec_or_default(emitter, "emitter", "dome_size_mm", self.config))
+        if dome == -1:
+            # -1 means "as wide as the narrowest footprint edge".
+            dome = min(float(emitter["footprint_x_mm"]),
+                       float(emitter["footprint_y_mm"]))
+        return max(0.0, dome) / 2.0
+
+    @staticmethod
+    def die_corners(shape, outline, die_length, die_width):
+        """Returns the die outline as (x, y) pairs, whatever the shape.
+
+        Args:
+            shape: Die shape, already resolved against the settings default.
+            outline: Vertices from emitter_die_outline, or None.
+            die_length: Die size along x.
+            die_width: Die size along y.
+
+        Returns:
+            A list of (x, y) pairs in order around the die.
+        """
+        if shape == "polygon":
+            return [(float(x), float(y)) for x, y in outline]
+        if shape == "round":
+            angle = np.linspace(0.0, 2.0 * np.pi, 48, endpoint=False)
+            return list(zip(die_length / 2.0 * np.cos(angle),
+                            die_length / 2.0 * np.sin(angle)))
+        return [(-die_length / 2.0, -die_width / 2.0),
+                (die_length / 2.0, -die_width / 2.0),
+                (die_length / 2.0, die_width / 2.0),
+                (-die_length / 2.0, die_width / 2.0)]
 
     def setup_hardware_widgets(self):
         """Indexes the combo boxes and spec inputs by hardware kind."""
@@ -341,8 +1056,35 @@ class MainWindow(QMainWindow):
                    for field in fields}
             for kind, fields in SPEC_FIELDS.items()
         }
+        # Kept apart from field_widgets so that read_fields, and therefore
+        # saving, never sees them.
+        self.run_only_widgets = {
+            "reflector": {
+                field: getattr(self, FIELD_WIDGET_PREFIX["reflector"] + field)
+                for field, _ in RUN_ONLY_REFLECTOR_FIELDS
+            },
+        }
         for kind, combo in self.combo_boxes.items():
             combo.addItems(self.library.names(kind))
+
+        self.populate_choice_fields()
+
+    def populate_choice_fields(self):
+        """Fills the spec drop downs from the values the engine accepts.
+
+        The caption shown and the value stored are kept apart: the caption is
+        the tidied up version, while the item carries the plain value as its
+        data, which is what reaches the catalogue.
+        """
+        for widgets in self.field_widgets.values():
+            for field, widget in widgets.items():
+                if field not in CHOICE_SPECS:
+                    continue
+                widget.blockSignals(True)
+                widget.clear()
+                for value in CHOICE_SPECS[field]:
+                    widget.addItem(_choice_label(value), value)
+                widget.blockSignals(False)
 
     def connect_signals(self):
         """Connects the catalogue buttons and the bottom control bar."""
@@ -361,6 +1103,26 @@ class MainWindow(QMainWindow):
             save_button.clicked.connect(lambda *_, k=kind: self.save_hardware(k))
             delete_button.clicked.connect(lambda *_, k=kind: self.delete_hardware(k))
 
+        # Previews follow the form, refreshed when a box is committed rather
+        # than on every keystroke, which would redraw mid-number.
+        for kind, widgets in self.field_widgets.items():
+            for widget in widgets.values():
+                if isinstance(widget, QComboBox):
+                    # A choice can decide whether another row applies, so it
+                    # refreshes the form as well as the previews.
+                    widget.currentIndexChanged.connect(
+                        lambda *_, k=kind: self.apply_conditional_rows(k))
+                    widget.currentIndexChanged.connect(
+                        lambda *_: self.update_previews())
+                else:
+                    widget.editingFinished.connect(self.update_previews)
+
+        # The centring offset is not a spec, but it moves the emitter in the
+        # reflector preview, so it refreshes it just the same.
+        for widgets in self.run_only_widgets.values():
+            for widget in widgets.values():
+                widget.editingFinished.connect(self.update_previews)
+
         self.btnSettings.clicked.connect(self.open_settings)
         self.btnSimulate.clicked.connect(self.run_simulation)
         self.btnStop.clicked.connect(self.stop_simulation)
@@ -370,16 +1132,91 @@ class MainWindow(QMainWindow):
     def reload_fields(self, kind):
         """Fills the spec inputs from the catalogue entry now selected.
 
+        Every optional spec is filled in at start up, so nothing shows blank
+        unless the entry is genuinely missing a mandatory spec. The run-only
+        inputs go back to zero, since the catalogue holds no value for them to
+        be restored from.
+
         Args:
             kind: One of the keys of SPEC_FIELDS.
         """
+        for widget in self.run_only_widgets.get(kind, {}).values():
+            widget.setText("0.0")
+
         name = self.combo_boxes[kind].currentText()
         if not name:
             return
 
         specs = self.library.get(kind, name)
         for field, widget in self.field_widgets[kind].items():
-            widget.setText(str(specs.get(field, "")))
+            value = specs.get(field, "")
+            if field in LIST_SPECS and value != "":
+                # Compact JSON, so the box holds exactly what a generator emits
+                # and can be copied back out again.
+                value = json.dumps(value, separators=(",", ":"))
+            if isinstance(widget, QComboBox):
+                index = widget.findData(str(value))
+                widget.setCurrentIndex(max(index, 0))
+            else:
+                widget.setText(str(value))
+
+        self.apply_conditional_rows(kind)
+        self.update_previews()
+
+    def apply_conditional_rows(self, kind):
+        """Shows or hides the spec rows that only apply to certain choices.
+
+        The die outline is meaningless for a rectangular or circular die, so
+        its row is taken out of the form rather than left there inviting a
+        value that would be ignored.
+
+        Args:
+            kind: One of the keys of SPEC_FIELDS.
+        """
+        widgets = self.field_widgets[kind]
+        for field, (deciding_field, needed_for) in CONDITIONAL_SPECS.items():
+            if field not in widgets or deciding_field not in widgets:
+                continue
+
+            current = self.field_value(widgets[deciding_field])
+            self.set_row_visible(widgets[field], current in needed_for)
+
+    @staticmethod
+    def set_row_visible(widget, visible):
+        """Shows or hides one row of the form a widget belongs to.
+
+        Qt 6.4 gained setRowVisible, which also collapses the space the row
+        took up. Older builds have to settle for hiding the two widgets, which
+        leaves a gap but keeps the row out of the way.
+
+        Args:
+            widget: The input whose row should be shown or hidden.
+            visible: True to show the row.
+        """
+        layout = widget.parentWidget().layout() if widget.parentWidget() else None
+        if isinstance(layout, QFormLayout):
+            if hasattr(layout, "setRowVisible"):
+                layout.setRowVisible(widget, visible)
+                return
+            label = layout.labelForField(widget)
+            if label is not None:
+                label.setVisible(visible)
+        widget.setVisible(visible)
+
+    @staticmethod
+    def field_value(widget):
+        """Returns what a spec input currently holds, as the catalogue sees it.
+
+        Args:
+            widget: A spec input, either a text box or a drop down.
+
+        Returns:
+            The stored value for a drop down, or the trimmed text otherwise.
+        """
+        if isinstance(widget, QComboBox):
+            data = widget.currentData()
+            return widget.currentText() if data is None else str(data)
+        return widget.text().strip()
 
     def read_fields(self, kind):
         """Reads the spec inputs back into a specs dict.
@@ -395,12 +1232,24 @@ class MainWindow(QMainWindow):
         """
         specs = {}
         for field, widget in self.field_widgets[kind].items():
-            text = widget.text().strip()
+            text = self.field_value(widget)
             if not text:
+                continue
+
+            if isinstance(widget, QComboBox):
+                specs[field] = text
                 continue
 
             if field in TEXT_SPECS:
                 specs[field] = text
+                continue
+
+            if field in LIST_SPECS:
+                try:
+                    specs[field] = json.loads(text)
+                except json.JSONDecodeError as error:
+                    self.log_message(f"Warning: Could not parse {field} as JSON "
+                                     f"({error}). Keeping the stored value.")
                 continue
 
             try:
@@ -410,6 +1259,27 @@ class MainWindow(QMainWindow):
                                  f"Defaulting to 0.0")
                 specs[field] = 0.0
         return specs
+
+    def read_emitter_offset(self):
+        """Reads the run-only emitter centring offset from the Reflector column.
+
+        Returns:
+            An EmitterOffset in polar form. A blank or unparseable box reads as
+            zero, so a typo simulates a centred emitter rather than stopping
+            the run, and is reported in the log.
+        """
+        values = {}
+        for field, widget in self.run_only_widgets["reflector"].items():
+            text = widget.text().strip()
+            try:
+                values[field] = float(text) if text else 0.0
+            except ValueError:
+                self.log_message(f"Warning: Could not parse '{text}' for {field}. "
+                                 f"Defaulting to 0.0")
+                values[field] = 0.0
+
+        return EmitterOffset(values["emitter_offset_distance_mm"],
+                             values["emitter_offset_angle_deg"])
 
     def refresh_dropdown(self, kind, select=None):
         """Reloads one dropdown from the library without firing its signals.
@@ -507,13 +1377,22 @@ class MainWindow(QMainWindow):
                                 "Please select a Reflector, Emitter, and Gasket.")
             return
 
-        finish = ("smooth" if self.cmbReflectorFinish.currentText() == "Smooth"
-                  else "orange_peel")
-
-        # On-screen edits apply to this run only; the catalogue on disk is left
-        # alone unless the operator presses Save.
+        # The run works on a detached copy of the catalogue. On-screen edits are
+        # overlaid onto that copy, so they apply to this simulation and to
+        # nothing else: the live catalogue is untouched, and only the Save
+        # button ever changes hardware_library.json.
+        run_library = self.library.copy_for_run()
         for kind, name in names.items():
-            self.library.apply_overrides(kind, name, self.read_fields(kind))
+            run_library.apply_overrides(kind, name, self.read_fields(kind))
+
+        # The finish is a reflector spec now, so it comes from the same place
+        # as every other value the run uses.
+        finish = spec_or_default(run_library.get("reflector", names["reflector"]),
+                                 "reflector", "surface_finish", self.config)
+
+        # The centring offset never reaches the catalogue at all, not even the
+        # run copy; it is passed straight to the job.
+        emitter_offset = self.read_emitter_offset()
 
         # The Run button always renders the current selection. Batch mode is
         # driven from the settings dialog instead.
@@ -524,8 +1403,9 @@ class MainWindow(QMainWindow):
         self.txtLogs.clear()
         self.log_message("--- INITIALIZING SIMULATION ---")
 
-        self.worker = SimulationWorker(self.config, self.library, names["reflector"],
-                                       names["emitter"], names["gasket"], finish)
+        self.worker = SimulationWorker(self.config, run_library, names["reflector"],
+                                       names["emitter"], names["gasket"], finish,
+                                       emitter_offset)
         self.worker.progress_signal.connect(self.update_progress)
         self.worker.log_signal.connect(self.log_message)
         self.worker.error_signal.connect(self.handle_simulation_error)
