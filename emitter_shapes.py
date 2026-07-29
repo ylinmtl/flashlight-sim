@@ -301,7 +301,7 @@ def preview(vertices, elements_per_side=16):
         print("Preview needs matplotlib and numpy.", file=sys.stderr)
         return
 
-    from fea_engine import _points_in_polygon
+    from core.optics import _points_in_polygon
 
     outline = np.asarray(vertices, dtype=float)
     min_x, min_y = outline.min(axis=0)

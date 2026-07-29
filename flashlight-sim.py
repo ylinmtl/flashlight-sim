@@ -28,10 +28,12 @@ from matplotlib.figure import Figure
 import numpy as np
 from mpl_toolkits.mplot3d.art3d import Poly3DCollection
 
-from fea_engine import (DIE_SHAPES, SURFACE_FINISHES, EmitterOffset,
-                        HardwareLibrary, SimulationConfig,
-                        emitter_die_outline, get_sim_geometry, resource_path,
-                        run_simulation_job, spec_or_default)
+from core import (DIE_SHAPES, GASKET_WALL_SHAPES, OUTPUT_MODES,
+                    SPEC_DEFAULT_SETTINGS, SURFACE_FINISHES, EmitterOffset,
+                    HardwareLibrary, SimulationConfig,
+                    effective_bore_diameter, emitter_die_outline,
+                    emitter_footprint_diagonal, get_sim_geometry,
+                    resource_path, run_simulation_job, spec_or_default)
 
 # Specs shown for each hardware kind, in the order they appear in the form. Each
 # one maps to a QLineEdit in mainwindow.ui named <prefix><spec>, for example
@@ -42,11 +44,14 @@ SPEC_FIELDS = {
                   "surface_finish", "reflectivity_smooth", "reflectivity_op",
                   "reflectivity_cylinder", "gasket_reflectivity", "OP_Factor",
                   "transmissivity_lens"),
-    "emitter": ("max_current_amps", "vf_turn_on_v", "vf_scale", "base_efficacy_lm_w",
-                "droop_factor", "footprint_x_mm", "footprint_y_mm", "height_mm",
+    "emitter": ("max_current_amps", "output_mode", "max_lumens",
+                "forward_voltage_v", "vf_turn_on_v", "vf_scale",
+                "base_efficacy_lm_w", "droop_factor",
+                "footprint_x_mm", "footprint_y_mm", "height_mm",
                 "dome_size_mm", "refractive_index", "die_length_mm", "die_width_mm",
                 "shape", "die_outline"),
-    "gasket": ("gasket_thickness_mm", "gasket_total_height_mm", "gasket_opening_mm"),
+    "gasket": ("outer_diameter_mm", "inner_diameter_mm", "emitter_size_mm",
+               "wall_shape", "thickness_mm", "total_height_mm"),
 }
 
 FIELD_WIDGET_PREFIX = {
@@ -68,11 +73,42 @@ EMITTER_DIE_COLOUR = "#FF9E1B"     # the light emitting surface itself
 EMITTER_DIE_EDGE_COLOUR = "#C77B14"
 EMITTER_DOME_COLOUR = "#CBE7F5"
 
-# The reflector is drawn as a single silver body. It stays translucent
-# so the shelf and the bore behind it still read, and the emitter is
-# drawn last so it shows through regardless.
+# The reflector is drawn as a single opaque silver body, stroked along
+# its own mesh so the shape reads. The gasket and emitter go on after
+# it, so they stay visible without the shell having to be see through.
 REFLECTOR_COLOUR = "#C6C8CC"
-REFLECTOR_ALPHA = 0.85
+REFLECTOR_ALPHA = 1.0
+REFLECTOR_EDGE_COLOUR = "#94969B"
+
+# How much wider than the parts themselves the gasket preview draws. The
+# seat sits proud of the wall so its edge stays visible behind it, and
+# the emitter window is cut with a little clearance a side.
+GASKET_SEAT_MARGIN_MM = 2.0
+
+# Slack allowed when judging whether a gasket fits, in millimetres.
+# Catalogue figures are rounded, so an exact comparison would reject a
+# gasket that is the intended match by a hundredth of a millimetre.
+GASKET_FIT_TOLERANCE_MM = 0.01
+
+# Slack allowed before a dimension counts as mismatched, and how far a
+# gasket may sit under the bore before it is worth pointing out.
+FIT_TOLERANCE_MM = 0.01
+GASKET_BORE_SLACK_MM = 0.5
+
+# Stand ins used while a column is empty, so the reflector can still be
+# drawn beside an emitter or gasket that is still being typed in. Only
+# the specs the geometry reads are needed, and they contribute nothing.
+BLANK_EMITTER = {"footprint_x_mm": 0.0, "footprint_y_mm": 0.0,
+                 "height_mm": 0.0, "dome_size_mm": 0.0,
+                 "refractive_index": 1.0}
+BLANK_GASKET = {"thickness_mm": 0.0, "total_height_mm": 0.0,
+                "inner_diameter_mm": 0.0}
+GASKET_EMITTER_CLEARANCE_MM = 0.1
+
+# The gasket is a rubber part, so it is drawn darker than the metal around it
+# and near enough opaque to read against the reflector behind it.
+GASKET_COLOUR = "#D8D5CE"
+GASKET_EDGE_COLOUR = "#6B6960"
 
 # Both previews sit on black, like the simulated beam shot does.
 PREVIEW_BACKGROUND = "#000000"
@@ -87,6 +123,8 @@ PREVIEW_ZOOM_STEP = 1.15
 CHOICE_SPECS = {
     "shape": DIE_SHAPES,
     "surface_finish": SURFACE_FINISHES,
+    "wall_shape": GASKET_WALL_SHAPES,
+    "output_mode": OUTPUT_MODES,
 }
 
 # Specs only meaningful for certain choices, as spec -> (deciding spec,
@@ -94,7 +132,19 @@ CHOICE_SPECS = {
 # outline box is not offered for a die that has no outline.
 CONDITIONAL_SPECS = {
     "die_outline": ("shape", frozenset({"polygon"})),
+    "max_lumens": ("output_mode", frozenset({"simple"})),
+    "forward_voltage_v": ("output_mode", frozenset({"simple"})),
+    "vf_turn_on_v": ("output_mode", frozenset({"advanced"})),
+    "vf_scale": ("output_mode", frozenset({"advanced"})),
+    "base_efficacy_lm_w": ("output_mode", frozenset({"advanced"})),
+    "droop_factor": ("output_mode", frozenset({"advanced"})),
 }
+
+# Where New should start a field somewhere other than the settings
+# default. A new emitter is described the simple way, but one already
+# in a catalogue predates the choice and has to be read the old way, so
+# the setting itself stays on advanced for their sake.
+NEW_ENTRY_OVERRIDES = {"emitter": {"output_mode": "simple"}}
 
 # Specs held as a JSON array rather than a single value. The input box takes
 # the text an outline generator produces, so a die shape can be pasted in.
@@ -124,6 +174,12 @@ SETTING_LABELS = {
         "export_plots": "Export Plot Images",
         "batch_output_directory": "Output Directory Path",
     },
+    "IES Export": {
+        "export_ies": "Export IES",
+        "ies_vertical_step_deg": "IES Vertical Step (deg)",
+        "ies_horizontal_step_deg": "IES Horizontal Step (deg)",
+        "ies_max_vertical_angle_deg": "IES Max Vertical Angle (deg)",
+    },
     "Simulation Space & Constraints": {
         "use_gpu": "Use GPU Acceleration (CUDA)",
         "max_multiple_reflections": "Max Multiple Reflections (Bounces)",
@@ -148,7 +204,6 @@ SETTING_LABELS = {
         "sim_theta_max_deg": "Theta Maximum (degrees)",
         "sim_phi_min_deg": "Phi Minimum (degrees)",
         "sim_phi_max_deg": "Phi Maximum (degrees)",
-        "lumen_calc_step_deg": "Lumen Calculation Step (degrees)",
     },
     "Material Defaults & Thresholds": {
         "default_reflectivity_smooth": "Default Reflectivity (Smooth)",
@@ -164,7 +219,8 @@ SETTING_LABELS = {
         "hotspot_fwhm_threshold": "Hotspot FWHM Threshold",
         "default_gasket_thickness_mm": "Default Gasket Thickness (mm)",
         "default_gasket_total_height_mm": "Default Gasket Total Height (mm)",
-        "default_gasket_opening_mm": "Default Gasket Opening (mm)",
+        "default_gasket_inner_diameter_mm": "Default Gasket Inner Diameter (mm)",
+        "default_gasket_wall_shape": "Default Gasket Wall Shape",
         "default_reflector_wall_thickness_mm": "Default Reflector Wall Thickness (mm)",
         "default_reflector_base_thickness_mm": "Default Reflector Base Thickness (mm)",
         "default_focus_offset_mm": "Default Focus Offset (mm)",
@@ -172,6 +228,13 @@ SETTING_LABELS = {
         "default_dome_size_mm": "Default Emitter Dome Size (mm)",
         "default_refractive_index": "Default Emitter Refractive Index",
         "default_emitter_shape": "Default Emitter Die Shape",
+        "default_emitter_output_mode": "Default Emitter Output Mode",
+        "default_max_lumens": "Default Max Lumens (lm)",
+        "default_forward_voltage_v": "Default Voltage (V)",
+        "default_vf_turn_on_v": "Default VF Turn On (V)",
+        "default_vf_scale": "Default VF Scale",
+        "default_base_efficacy_lm_w": "Default Base Efficiency (lm/W)",
+        "default_droop_factor": "Default Droop Factor",
     },
 }
 
@@ -302,6 +365,119 @@ def _dome_surface(radius, centre_z, segments=32):
             centre_z + radius * np.cos(polar) + 0.0 * azimuth)
 
 
+def _solid_quads(surface, outward):
+    """Splits a surface grid into quads wound so their normals face outward.
+
+    _SolidFaces decides what to hide from each face's normal, and a normal only
+    means anything if the vertices run consistently. Rather than working the
+    winding out by hand for every piece, each quad is checked against the
+    direction that piece is known to face and reversed where it disagrees.
+
+    The whole grid is handled at once. A preview rebuilds several thousand
+    quads every time a field changes, and doing that a quad at a time in Python
+    is what made the previews lag.
+
+    Args:
+        surface: (x, y, z) arrays as the surface helpers return them.
+        outward: Which way the faces look: "up", "down", "out" for away from
+            the axis, or "in" for towards it.
+
+    Returns:
+        A list of quads, each a (4, 3) array of vertices.
+    """
+    x, y, z = surface
+    corners = [np.stack([x[a:b or None, c:d or None],
+                         y[a:b or None, c:d or None],
+                         z[a:b or None, c:d or None]], axis=-1)
+               for a, b, c, d in ((0, -1, 0, -1), (1, 0, 0, -1),
+                                  (1, 0, 1, 0), (0, -1, 1, 0))]
+    quads = np.stack(corners, axis=2).reshape(-1, 4, 3)
+    if not len(quads):
+        return []
+
+    # Newell's method, run over every quad at once.
+    following = np.roll(quads, -1, axis=1)
+    normals = np.stack([
+        np.sum((quads[:, :, 1] - following[:, :, 1])
+               * (quads[:, :, 2] + following[:, :, 2]), axis=1),
+        np.sum((quads[:, :, 2] - following[:, :, 2])
+               * (quads[:, :, 0] + following[:, :, 0]), axis=1),
+        np.sum((quads[:, :, 0] - following[:, :, 0])
+               * (quads[:, :, 1] + following[:, :, 1]), axis=1)], axis=1)
+
+    if outward in ("up", "down"):
+        wanted = np.zeros_like(normals)
+        wanted[:, 2] = 1.0 if outward == "up" else -1.0
+    else:
+        centres = quads.mean(axis=1)
+        wanted = np.stack([centres[:, 0], centres[:, 1],
+                           np.zeros(len(quads))], axis=1)
+        if outward == "in":
+            wanted = -wanted
+
+    facing_away = np.sum(normals * wanted, axis=1) < 0.0
+    quads[facing_away] = quads[facing_away][:, ::-1]
+    return list(quads)
+
+
+def _aperture_radius(angle, half_size=None, radius=None):
+    """Distance from the centre out to an aperture edge, at each angle.
+
+    A square aperture is described the same way a round one is, as a radius
+    that happens to vary with angle, so one piece of code builds either.
+
+    Args:
+        angle: Angles in radians, any shape.
+        half_size: Half the width of a square aperture.
+        radius: Radius of a round aperture. Used when half_size is None.
+
+    Returns:
+        The radius at each angle, shaped like angle.
+    """
+    if half_size is None:
+        return np.full_like(angle, float(radius))
+    return half_size / np.maximum(np.abs(np.cos(angle)), np.abs(np.sin(angle)))
+
+
+def _ring_surface(inner, outer, height, segments=192):
+    """Builds a flat ring at one height, between an inner and an outer radius.
+
+    Args:
+        inner: Inner radius, either a scalar or one value per angle step.
+        outer: Outer radius, in the same form.
+        height: Height of the plane the ring lies in.
+        segments: Steps around the turn.
+
+    Returns:
+        (x, y, z) arrays shaped for plot_surface.
+    """
+    angle = np.linspace(0.0, 2.0 * np.pi, segments)[:, None]
+    inner = np.broadcast_to(np.asarray(inner, dtype=float).reshape(-1, 1), angle.shape)
+    outer = np.broadcast_to(np.asarray(outer, dtype=float).reshape(-1, 1), angle.shape)
+    radii = np.concatenate([inner, outer], axis=1)
+    return (radii * np.cos(angle), radii * np.sin(angle),
+            np.full_like(radii, float(height)))
+
+
+def _wall_surface(radius, z_low, z_high, segments=192):
+    """Builds an upright wall at a radius that may vary with angle.
+
+    Args:
+        radius: Radius, either a scalar or one value per angle step.
+        z_low: Height of the bottom edge.
+        z_high: Height of the top edge.
+        segments: Steps around the turn.
+
+    Returns:
+        (x, y, z) arrays shaped for plot_surface.
+    """
+    angle = np.linspace(0.0, 2.0 * np.pi, segments)[:, None]
+    radius = np.broadcast_to(np.asarray(radius, dtype=float).reshape(-1, 1), angle.shape)
+    x, y = radius * np.cos(angle), radius * np.sin(angle)
+    return (np.concatenate([x, x], axis=1), np.concatenate([y, y], axis=1),
+            np.tile([[float(z_low), float(z_high)]], (angle.shape[0], 1)))
+
+
 def _dimpled_revolution(radii, heights, segments, amplitude, around, along):
     """Revolves a profile with a dimpled surface, the look of orange peel.
 
@@ -330,28 +506,6 @@ def _dimpled_revolution(radii, heights, segments, amplitude, around, along):
     pushed = radii * (1.0 + amplitude * ripple)
     return (pushed * np.cos(angle), pushed * np.sin(angle),
             heights + 0.0 * angle)
-
-
-def _filled_outline_surface(corners, height):
-    """Turns a closed outline into a fan of surface patches at one height.
-
-    Every part of the reflector preview is drawn with plot_surface, so the
-    emitter is built the same way rather than as a separate collection.
-    Mixing the two makes mplot3d sort them against each other unreliably,
-    which loses the emitter entirely once the reflector is large.
-
-    Args:
-        corners: (x, y) pairs in order around the outline.
-        height: Height of the plane the outline lies in.
-
-    Returns:
-        (x, y, z) arrays shaped for plot_surface, fanned from the centre.
-    """
-    x = np.array([c[0] for c in corners] + [corners[0][0]], dtype=float)
-    y = np.array([c[1] for c in corners] + [corners[0][1]], dtype=float)
-    return (np.vstack([np.full_like(x, x[:-1].mean()), x]),
-            np.vstack([np.full_like(y, y[:-1].mean()), y]),
-            np.full((2, x.size), float(height)))
 
 
 def _outline_area(vertices):
@@ -725,6 +879,9 @@ class MainWindow(QMainWindow):
         self.emitter_preview = SquarePreview()
         self.widgetEmitterPreview.layout().addWidget(self.emitter_preview)
 
+        self.gasket_preview = SquarePreview()
+        self.widgetGasketPreview.layout().addWidget(self.gasket_preview)
+
     def current_specs(self, kind):
         """Returns the stored specs for a kind, overlaid with the form's edits.
 
@@ -747,6 +904,8 @@ class MainWindow(QMainWindow):
         """
         self.draw_reflector_preview()
         self.draw_emitter_preview()
+        self.draw_gasket_preview()
+        self.update_warnings()
 
     def draw_reflector_preview(self):
         """Draws the reflector as a full solid of revolution, emitter included.
@@ -758,16 +917,21 @@ class MainWindow(QMainWindow):
         visible from any angle.
         """
         preview = self.reflector_preview
-        specs = [self.current_specs(kind) for kind in ("reflector", "emitter", "gasket")]
-        if not all(specs):
-            preview.message("Select a reflector,\nemitter and gasket")
+        reflector = self.current_specs("reflector")
+        if reflector is None:
+            preview.message("")
             return
 
-        reflector, emitter = specs[0], specs[1]
+        # An emitter or gasket part way through being entered should not take
+        # the reflector down with it, so the geometry falls back to a blank
+        # stand in and only the parts that can be drawn are drawn.
+        emitter = self.current_specs("emitter")
+        gasket = self.current_specs("gasket")
+        specs = [reflector, emitter or BLANK_EMITTER, gasket or BLANK_GASKET]
         finish = spec_or_default(reflector, "reflector", "surface_finish", self.config)
         emitter_offset = self.read_emitter_offset()
         try:
-            geom = get_sim_geometry(reflector, emitter, specs[2], finish,
+            geom = get_sim_geometry(reflector, specs[1], specs[2], finish,
                                     self.config, emitter_offset)
             outer_radius = float(reflector["diameter_mm"]) / 2.0
         except (KeyError, ValueError, ZeroDivisionError) as error:
@@ -818,7 +982,8 @@ class MainWindow(QMainWindow):
         for radii, heights in body[:2]:
             axes.plot_surface(*_revolved_surface(radii, heights),
                               color=REFLECTOR_COLOUR, alpha=REFLECTOR_ALPHA,
-                              linewidth=0, antialiased=True)
+                              edgecolor=REFLECTOR_EDGE_COLOUR,
+                              linewidth=0.2, antialiased=True)
 
         # The bowl itself, stippled when the reflector is orange peel so the
         # finish is visible rather than only being a number in the form. The
@@ -832,6 +997,10 @@ class MainWindow(QMainWindow):
                                        0.035 * max(strength, 0.1), 40, 8)
         else:
             bowl = _revolved_surface(bowl_r, bowl_z)
+        # No stroke on the bowl itself: at the resolution the dimples
+        # need, a mesh over the top of them hides what it is there to
+        # show. Shading carries the shape, and the flats and walls
+        # around it keep their edging.
         axes.plot_surface(*bowl, color=REFLECTOR_COLOUR,
                           alpha=REFLECTOR_ALPHA, linewidth=0,
                           antialiased=True)
@@ -839,12 +1008,28 @@ class MainWindow(QMainWindow):
         for radii, heights in body[2:]:
             axes.plot_surface(*_revolved_surface(radii, heights),
                               color=REFLECTOR_COLOUR, alpha=REFLECTOR_ALPHA,
-                              linewidth=0, antialiased=True)
+                              edgecolor=REFLECTOR_EDGE_COLOUR,
+                              linewidth=0.2, antialiased=True)
 
-        extents = self.add_emitter(axes, emitter, geom["ez_base"],
-                                   geom["emitter_offset_x"],
-                                   geom["emitter_offset_y"])
-        emitter_low = None if extents is None else extents["base_z"]
+        # The gasket sits on the same board as the emitter, its seat filling
+        # the gap up to the reflector and its wall rising into the bore. It
+        # goes on before the emitter, so the emitter stays on top of it.
+        lowest = []
+        if gasket is not None:
+            thickness = float(spec_or_default(gasket, "gasket", "thickness_mm",
+                                              self.config))
+            drawn = self.add_gasket(axes, gasket, z_bottom - thickness)
+            if drawn is not None:
+                lowest.append(drawn["base_z"])
+
+        if emitter is not None:
+            drawn = self.add_emitter(axes, emitter, geom["ez_base"],
+                                     geom["emitter_offset_x"],
+                                     geom["emitter_offset_y"])
+            if drawn is not None:
+                lowest.append(drawn["base_z"])
+
+        emitter_low = min(lowest) if lowest else None
 
         # True proportions, so a deep reflector looks deep. The emitter can sit
         # below the reflector's floor once the gasket is compressed, so the
@@ -965,7 +1150,7 @@ class MainWindow(QMainWindow):
         preview = self.emitter_preview
         specs = self.current_specs("emitter")
         if specs is None:
-            preview.message("Select an emitter")
+            preview.message("")
             return
 
         preview.figure.clear()
@@ -1044,6 +1229,387 @@ class MainWindow(QMainWindow):
                 (die_length / 2.0, die_width / 2.0),
                 (-die_length / 2.0, die_width / 2.0)]
 
+    def add_gasket(self, axes, gasket, base_z):
+        """Draws the gasket as the two stacked shapes it is made of.
+
+        The lower shape is the seat: a disc a little wider than the gasket, with
+        a square window cut through it that clears the emitter package. The
+        upper shape is the wall the reflector presses onto, at the gasket's own
+        diameter, with the aperture the light actually leaves through. A round
+        wall makes that a hollow cylinder; a square one repeats the window from
+        the seat below.
+
+        Both previews call this, so the gasket looks the same on its own as it
+        does sitting under the reflector.
+
+        Args:
+            axes: 3D axes to draw on.
+            gasket: Gasket specs, already merged with the form's edits.
+            base_z: Height the underside of the seat sits at.
+
+        Returns:
+            A dict of the extents drawn, or None when the specs are too
+            incomplete to draw.
+        """
+        try:
+            outer = float(spec_or_default(gasket, "gasket", "outer_diameter_mm",
+                                          self.config))
+            inner = float(spec_or_default(gasket, "gasket", "inner_diameter_mm",
+                                          self.config))
+            emitter_size = float(spec_or_default(gasket, "gasket", "emitter_size_mm",
+                                                 self.config))
+            wall_shape = spec_or_default(gasket, "gasket", "wall_shape", self.config)
+            thickness = float(spec_or_default(gasket, "gasket", "thickness_mm",
+                                              self.config))
+            total_height = float(spec_or_default(gasket, "gasket", "total_height_mm",
+                                                 self.config))
+        except (KeyError, ValueError, TypeError):
+            return None
+
+        seat_radius = outer / 2.0 + GASKET_SEAT_MARGIN_MM
+        wall_radius = outer / 2.0
+        # The window always clears the package by the same margin a side, so
+        # the seat never covers the emitter whatever the wall above it does.
+        window_half = emitter_size / 2.0 + GASKET_EMITTER_CLEARANCE_MM
+
+        seat_top = base_z + thickness
+        wall_top = base_z + max(total_height, thickness)
+
+        steps = 64
+        angle = np.linspace(0.0, 2.0 * np.pi, steps)
+        window = _aperture_radius(angle, half_size=window_half)
+        aperture = (_aperture_radius(angle, radius=inner / 2.0)
+                    if wall_shape == "round"
+                    else _aperture_radius(angle, half_size=window_half))
+
+        # Every face of both discs goes into one collection, which is what
+        # makes them read as solid: faces spread over several collections
+        # cannot be sorted against each other and the discs look hollow.
+        # Each disc is closed top and bottom. The two faces of a disc never
+        # appear together, because whichever one points away from the viewer
+        # is culled, so the underside of the wall can share a plane with the
+        # top of the seat without the two fighting over it.
+        # Where the two discs meet, only the rings that are actually exposed
+        # are built. Culling hides a face pointing away from the viewer, but
+        # it cannot know that a face is buried inside the part, and a buried
+        # face has to be sorted behind the one covering it every time or its
+        # mesh shows through. Not building it is exact; sorting is not.
+        seat_inner_top = np.maximum(window, aperture)
+        wall_underside = np.maximum(aperture, window)
+
+        faces = []
+        for surface, direction in (
+                # The seat: underside, rim, and the window through it.
+                (_ring_surface(window, seat_radius, base_z, steps), "down"),
+                (_wall_surface(seat_radius, base_z, seat_top, steps), "out"),
+                (_wall_surface(window, base_z, seat_top, steps), "in"),
+                # Its top, in the two bands the wall above does not cover.
+                (_ring_surface(window, seat_inner_top, seat_top, steps), "up"),
+                (_ring_surface(wall_radius, seat_radius, seat_top, steps), "up"),
+                # The wall standing on it. Its underside exists only where
+                # the seat has a hole beneath it to be seen through.
+                (_ring_surface(aperture, wall_underside, seat_top, steps), "down"),
+                (_ring_surface(aperture, wall_radius, wall_top, steps), "up"),
+                (_wall_surface(wall_radius, seat_top, wall_top, steps), "out"),
+                (_wall_surface(aperture, seat_top, wall_top, steps), "in")):
+            faces.extend(_solid_quads(surface, direction))
+
+        # The mesh itself is the edging: stroking each quad costs nothing to
+        # build, and the strokes are culled and depth sorted with the faces
+        # they belong to, so an edge behind the gasket stays behind it.
+        axes.add_collection3d(_SolidFaces(
+            faces, [GASKET_COLOUR] * len(faces),
+            [GASKET_EDGE_COLOUR] * len(faces), linewidths=0.35, zsort="max"))
+
+        return {"reach": seat_radius, "top_z": wall_top, "base_z": base_z}
+
+    def draw_gasket_preview(self):
+        """Draws the gasket on its own in 3D, free to rotate and zoom."""
+        preview = self.gasket_preview
+        specs = self.current_specs("gasket")
+        if specs is None:
+            preview.message("")
+            return
+
+        preview.figure.clear()
+        preview.figure.patch.set_facecolor(PREVIEW_BACKGROUND)
+        axes = preview.figure.add_subplot(111, projection="3d")
+
+        extents = self.add_gasket(axes, specs, 0.0)
+        if extents is None:
+            preview.message("Gasket specs are incomplete")
+            return
+
+        reach = max(extents["reach"] * 1.1, 1e-3)
+        height = max(extents["top_z"], reach * 0.35)
+        axes.set_facecolor(PREVIEW_BACKGROUND)
+        axes.set_xlim(-reach, reach)
+        axes.set_ylim(-reach, reach)
+        axes.set_zlim(0.0, height)
+        axes.set_box_aspect((1.0, 1.0, min(max(height / (2.0 * reach), 0.18), 1.5)))
+        axes.set_axis_off()
+        axes.view_init(elev=26.0, azim=-58.0)
+        preview.figure.subplots_adjust(left=0.0, right=1.0, bottom=0.0, top=1.0)
+        preview.canvas.draw_idle()
+
+    def new_hardware(self, kind):
+        """Clears the column so a new entry can be typed in from scratch.
+
+        The dropdown is emptied, so a Save asks for a name rather than
+        overwriting whatever happened to be selected. Specs that have a default
+        in the settings are filled in with it; the rest are left blank, because
+        they are what actually describes the new part and there is no sensible
+        stand in for them.
+
+        Args:
+            kind: One of the keys of SPEC_FIELDS.
+        """
+        self.combo_boxes[kind].setCurrentIndex(-1)
+
+        overrides = NEW_ENTRY_OVERRIDES.get(kind, {})
+        for field, widget in self.field_widgets[kind].items():
+            setting = SPEC_DEFAULT_SETTINGS[kind].get(field)
+            value = "" if setting is None else getattr(self.config, setting, "")
+            value = overrides.get(field, value)
+            if isinstance(widget, QComboBox):
+                widget.setCurrentIndex(widget.findData(str(value)))
+            else:
+                widget.setText(str(value))
+
+        for widget in self.run_only_widgets.get(kind, {}).values():
+            widget.setText("0.0")
+
+        self.apply_conditional_rows(kind)
+        self.update_previews()
+        self.log_message(f"New {kind}: fill in the blank fields, then press Save.")
+
+    def best_gasket_for(self, reflector, emitter):
+        """Picks the gasket that fits the current reflector and emitter.
+
+        Ranked in the order the parts constrain each other:
+
+        1. Outer diameter as close as possible to the reflector's bore without
+           exceeding it, because a gasket wider than the bore will not seat.
+        2. Emitter size as close as possible to the emitter's footprint without
+           going under it, because a window smaller than the package covers the
+           die.
+        3. Thickness as close as possible to the emitter height, which is what
+           sets how near the die sits to the focus.
+
+        Each rule is a tie break for the one above, so a worse fit on an
+        earlier rule is never traded for a better fit on a later one.
+
+        Args:
+            reflector: Reflector specs, already merged with the form's edits.
+            emitter: Emitter specs, already merged with the form's edits.
+
+        Returns:
+            The name of the best gasket, or None if nothing fits or the specs
+            needed for the comparison are missing.
+        """
+        try:
+            bore = float(spec_or_default(reflector, "reflector",
+                                         "opening_diameter_mm", self.config))
+            footprint = max(float(emitter["footprint_x_mm"]),
+                            float(emitter["footprint_y_mm"]))
+            height = float(emitter["height_mm"])
+        except (KeyError, ValueError, TypeError):
+            return None
+
+        if bore <= 0.0:
+            return None
+
+        ranked = []
+        for name in self.library.names("gasket"):
+            specs = self.library.get("gasket", name)
+            try:
+                outer = float(spec_or_default(specs, "gasket", "outer_diameter_mm",
+                                              self.config))
+                size = float(spec_or_default(specs, "gasket", "emitter_size_mm",
+                                             self.config))
+                thickness = float(spec_or_default(specs, "gasket", "thickness_mm",
+                                                  self.config))
+            except (KeyError, ValueError, TypeError):
+                continue
+
+            if outer > bore + GASKET_FIT_TOLERANCE_MM:
+                continue  # Too wide for the bore, so it cannot seat at all.
+            # Sorting on (too small, shortfall) puts every gasket that covers
+            # the emitter ahead of every one that does not, and only then
+            # prefers the snuggest of them.
+            undersized = size < footprint - GASKET_FIT_TOLERANCE_MM
+            ranked.append(((bore - outer, undersized, abs(size - footprint),
+                            abs(thickness - height)), name))
+
+        return min(ranked)[1] if ranked else None
+
+    def autoselect_gasket(self):
+        """Switches to the gasket that best fits the reflector and emitter.
+
+        Called whenever the reflector or emitter changes, by selection or by
+        edit, since either can change which gasket fits.
+        """
+        if getattr(self, "_choosing_gasket", False):
+            return  # Already inside a selection; do not recurse.
+
+        reflector = self.current_specs("reflector")
+        emitter = self.current_specs("emitter")
+        if reflector is None or emitter is None:
+            return
+
+        best = self.best_gasket_for(reflector, emitter)
+        if not best or best == self.combo_boxes["gasket"].currentText():
+            return
+
+        self._choosing_gasket = True
+        try:
+            self.combo_boxes["gasket"].setCurrentText(best)
+            self.reload_fields("gasket")
+        finally:
+            self._choosing_gasket = False
+        self.log_message(f"Gasket auto-selected: {best}")
+
+    def update_warnings(self):
+        """Refreshes the fit warnings shown at the top of each column.
+
+        Every warning is worked out from the same specs the run would use, so
+        what is flagged here is what the tracer would actually do.
+        """
+        reflector = self.current_specs("reflector")
+        emitter = self.current_specs("emitter")
+        gasket = self.current_specs("gasket")
+
+        bore = None
+        if reflector is not None and emitter is not None:
+            try:
+                bore = effective_bore_diameter(reflector, emitter, self.config)
+            except (KeyError, ValueError, TypeError):
+                bore = None
+
+        self._set_warning(self.lblReflectorWarning,
+                          self._reflector_warnings(reflector, emitter, bore))
+        self._set_warning(self.lblEmitterWarning,
+                          self._emitter_warnings(reflector, emitter))
+        self._set_warning(self.lblGasketWarning,
+                          self._gasket_warnings(gasket, emitter, bore))
+
+    @staticmethod
+    def _set_warning(label, messages):
+        """Shows the given warnings, or hides the label when there are none.
+
+        Args:
+            label: The QLabel to write into.
+            messages: Warning lines, possibly empty.
+        """
+        label.setText("\n".join(messages))
+        label.setVisible(bool(messages))
+
+    def _reflector_warnings(self, reflector, emitter, bore):
+        """Warns when the bore is being assumed rather than read from the entry.
+
+        Args:
+            reflector: Reflector specs, or None.
+            emitter: Emitter specs, or None.
+            bore: The bore the tracer will use, or None if it cannot be worked out.
+
+        Returns:
+            A list of warning lines.
+        """
+        if reflector is None or emitter is None or bore is None:
+            return []
+
+        try:
+            diameter = float(reflector["diameter_mm"])
+            height = float(reflector["height_mm"])
+            opening = float(spec_or_default(reflector, "reflector",
+                                            "opening_diameter_mm", self.config))
+        except (KeyError, ValueError, TypeError):
+            return []
+
+        if diameter > 0.0 and height > 0.0 and opening == 0.0:
+            return [f"No opening size: assuming {bore:.2f} mm "
+                    f"(footprint diagonal)."]
+        return []
+
+    def _emitter_warnings(self, reflector, emitter):
+        """Warns when the emitter package will not pass through the bore.
+
+        Args:
+            reflector: Reflector specs, or None.
+            emitter: Emitter specs, or None.
+
+        Returns:
+            A list of warning lines.
+        """
+        if reflector is None or emitter is None:
+            return []
+
+        try:
+            opening = float(spec_or_default(reflector, "reflector",
+                                            "opening_diameter_mm", self.config))
+            diagonal = emitter_footprint_diagonal(emitter)
+        except (KeyError, ValueError, TypeError):
+            return []
+
+        # An opening of zero is assumed from this very diagonal, so there is
+        # nothing to compare against; the reflector column says so instead.
+        if opening > 0.0 and diagonal > opening + FIT_TOLERANCE_MM:
+            return [f"Footprint diagonal {diagonal:.2f} mm > "
+                    f"opening {opening:.2f} mm."]
+        return []
+
+    def _gasket_warnings(self, gasket, emitter, bore):
+        """Warns when the gasket does not match the bore or the emitter.
+
+        Args:
+            gasket: Gasket specs, or None.
+            emitter: Emitter specs, or None.
+            bore: The bore the tracer will use, or None.
+
+        Returns:
+            A list of warning lines.
+        """
+        if gasket is None:
+            return []
+
+        messages = []
+        try:
+            outer = float(spec_or_default(gasket, "gasket", "outer_diameter_mm",
+                                          self.config))
+        except (KeyError, ValueError, TypeError):
+            outer = None
+
+        if outer is not None and bore is not None and outer > 0.0:
+            if outer > bore + FIT_TOLERANCE_MM:
+                messages.append(f"Outer {outer:.2f} mm > opening {bore:.2f} mm.")
+            elif bore - outer > GASKET_BORE_SLACK_MM:
+                messages.append(f"Outer {outer:.2f} mm is {bore - outer:.2f} mm "
+                                f"under opening {bore:.2f} mm.")
+
+        if emitter is not None:
+            try:
+                size = float(spec_or_default(gasket, "gasket", "emitter_size_mm",
+                                             self.config))
+                footprint_x = float(emitter["footprint_x_mm"])
+                footprint_y = float(emitter["footprint_y_mm"])
+            except (KeyError, ValueError, TypeError):
+                return messages
+
+            # Both axes are checked, but a single line reports whichever of
+            # them missed, so a square package does not say the same thing
+            # twice.
+            missed = [(axis, value)
+                      for axis, value in (("X", footprint_x), ("Y", footprint_y))
+                      if abs(size - value) > FIT_TOLERANCE_MM]
+            if len(missed) == 2:
+                messages.append(f"Window {size:.2f} mm != footprint "
+                                f"{footprint_x:.2f} x {footprint_y:.2f} mm.")
+            elif missed:
+                axis, value = missed[0]
+                messages.append(f"Window {size:.2f} mm != footprint "
+                                f"{axis} {value:.2f} mm.")
+        return messages
+
     def setup_hardware_widgets(self):
         """Indexes the combo boxes and spec inputs by hardware kind."""
         self.combo_boxes = {
@@ -1088,18 +1654,22 @@ class MainWindow(QMainWindow):
 
     def connect_signals(self):
         """Connects the catalogue buttons and the bottom control bar."""
-        for kind, save_button, delete_button, reset_button in (
+        for kind, save_button, delete_button, reset_button, new_button in (
                 ("reflector", self.btnSaveReflector, self.btnDeleteReflector,
-                 self.btnResetReflector),
+                 self.btnResetReflector, self.btnNewReflector),
                 ("emitter", self.btnSaveEmitter, self.btnDeleteEmitter,
-                 self.btnResetEmitter),
+                 self.btnResetEmitter, self.btnNewEmitter),
                 ("gasket", self.btnSaveGasket, self.btnDeleteGasket,
-                 self.btnResetGasket)):
+                 self.btnResetGasket, self.btnNewGasket)):
             # k=kind binds the current value; the signals' own arguments are
             # swallowed by *_ because none of these slots need them.
             self.combo_boxes[kind].currentIndexChanged.connect(
                 lambda *_, k=kind: self.reload_fields(k))
+            if kind != "gasket":
+                self.combo_boxes[kind].currentIndexChanged.connect(
+                    lambda *_: self.autoselect_gasket())
             reset_button.clicked.connect(lambda *_, k=kind: self.reload_fields(k))
+            new_button.clicked.connect(lambda *_, k=kind: self.new_hardware(k))
             save_button.clicked.connect(lambda *_, k=kind: self.save_hardware(k))
             delete_button.clicked.connect(lambda *_, k=kind: self.delete_hardware(k))
 
@@ -1116,6 +1686,14 @@ class MainWindow(QMainWindow):
                         lambda *_: self.update_previews())
                 else:
                     widget.editingFinished.connect(self.update_previews)
+
+                if kind != "gasket":
+                    # Editing a reflector bore or an emitter package can
+                    # change which gasket fits, so the choice is revisited.
+                    signal = (widget.currentIndexChanged
+                              if isinstance(widget, QComboBox)
+                              else widget.editingFinished)
+                    signal.connect(lambda *_: self.autoselect_gasket())
 
         # The centring offset is not a spec, but it moves the emitter in the
         # reflector preview, so it refreshes it just the same.

@@ -10,6 +10,12 @@
         "export_csv": false,
         "export_plots": false
     },
+    "IES Export": {
+        "export_ies": false,
+        "ies_vertical_step_deg": 1.0,
+        "ies_horizontal_step_deg": 5.0,
+        "ies_max_vertical_angle_deg": 90.0
+    },
     "Simulation Space & Constraints": {
         "use_gpu": true,
         "max_multiple_reflections": 5,
@@ -33,15 +39,14 @@
         "sim_theta_min_deg": 0.01,
         "sim_theta_max_deg": 89.99,
         "sim_phi_min_deg": 0.0,
-        "sim_phi_max_deg": 360.0,
-        "lumen_calc_step_deg": 0.1
+        "sim_phi_max_deg": 360.0
     },
     "Material Defaults & Thresholds": {
         "default_reflectivity_smooth": 0.85,
-        "default_reflectivity_op": 0.80,
+        "default_reflectivity_op": 0.8,
         "default_reflectivity_cylinder": 0.0,
         "default_gasket_reflectivity": 0.0,
-        "default_op_blur_strength": 1.0,
+        "default_op_blur_strength": 8.5,
         "default_op_factor": 1.0,
         "default_transmissivity_lens": 0.95,
         "default_surface_finish": "smooth",
@@ -50,13 +55,21 @@
         "hotspot_fwhm_threshold": 0.5,
         "default_gasket_thickness_mm": 1.0,
         "default_gasket_total_height_mm": 1.0,
-        "default_gasket_opening_mm": 0.0,
+        "default_gasket_inner_diameter_mm": 0.0,
+        "default_gasket_wall_shape": "round",
         "default_reflector_wall_thickness_mm": 1.0,
         "default_reflector_base_thickness_mm": 0.5,
         "default_focus_offset_mm": 0.0,
         "default_opening_diameter_mm": 0.0,
         "default_dome_size_mm": 0.0,
         "default_refractive_index": 1.0,
-        "default_emitter_shape": "square"
+        "default_emitter_shape": "square",
+        "default_emitter_output_mode": "advanced",
+        "default_max_lumens": 0.0,
+        "default_forward_voltage_v": 0.0,
+        "default_vf_turn_on_v": 0.0,
+        "default_vf_scale": 0.0,
+        "default_base_efficacy_lm_w": 0.0,
+        "default_droop_factor": 0.0
     }
 }
