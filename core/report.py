@@ -7,7 +7,7 @@ public surface.
 import csv
 import math
 import os
-from typing import Optional
+from typing import NamedTuple, Optional
 
 import numpy as np
 
@@ -172,9 +172,55 @@ def _format_output_modes(emitter: dict, max_amps: float, max_cd: float,
     return table
 
 
+class WallShot(NamedTuple):
+    """Everything needed to draw a wall shot, kept apart from the trace.
+
+    The camera turns illuminance into a picture, and nothing about that feeds
+    back into the ray tracing. Holding these four values means the exposure can
+    be changed and the shot redrawn in a moment, instead of tracing the whole
+    ray budget again to look at the same beam differently.
+
+    Attributes:
+        wall_lux: Illuminance on the wall, in lux.
+        title: The header block for the figure.
+        geometry_text: The beam geometry overlay.
+        modes_text: The output table overlay.
+        filename: What to call the PNG if it is exported again.
+    """
+
+    wall_lux: np.ndarray
+    title: str
+    geometry_text: str
+    modes_text: str
+    filename: str
+
+
+def render_wall_shot(shot: WallShot, config: SimulationConfig,
+                     save_path: Optional[str] = None,
+                     always_save: bool = False):
+    """Draws a wall shot at the current camera settings.
+
+    Args:
+        shot: The stored render inputs from a completed simulation.
+        config: Active configuration, for the camera settings.
+        save_path: PNG to write, or None to render without saving.
+        always_save: Writes the file even when export_plots is off. That
+            setting governs whether a run leaves files behind on its own;
+            asking for the shot to be exported is a separate instruction
+            and should not be silently ignored because of it.
+
+    Returns:
+        The Matplotlib figure.
+    """
+    return _render_wall_shot(
+        apply_camera_exposure_and_tonemap(shot.wall_lux, config),
+        shot.title, shot.geometry_text, shot.modes_text, config, save_path,
+        always_save)
+
+
 def _render_wall_shot(render_data: np.ndarray, title_str: str, geometry_text: str,
                       modes_text: str, config: SimulationConfig,
-                      save_path: Optional[str]):
+                      save_path: Optional[str], always_save: bool = False):
     """Renders the simulated photograph of the beam on the wall.
 
     Args:
@@ -222,7 +268,7 @@ def _render_wall_shot(render_data: np.ndarray, title_str: str, geometry_text: st
     plt.title(title_str, color="#CCCCCC", fontsize=10, pad=12)
     plt.tight_layout(rect=[0.01, 0.05, 0.99, 0.95])
 
-    if save_path and config.export_plots:
+    if save_path and (always_save or config.export_plots):
         plt.savefig(save_path, facecolor="black", edgecolor="none",
                     dpi=150, bbox_inches="tight")
 
@@ -256,7 +302,7 @@ def generate_flashlight_plot(emitter_name: str, reflector_name: str, gasket_name
             here instead of being read from the reflector specs.
 
     Returns:
-        (figure, results): the wall shot figure (None when plot_wall_shot is
+        (figure, results, shot): the wall shot figure (None when plot_wall_shot is
         off) and a dict of headline results, or (None, None) if cancelled.
     """
     reflector = library.get("reflector", reflector_name)
@@ -271,7 +317,7 @@ def generate_flashlight_plot(emitter_name: str, reflector_name: str, gasket_name
         log_callback, progress_callback, is_cancelled_callback)
 
     if illumination is None:
-        return None, None  # Cancelled.
+        return None, None, None  # Cancelled.
 
     # Peak intensity, and the ANSI throw distance where it falls to 0.25 lux.
     max_cd = np.max(illumination.total_lux) * (config.target_distance_m ** 2)
@@ -297,18 +343,20 @@ def generate_flashlight_plot(emitter_name: str, reflector_name: str, gasket_name
     if offset_text:
         title_str += f" | {offset_text}"
 
+    shot = WallShot(illumination.total_lux, title_str,
+                    _format_beam_geometry(metrics, config),
+                    _format_output_modes(emitter, max_amps, max_cd,
+                                         illumination.total_lumens,
+                                         illumination.delivered_lumens,
+                                         config),
+                    _plot_filename(reflector_name, emitter_name,
+                                   gasket_name, finish_type))
+
     figure = None
     if config.plot_wall_shot:
         if log_callback:
             log_callback("Rendering final camera visualization...")
-        figure = _render_wall_shot(
-            apply_camera_exposure_and_tonemap(illumination.total_lux, config),
-            title_str,
-            _format_beam_geometry(metrics, config),
-            _format_output_modes(emitter, max_amps, max_cd,
-                                 illumination.total_lumens,
-                                 illumination.delivered_lumens, config),
-            config, save_path)
+        figure = render_wall_shot(shot, config, save_path)
 
     if config.export_ies and save_path:
         watts = max_amps * forward_voltage(emitter, max_amps, config)
@@ -361,7 +409,7 @@ def generate_flashlight_plot(emitter_name: str, reflector_name: str, gasket_name
         "Corona Angle (deg)": round(metrics.corona_angle_deg, 1),
         "Hotspot Angle (deg)": round(metrics.hotspot_angle_deg, 1),
         "Cd/Lm Ratio": round(metrics.candela_per_lumen, 1),
-    }
+    }, shot
 # ==============================================================================
 # 6. API EXECUTION ENTRY POINT
 # ==============================================================================
@@ -480,9 +528,11 @@ def run_simulation_job(config: SimulationConfig, library: HardwareLibrary,
             combination swept.
 
     Returns:
-        (figure, results): the wall shot figure for a single render (None in
-        batch mode), and every result row keyed by hardware combination.
-        (None, None) if the batch was cancelled.
+        (figure, results, shot): the wall shot figure for a single render
+        (None in batch mode), every result row keyed by hardware
+        combination, and the render inputs so the shot can be redrawn at a
+        different exposure without tracing again. (None, None, None) if the
+        run was cancelled.
     """
     output_dir = config.resolved_output_directory
     os.makedirs(output_dir, exist_ok=True)
@@ -511,12 +561,12 @@ def run_simulation_job(config: SimulationConfig, library: HardwareLibrary,
         combinations = _list_valid_combinations(library)
         for position, (reflector, emitter, gasket, combo_finish) in enumerate(combinations, 1):
             if is_cancelled_callback and is_cancelled_callback():
-                return None, None
+                return None, None, None
             if log_callback:
                 log_callback(f"[{position}/{len(combinations)}] Rendering {reflector} + "
                              f"{emitter} + {gasket} ({combo_finish.upper()})...")
 
-            _, metrics = generate_flashlight_plot(
+            _, metrics, _ = generate_flashlight_plot(
                 emitter, reflector, gasket, combo_finish, config, library,
                 log_callback, progress_callback, is_cancelled_callback,
                 os.path.join(output_dir,
@@ -531,14 +581,14 @@ def run_simulation_job(config: SimulationConfig, library: HardwareLibrary,
 
         if log_callback:
             log_callback("Batch generation complete!")
-        figure = None
+        figure, shot = None, None
 
     else:
         if log_callback:
             log_callback(f"Starting specific render: {active_reflector} + "
                          f"{active_emitter} + {active_gasket}")
 
-        figure, metrics = generate_flashlight_plot(
+        figure, metrics, shot = generate_flashlight_plot(
             active_emitter, active_reflector, active_gasket, finish, config, library,
             log_callback, progress_callback, is_cancelled_callback,
             os.path.join(output_dir, _plot_filename(
@@ -555,4 +605,4 @@ def run_simulation_job(config: SimulationConfig, library: HardwareLibrary,
             writer.writeheader()
             writer.writerows(results.values())
 
-    return figure, results
+    return figure, results, shot

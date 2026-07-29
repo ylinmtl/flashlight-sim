@@ -7,7 +7,7 @@
     <x>0</x>
     <y>0</y>
     <width>1800</width>
-    <height>950</height>
+    <height>1000</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -386,6 +386,83 @@
         </widget>
        </item>
        
+       <item>
+        <widget class="QGroupBox" name="grpCamera">
+         <property name="title"><string>Camera</string></property>
+         <property name="toolTip"><string>Exposure only changes how the result is displayed, so these take effect immediately without re-running the simulation.</string></property>
+         <layout class="QHBoxLayout" name="horizontalLayout_Camera">
+          <item>
+           <widget class="QCheckBox" name="chkAutoExposure">
+            <property name="text"><string>Auto Exposure</string></property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QLineEdit" name="txtExposureEV">
+            <property name="toolTip"><string>Exposure compensation in stops. The slider covers -10 to +10; typing here can go further.</string></property>
+            <property name="maximumSize"><size><width>60</width><height>16777215</height></size></property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QSlider" name="sldExposureEV">
+            <property name="orientation"><enum>Qt::Horizontal</enum></property>
+            <property name="minimum"><number>-100</number></property>
+            <property name="maximum"><number>100</number></property>
+            <property name="value"><number>0</number></property>
+            <property name="toolTip"><string>Exposure compensation, -10 to +10 stops in tenths.</string></property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QLabel" name="lblCamIso">
+            <property name="text"><string>ISO</string></property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QLineEdit" name="txtCamIso">
+            <property name="toolTip"><string>Sensor sensitivity.</string></property>
+            <property name="maximumSize"><size><width>60</width><height>16777215</height></size></property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QLabel" name="lblCamFStop">
+            <property name="text"><string>f/</string></property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QLineEdit" name="txtCamFStop">
+            <property name="toolTip"><string>Aperture.</string></property>
+            <property name="maximumSize"><size><width>50</width><height>16777215</height></size></property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QLabel" name="lblCamShutter">
+            <property name="text"><string>Shutter 1/</string></property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QLineEdit" name="txtCamShutter">
+            <property name="toolTip"><string>Shutter speed denominator: 60 means 1/60 s.</string></property>
+            <property name="maximumSize"><size><width>60</width><height>16777215</height></size></property>
+           </widget>
+          </item>
+          <item>
+           <spacer name="cameraSpacer">
+            <property name="orientation"><enum>Qt::Horizontal</enum></property>
+            <property name="sizeHint" stdset="0"><size><width>20</width><height>10</height></size></property>
+           </spacer>
+          </item>
+          <item>
+           <widget class="QPushButton" name="btnSaveCameraDefaults">
+            <property name="text"><string>Save Default Camera Settings</string></property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QPushButton" name="btnExportWallShot">
+            <property name="text"><string>Export Wall Shot</string></property>
+           </widget>
+          </item>
+         </layout>
+        </widget>
+       </item>
        <item>
         <widget class="QPlainTextEdit" name="txtLogs">
          <property name="readOnly"><bool>true</bool></property>
