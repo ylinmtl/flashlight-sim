@@ -210,7 +210,7 @@ Distance between the flashlight and the simulated wall.
 
 Controls the total simulated wall area.
 
-Used to determine the wall grid resolution. Should not need to be changed.
+Used to determine the wall grid resolution. Changing this will require Orange Peel blurring to be recalibrated.
 
 ---
 
