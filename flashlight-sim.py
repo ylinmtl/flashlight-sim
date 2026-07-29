@@ -16,6 +16,7 @@ import traceback
 from PyQt6 import uic
 from PyQt6.QtCore import QThread, pyqtSignal
 from PyQt6.QtWidgets import (QApplication, QCheckBox, QComboBox, QDialog,
+                             QSlider,
                              QFormLayout, QGroupBox, QHBoxLayout, QInputDialog,
                              QLineEdit,
                              QMainWindow, QMessageBox, QPushButton, QScrollArea,
@@ -33,7 +34,8 @@ from core import (DIE_SHAPES, GASKET_WALL_SHAPES, OUTPUT_MODES,
                     HardwareLibrary, SimulationConfig,
                     effective_bore_diameter, emitter_die_outline,
                     emitter_footprint_diagonal, get_sim_geometry,
-                    resource_path, run_simulation_job, spec_or_default)
+                    render_wall_shot, resource_path, run_simulation_job,
+                    spec_or_default)
 
 # Specs shown for each hardware kind, in the order they appear in the form. Each
 # one maps to a QLineEdit in mainwindow.ui named <prefix><spec>, for example
@@ -113,6 +115,11 @@ GASKET_EDGE_COLOUR = "#6B6960"
 # Both previews sit on black, like the simulated beam shot does.
 PREVIEW_BACKGROUND = "#000000"
 PREVIEW_TEXT_COLOUR = "#FFFFFF"
+
+# How far the exposure slider reaches, in stops either side of zero. The
+# box beside it is not limited to this: a value typed there simply parks
+# the slider at its end stop.
+EXPOSURE_SLIDER_RANGE_EV = 10.0
 
 # Zoom applied per mouse wheel step in a 3D preview.
 PREVIEW_ZOOM_STEP = 1.15
@@ -606,14 +613,16 @@ class SimulationWorker(QThread):
     Signals:
         progress_signal: Completion percentage, 0-100.
         log_signal: A line of engine output.
-        finished_signal: (figure, results) once the job ends; (None, {}) if it
+        finished_signal: (figure, results, shot) once the job ends, where
+            shot carries the render inputs so the camera can redraw the
+            wall shot without tracing again; (None, {}, None) if it
             was cancelled.
         error_signal: Formatted traceback if the engine raised.
     """
 
     progress_signal = pyqtSignal(float)
     log_signal = pyqtSignal(str)
-    finished_signal = pyqtSignal(object, dict)
+    finished_signal = pyqtSignal(object, dict, object)
     error_signal = pyqtSignal(str)
 
     def __init__(self, config, library, reflector_name, emitter_name, gasket_name,
@@ -649,7 +658,7 @@ class SimulationWorker(QThread):
     def run(self):
         """Runs the job and reports the outcome through the signals."""
         try:
-            figure, results = run_simulation_job(
+            figure, results, shot = run_simulation_job(
                 self.config, self.library,
                 self.reflector_name, self.emitter_name, self.gasket_name, self.finish,
                 log_callback=self.log_signal.emit,
@@ -659,9 +668,9 @@ class SimulationWorker(QThread):
 
             if self._is_cancelled:
                 self.log_signal.emit("\n[!] Simulation stopped by user.")
-                self.finished_signal.emit(None, {})
+                self.finished_signal.emit(None, {}, None)
             else:
-                self.finished_signal.emit(figure, results)
+                self.finished_signal.emit(figure, results, shot)
 
         except Exception:
             self.error_signal.emit(traceback.format_exc())
@@ -825,6 +834,7 @@ class MainWindow(QMainWindow):
 
         self.setup_canvas()
         self.setup_previews()
+        self.setup_camera_controls()
         self.setup_hardware_widgets()
         self.connect_signals()
 
@@ -1610,6 +1620,154 @@ class MainWindow(QMainWindow):
                                 f"{axis} {value:.2f} mm.")
         return messages
 
+    def setup_camera_controls(self):
+        """Wires the camera bar and puts the saved settings into it.
+
+        The camera only decides how a finished result is displayed, so these
+        redraw the stored wall shot rather than starting a new trace.
+        """
+        self.grpCamera.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Fixed)
+        self.wall_shot = None
+        self.btnExportWallShot.setEnabled(False)
+        self._syncing_exposure = False
+
+        self.chkAutoExposure.setChecked(bool(self.config.use_auto_exposure))
+        self.txtExposureEV.setText(f"{self.config.auto_exposure_compensation_ev:g}")
+        self.sldExposureEV.setValue(
+            self._exposure_to_slider(self.config.auto_exposure_compensation_ev))
+        self.txtCamIso.setText(f"{self.config.cam_iso:g}")
+        self.txtCamFStop.setText(f"{self.config.cam_f_stop:g}")
+        self.txtCamShutter.setText(
+            f"{1.0 / self.config.cam_shutter_speed_s:g}"
+            if self.config.cam_shutter_speed_s else "0")
+
+        self.chkAutoExposure.toggled.connect(self.apply_camera_settings)
+        self.sldExposureEV.valueChanged.connect(self.exposure_slider_moved)
+        self.sldExposureEV.sliderReleased.connect(self.apply_camera_settings)
+        self.txtExposureEV.editingFinished.connect(self.exposure_text_edited)
+        for widget in (self.txtCamIso, self.txtCamFStop, self.txtCamShutter):
+            widget.editingFinished.connect(self.apply_camera_settings)
+        self.btnSaveCameraDefaults.clicked.connect(self.save_camera_defaults)
+        self.btnExportWallShot.clicked.connect(self.export_wall_shot)
+
+        self.apply_camera_settings()
+
+    @staticmethod
+    def _exposure_to_slider(stops):
+        """Converts stops of exposure into the slider's tenth-of-a-stop steps.
+
+        Args:
+            stops: Exposure compensation in stops.
+
+        Returns:
+            The slider position, clamped to its own range.
+        """
+        return int(round(max(-EXPOSURE_SLIDER_RANGE_EV,
+                             min(EXPOSURE_SLIDER_RANGE_EV, stops)) * 10))
+
+    def exposure_slider_moved(self, position):
+        """Writes the slider's value into the box, then redraws.
+
+        Args:
+            position: Slider position, in tenths of a stop.
+        """
+        if self._syncing_exposure:
+            return
+        self._syncing_exposure = True
+        self.txtExposureEV.setText(f"{position / 10.0:g}")
+        self._syncing_exposure = False
+        
+        # Only redraw the image if the slider isn't actively being dragged
+        if not self.sldExposureEV.isSliderDown():
+            self.apply_camera_settings()
+
+    def exposure_text_edited(self, *_):
+        """Moves the slider to match the box, then redraws.
+
+        The box is the authority: it may hold a value beyond the slider's range,
+        in which case the slider simply sits at its end stop.
+        """
+        if self._syncing_exposure:
+            return
+        self._syncing_exposure = True
+        self.sldExposureEV.setValue(self._exposure_to_slider(self.camera_values()[1]))
+        self._syncing_exposure = False
+        self.apply_camera_settings()
+
+    def camera_values(self):
+        """Reads the camera bar, falling back to the stored settings.
+
+        Returns:
+            (auto, stops, iso, f_stop, shutter_seconds). A box that cannot be
+            read keeps its saved value rather than stopping the redraw.
+        """
+        def number(widget, fallback):
+            """Parses one box, or returns the saved value."""
+            try:
+                return float(widget.text().strip())
+            except ValueError:
+                return fallback
+
+        denominator = number(self.txtCamShutter,
+                             1.0 / self.config.cam_shutter_speed_s
+                             if self.config.cam_shutter_speed_s else 0.0)
+        return (self.chkAutoExposure.isChecked(),
+                number(self.txtExposureEV, self.config.auto_exposure_compensation_ev),
+                number(self.txtCamIso, self.config.cam_iso),
+                number(self.txtCamFStop, self.config.cam_f_stop),
+                1.0 / denominator if denominator else self.config.cam_shutter_speed_s)
+
+    def apply_camera_settings(self, *_):
+        """Shows the relevant boxes and redraws the stored wall shot.
+
+        Written to take and ignore an argument, because the signals it is
+        connected to pass one: toggled sends a bool, clicked likewise.
+
+        Auto exposure needs one number, manual needs three, so only the set in
+        use is shown. Nothing here touches the trace: if there is no result yet
+        the settings are simply remembered for the next one.
+        """
+        auto, stops, iso, f_stop, shutter = self.camera_values()
+
+        self.txtExposureEV.setVisible(auto)
+        self.sldExposureEV.setVisible(auto)
+        for widget in (self.lblCamIso, self.txtCamIso, self.lblCamFStop,
+                       self.txtCamFStop, self.lblCamShutter, self.txtCamShutter):
+            widget.setVisible(not auto)
+
+        self.config.use_auto_exposure = auto
+        self.config.auto_exposure_compensation_ev = stops
+        self.config.cam_iso = iso
+        self.config.cam_f_stop = f_stop
+        self.config.cam_shutter_speed_s = shutter
+
+        if self.wall_shot is not None:
+            self.show_figure(render_wall_shot(self.wall_shot, self.config))
+
+    def save_camera_defaults(self, *_):
+        """Writes the camera bar's values into the settings file."""
+        self.apply_camera_settings()
+        self.config.save_settings()
+        if self.config.use_auto_exposure:
+            detail = f"auto, {self.config.auto_exposure_compensation_ev:+g} EV"
+        else:
+            detail = (f"ISO {self.config.cam_iso:g}, f/{self.config.cam_f_stop:g}, "
+                      f"1/{1.0 / self.config.cam_shutter_speed_s:.0f}s")
+        self.log_message(f"Camera defaults saved ({detail}).")
+
+    def export_wall_shot(self, *_):
+        """Writes the wall shot to the output directory at the current exposure."""
+        if self.wall_shot is None:
+            self.log_message("No wall shot to export yet; run a simulation first.")
+            return
+
+        directory = self.config.resolved_output_directory
+        os.makedirs(directory, exist_ok=True)
+        path = os.path.join(directory, self.wall_shot.filename)
+        render_wall_shot(self.wall_shot, self.config, path,
+                         always_save=True)
+        self.log_message(f"Wall shot exported: {path}")
+
     def setup_hardware_widgets(self):
         """Indexes the combo boxes and spec inputs by hardware kind."""
         self.combo_boxes = {
@@ -2009,15 +2167,19 @@ class MainWindow(QMainWindow):
         QMessageBox.critical(self, "Simulation Error",
                              "An error occurred during simulation. Check logs.")
 
-    def handle_simulation_finished(self, figure, results):
+    def handle_simulation_finished(self, figure, results, shot):
         """Restores the controls, logs the results and shows the new plot.
 
         Args:
             figure: Matplotlib figure to display, or None.
             results: Headline results keyed by label; empty if cancelled.
+            shot: Render inputs kept so the camera controls can redraw the
+                wall shot, or None when there is nothing to redraw.
         """
         self.set_controls_running(False)
         self.progressBar.setValue(100)
+        self.wall_shot = shot
+        self.btnExportWallShot.setEnabled(shot is not None)
 
         if results:
             self.log_message("\n--- SIMULATION RESULTS ---")
@@ -2025,13 +2187,21 @@ class MainWindow(QMainWindow):
                 self.log_message(f"{label}: {value}")
 
         if figure:
-            if self.figure_canvas is not None:
-                self.grpPlot.layout().removeWidget(self.figure_canvas)
-                self.figure_canvas.deleteLater()
+            self.show_figure(figure)
 
-            self.figure_canvas = FigureCanvas(figure)
-            self.grpPlot.layout().addWidget(self.figure_canvas)
-            self.figure_canvas.draw()
+    def show_figure(self, figure):
+        """Puts a figure in the output box, replacing whatever was there.
+
+        Args:
+            figure: The Matplotlib figure to display.
+        """
+        if self.figure_canvas is not None:
+            self.grpPlot.layout().removeWidget(self.figure_canvas)
+            self.figure_canvas.deleteLater()
+
+        self.figure_canvas = FigureCanvas(figure)
+        self.grpPlot.layout().addWidget(self.figure_canvas)
+        self.figure_canvas.draw()
 
 
 def main():

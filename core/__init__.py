@@ -28,7 +28,7 @@ from .optics import (DIE_SUBSAMPLES, NO_EMITTER_OFFSET, EmitterOffset,
                      forward_voltage, get_sim_geometry, lambertian_intensity)
 from .paths import resource_path, user_data_path
 from .photometry import beam_candela_grid, export_beam_ies, write_ies_file
-from .report import generate_flashlight_plot, run_simulation_job
+from .report import generate_flashlight_plot, run_simulation_job, render_wall_shot
 from .simulation import (BeamMetrics, WallIllumination, angular_sampling_warnings,
                          apply_camera_exposure_and_tonemap, get_beam_metrics,
                          simulate_wall_illuminance)
@@ -72,4 +72,5 @@ __all__ = [
     "spec_or_default",
     "user_data_path",
     "write_ies_file",
+    "render_wall_shot",
 ]
