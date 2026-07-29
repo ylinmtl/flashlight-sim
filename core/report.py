@@ -143,11 +143,10 @@ def _format_output_modes(emitter: dict, max_amps: float, max_cd: float,
                          config: SimulationConfig) -> str:
     """Builds the output table for the usual 1/10/35/100 percent drive levels.
 
-    Two lumen figures, because they answer different questions. "Emitted" is
-    what leaves the die, which is the emitter's rating. "On Wall" is what
-    survives the reflector, the lens and the gasket and lands inside the
-    canvas. Both scale with drive current, and intensity is scaled from the
-    simulated maximum the same way, since the beam shape does not change.
+    Lumens displayed are the "delivered" lumens that survive the reflector, lens,
+    and gasket to land inside the canvas. Output scales with drive current, and
+    intensity is scaled from the simulated maximum the same way, since the beam
+    shape does not change.
 
     Args:
         emitter: Emitter specs.
@@ -161,14 +160,14 @@ def _format_output_modes(emitter: dict, max_amps: float, max_cd: float,
         The formatted table.
     """
     survival = delivered_flux / total_flux if total_flux else 0.0
-    table = (" Mode | Amps | Emitted | On Wall |  Candela | Throw \n"
-             + "-" * 54 + "\n")
+    table = (" Mode | Amps |  Lumens |  Candela | Throw \n"
+             + "-" * 45 + "\n")
     for fraction in (0.01, 0.10, 0.35, 1.0):
         amps = max_amps * fraction
         lumens = calculate_lumens(emitter, amps, config)
         candela = max_cd * (lumens / total_flux) if total_flux else 0.0
         table += (f"{int(fraction * 100):>4}% | {amps:>4.1f} | "
-                  f"{int(lumens):>7,} | {int(lumens * survival):>7,} | "
+                  f"{int(lumens * survival):>7,} | "
                   f"{int(candela):>8,} | {int(np.sqrt(candela * 4)):>4,}m\n")
     return table
 
@@ -280,7 +279,7 @@ def generate_flashlight_plot(emitter_name: str, reflector_name: str, gasket_name
 
     metrics = get_beam_metrics(illumination.total_lux, illumination.hotspot_lux,
                                illumination.spill_lux, max_cd,
-                               illumination.total_lumens, config)
+                               illumination.delivered_lumens, config)
 
     # The hardware line carries the three names and nothing else: which part is
     # which is obvious from the names themselves. The finish stays with the

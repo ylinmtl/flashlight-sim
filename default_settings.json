@@ -46,7 +46,7 @@
         "default_reflectivity_op": 0.8,
         "default_reflectivity_cylinder": 0.0,
         "default_gasket_reflectivity": 0.0,
-        "default_op_blur_strength": 1.0,
+        "default_op_blur_strength": 5.35,
         "default_op_factor": 1.0,
         "default_transmissivity_lens": 0.95,
         "default_surface_finish": "smooth",
