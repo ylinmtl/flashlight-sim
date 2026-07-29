@@ -21,7 +21,7 @@
         "max_multiple_reflections": 5,
         "use_reflector_opening": true,
         "target_distance_m": 5.0,
-        "canvas_fov_deg": 120.0,
+        "canvas_fov_deg": 150.0,
         "plot_fov_deg": 90.0
     },
     "Camera Settings": {
@@ -39,8 +39,7 @@
         "sim_theta_min_deg": 0.01,
         "sim_theta_max_deg": 89.99,
         "sim_phi_min_deg": 0.0,
-        "sim_phi_max_deg": 360.0,
-        "lumen_calc_step_deg": 0.1
+        "sim_phi_max_deg": 360.0
     },
     "Material Defaults & Thresholds": {
         "default_reflectivity_smooth": 0.85,

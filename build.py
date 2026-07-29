@@ -31,6 +31,14 @@ APP_DATA_FILES = [
     ("default_settings.json", "."),
 ]
 
+# The script PyInstaller is pointed at.
+ENTRY_SCRIPT = "flashlight-sim.py"
+
+# The package beside the entry script. PyInstaller finds it by
+# following the imports; it is named here only so the pre-flight
+# check can confirm it is present.
+PACKAGE_DIR = "core"
+
 # Packages whose data files and hidden imports PyInstaller cannot infer.
 COLLECT_ALL_PACKAGES = ["numba", "llvmlite", "scipy"]
 
@@ -40,6 +48,29 @@ SKIP_DIRS = frozenset({"pkgs", "stubs", "info", ".conda", "conda-meta"})
 
 # Minimum size of a real CUDA binary, used to reject placeholder files.
 MIN_BINARY_BYTES = 10_000
+
+
+def check_application_files():
+    """Exits with a clear message if the application's own files are missing.
+
+    Everything here belongs beside flashlight-sim.py, not inside the engine
+    package, and this script has to be run from that folder. PyInstaller does
+    report a missing --add-data source, but it does so in the middle of a long
+    trace, so it is worth saying plainly first.
+    """
+    missing = [source for source, _ in APP_DATA_FILES if not os.path.exists(source)]
+    if not os.path.isdir(PACKAGE_DIR) or not os.path.exists(
+            os.path.join(PACKAGE_DIR, "__init__.py")):
+        missing.append("core/__init__.py (the engine package)")
+    if not os.path.exists(ENTRY_SCRIPT):
+        missing.append(ENTRY_SCRIPT)
+
+    if missing:
+        print(f"\n[!] ERROR: run this from the project folder. Missing from "
+              f"{os.getcwd()}:")
+        for name in missing:
+            print(f"  - {name}")
+        sys.exit(1)
 
 
 def find_environment_file(pattern, env_path):
@@ -124,8 +155,8 @@ def check_required_components(components):
 def stage_cuda_toolkit(components):
     """Copies the CUDA components into the layout Numba looks for.
 
-    At runtime fea_engine points CUDA_HOME at the bundle root, and Numba then
-    expects a genuine toolkit underneath it:
+    At runtime core.cuda_setup points CUDA_HOME at the bundle root, and Numba
+    then expects a genuine toolkit underneath it:
 
         bin/            cudart, ptxas and their dependencies
         nvvm/bin/       libNVVM, which is where Numba looks on Windows
@@ -206,7 +237,7 @@ def run_pyinstaller():
     command += build_add_data_arguments()
     for package in COLLECT_ALL_PACKAGES:
         command += ["--collect-all", package]
-    command.append("flashlight-sim.py")
+    command.append(ENTRY_SCRIPT)
 
     if subprocess.run(command).returncode != 0:
         sys.exit("PyInstaller failed.")
@@ -235,6 +266,8 @@ def verify_bundle():
 
 def main():
     """Locates the CUDA toolkit, stages it and builds the application."""
+    check_application_files()
+
     env_path = sys.prefix
     print(f"Scanning active Conda environment in: {env_path}...")
 

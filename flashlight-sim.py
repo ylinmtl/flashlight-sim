@@ -28,14 +28,12 @@ from matplotlib.figure import Figure
 import numpy as np
 from mpl_toolkits.mplot3d.art3d import Poly3DCollection
 
-from fea_engine import (DIE_SHAPES, GASKET_WALL_SHAPES, OUTPUT_MODES,
-                        SPEC_DEFAULT_SETTINGS, SURFACE_FINISHES,
-                        EmitterOffset,
-                        effective_bore_diameter,
-                        emitter_footprint_diagonal,
-                        HardwareLibrary, SimulationConfig,
-                        emitter_die_outline, get_sim_geometry, resource_path,
-                        run_simulation_job, spec_or_default)
+from core import (DIE_SHAPES, GASKET_WALL_SHAPES, OUTPUT_MODES,
+                    SPEC_DEFAULT_SETTINGS, SURFACE_FINISHES, EmitterOffset,
+                    HardwareLibrary, SimulationConfig,
+                    effective_bore_diameter, emitter_die_outline,
+                    emitter_footprint_diagonal, get_sim_geometry,
+                    resource_path, run_simulation_job, spec_or_default)
 
 # Specs shown for each hardware kind, in the order they appear in the form. Each
 # one maps to a QLineEdit in mainwindow.ui named <prefix><spec>, for example
@@ -206,7 +204,6 @@ SETTING_LABELS = {
         "sim_theta_max_deg": "Theta Maximum (degrees)",
         "sim_phi_min_deg": "Phi Minimum (degrees)",
         "sim_phi_max_deg": "Phi Maximum (degrees)",
-        "lumen_calc_step_deg": "Lumen Calculation Step (degrees)",
     },
     "Material Defaults & Thresholds": {
         "default_reflectivity_smooth": "Default Reflectivity (Smooth)",
