@@ -24,6 +24,13 @@
         "canvas_fov_deg": 120.0,
         "plot_fov_deg": 90.0
     },
+    "Spherical Projection": {
+        "use_spherical_projection": true,
+        "dome_angle_deg": 180.0,
+        "dome_polar_step_deg": 0.05,
+        "dome_azimuth_step_deg": 0.05,
+        "dome_memory_budget_mb": 1024.0
+    },
     "Camera Settings": {
         "use_auto_exposure": false,
         "auto_exposure_compensation_ev": -5.0,
@@ -46,8 +53,6 @@
         "default_reflectivity_op": 0.8,
         "default_reflectivity_cylinder": 0.0,
         "default_gasket_reflectivity": 0.0,
-        "default_op_blur_strength": 8.5,
-        "default_op_factor": 1.0,
         "default_transmissivity_lens": 0.95,
         "default_surface_finish": "smooth",
         "spill_visible_threshold_lux": 0.0001,
@@ -70,6 +75,18 @@
         "default_vf_turn_on_v": 0.0,
         "default_vf_scale": 0.0,
         "default_base_efficacy_lm_w": 0.0,
-        "default_droop_factor": 0.0
+        "default_droop_factor": 0.0,
+        "default_lens_finish": "clear",
+        "default_lens_refractive_index": 0.0,
+        "default_lens_diffusion_fwhm_deg": 0.0,
+        "default_surface_roughness_nm": 0.0,
+        "default_op_dimple_pitch_mm": 0.5,
+        "default_op_dimple_depth_um": 3.0,
+        "default_surface_correlation_um": 25.0,
+        "default_die_layout": "monolithic",
+        "default_die_rows": 1,
+        "default_die_columns": 1,
+        "default_die_gap_mm": 0.1,
+        "default_die_gap_output": 0.5
     }
 }

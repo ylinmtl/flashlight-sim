@@ -16,7 +16,12 @@
             "refractive_index": 1.41,
             "output_mode": "advanced",
             "max_lumens": 0.0,
-            "forward_voltage_v": 0.0
+            "forward_voltage_v": 0.0,
+            "die_layout": "monolithic",
+            "die_rows": 1.0,
+            "die_columns": 1.0,
+            "die_gap_mm": 0.1,
+            "die_gap_output": 0.5
         },
         "Nichia 519A 4000K": {
             "die_length_mm": 2.0,
@@ -34,7 +39,12 @@
             "refractive_index": 1.41,
             "output_mode": "advanced",
             "max_lumens": 0.0,
-            "forward_voltage_v": 0.0
+            "forward_voltage_v": 0.0,
+            "die_layout": "monolithic",
+            "die_rows": 1.0,
+            "die_columns": 1.0,
+            "die_gap_mm": 0.1,
+            "die_gap_output": 0.5
         },
         "Nichia 519A 5000K": {
             "die_length_mm": 2.0,
@@ -52,7 +62,12 @@
             "refractive_index": 1.41,
             "output_mode": "advanced",
             "max_lumens": 0.0,
-            "forward_voltage_v": 0.0
+            "forward_voltage_v": 0.0,
+            "die_layout": "monolithic",
+            "die_rows": 1.0,
+            "die_columns": 1.0,
+            "die_gap_mm": 0.1,
+            "die_gap_output": 0.5
         },
         "Nichia 719A 5000K": {
             "die_length_mm": 2.0,
@@ -70,7 +85,12 @@
             "refractive_index": 1.0,
             "output_mode": "advanced",
             "max_lumens": 0.0,
-            "forward_voltage_v": 0.0
+            "forward_voltage_v": 0.0,
+            "die_layout": "monolithic",
+            "die_rows": 1.0,
+            "die_columns": 1.0,
+            "die_gap_mm": 0.1,
+            "die_gap_output": 0.5
         },
         "Nichia B35AM 5700K": {
             "die_length_mm": 3.12,
@@ -88,7 +108,12 @@
             "refractive_index": 1.0,
             "output_mode": "advanced",
             "max_lumens": 0.0,
-            "forward_voltage_v": 0.0
+            "forward_voltage_v": 0.0,
+            "die_layout": "monolithic",
+            "die_rows": 1.0,
+            "die_columns": 1.0,
+            "die_gap_mm": 0.1,
+            "die_gap_output": 0.5
         },
         "Getian GT FC40 5000K": {
             "die_length_mm": 5.55,
@@ -106,7 +131,12 @@
             "refractive_index": 1.0,
             "output_mode": "advanced",
             "max_lumens": 0.0,
-            "forward_voltage_v": 0.0
+            "forward_voltage_v": 0.0,
+            "die_layout": "array",
+            "die_rows": 4.0,
+            "die_columns": 4.0,
+            "die_gap_mm": 0.1,
+            "die_gap_output": 0.5
         },
         "Osram KW CULPM1.TG": {
             "die_length_mm": 1.59,
@@ -124,7 +154,12 @@
             "refractive_index": 1.0,
             "output_mode": "advanced",
             "max_lumens": 0.0,
-            "forward_voltage_v": 0.0
+            "forward_voltage_v": 0.0,
+            "die_layout": "monolithic",
+            "die_rows": 1.0,
+            "die_columns": 1.0,
+            "die_gap_mm": 0.1,
+            "die_gap_output": 0.5
         },
         "Lumen Pioneer LHP531 6500K": {
             "die_length_mm": 3.67,
@@ -142,7 +177,12 @@
             "refractive_index": 1.0,
             "output_mode": "advanced",
             "max_lumens": 0.0,
-            "forward_voltage_v": 0.0
+            "forward_voltage_v": 0.0,
+            "die_layout": "array",
+            "die_rows": 3.0,
+            "die_columns": 3.0,
+            "die_gap_mm": 0.1,
+            "die_gap_output": 0.5
         },
         "Lumen Pioneer LHP531 5000K": {
             "die_length_mm": 3.67,
@@ -160,7 +200,12 @@
             "refractive_index": 1.0,
             "output_mode": "advanced",
             "max_lumens": 0.0,
-            "forward_voltage_v": 0.0
+            "forward_voltage_v": 0.0,
+            "die_layout": "array",
+            "die_rows": 3.0,
+            "die_columns": 3.0,
+            "die_gap_mm": 0.1,
+            "die_gap_output": 0.5
         },
         "Lumen Pioneer LHP531 4000K": {
             "die_length_mm": 3.67,
@@ -178,7 +223,12 @@
             "refractive_index": 1.0,
             "output_mode": "advanced",
             "max_lumens": 0.0,
-            "forward_voltage_v": 0.0
+            "forward_voltage_v": 0.0,
+            "die_layout": "array",
+            "die_rows": 3.0,
+            "die_columns": 3.0,
+            "die_gap_mm": 0.1,
+            "die_gap_output": 0.5
         },
         "Lumen Pioneer LHP531 3000K": {
             "die_length_mm": 3.67,
@@ -196,7 +246,12 @@
             "refractive_index": 1.0,
             "output_mode": "advanced",
             "max_lumens": 0.0,
-            "forward_voltage_v": 0.0
+            "forward_voltage_v": 0.0,
+            "die_layout": "array",
+            "die_rows": 3.0,
+            "die_columns": 3.0,
+            "die_gap_mm": 0.1,
+            "die_gap_output": 0.5
         },
         "Lumen Pioneer LHP531 1800K": {
             "die_length_mm": 3.78,
@@ -214,7 +269,12 @@
             "refractive_index": 1.0,
             "output_mode": "advanced",
             "max_lumens": 0.0,
-            "forward_voltage_v": 0.0
+            "forward_voltage_v": 0.0,
+            "die_layout": "array",
+            "die_rows": 3.0,
+            "die_columns": 3.0,
+            "die_gap_mm": 0.1,
+            "die_gap_output": 0.5
         },
         "Lumen Pioneer LHP73B 5000K": {
             "die_length_mm": 5.0,
@@ -232,7 +292,12 @@
             "refractive_index": 1.0,
             "output_mode": "advanced",
             "max_lumens": 0.0,
-            "forward_voltage_v": 0.0
+            "forward_voltage_v": 0.0,
+            "die_layout": "array",
+            "die_rows": 4.0,
+            "die_columns": 4.0,
+            "die_gap_mm": 0.1,
+            "die_gap_output": 0.5
         },
         "Luminus SBT90.2 6500K": {
             "die_length_mm": 3.0,
@@ -250,7 +315,12 @@
             "refractive_index": 1.0,
             "output_mode": "advanced",
             "max_lumens": 0.0,
-            "forward_voltage_v": 0.0
+            "forward_voltage_v": 0.0,
+            "die_layout": "monolithic",
+            "die_rows": 1.0,
+            "die_columns": 1.0,
+            "die_gap_mm": 0.1,
+            "die_gap_output": 0.5
         },
         "Luminus SFT12 6500K": {
             "die_length_mm": 1.26,
@@ -268,7 +338,12 @@
             "refractive_index": 1.0,
             "output_mode": "advanced",
             "max_lumens": 0.0,
-            "forward_voltage_v": 0.0
+            "forward_voltage_v": 0.0,
+            "die_layout": "monolithic",
+            "die_rows": 1.0,
+            "die_columns": 1.0,
+            "die_gap_mm": 0.1,
+            "die_gap_output": 0.5
         },
         "Luminus SFT25R 5700K": {
             "die_length_mm": 1.7,
@@ -286,7 +361,12 @@
             "refractive_index": 1.0,
             "output_mode": "advanced",
             "max_lumens": 0.0,
-            "forward_voltage_v": 0.0
+            "forward_voltage_v": 0.0,
+            "die_layout": "monolithic",
+            "die_rows": 1.0,
+            "die_columns": 1.0,
+            "die_gap_mm": 0.1,
+            "die_gap_output": 0.5
         },
         "Luminus SFT25R 6500K": {
             "die_length_mm": 1.7,
@@ -304,7 +384,12 @@
             "refractive_index": 1.0,
             "output_mode": "advanced",
             "max_lumens": 0.0,
-            "forward_voltage_v": 0.0
+            "forward_voltage_v": 0.0,
+            "die_layout": "monolithic",
+            "die_rows": 1.0,
+            "die_columns": 1.0,
+            "die_gap_mm": 0.1,
+            "die_gap_output": 0.5
         },
         "Luminus SFT40 3000K": {
             "die_length_mm": 1.97,
@@ -372,7 +457,12 @@
             ],
             "output_mode": "advanced",
             "max_lumens": 0.0,
-            "forward_voltage_v": 0.0
+            "forward_voltage_v": 0.0,
+            "die_layout": "monolithic",
+            "die_rows": 1.0,
+            "die_columns": 1.0,
+            "die_gap_mm": 0.1,
+            "die_gap_output": 0.5
         },
         "Luminus SFT40 6500K": {
             "die_length_mm": 1.97,
@@ -440,7 +530,12 @@
             ],
             "output_mode": "advanced",
             "max_lumens": 0.0,
-            "forward_voltage_v": 0.0
+            "forward_voltage_v": 0.0,
+            "die_layout": "monolithic",
+            "die_rows": 1.0,
+            "die_columns": 1.0,
+            "die_gap_mm": 0.1,
+            "die_gap_output": 0.5
         },
         "Luminus SFT42R 6500K": {
             "max_current_amps": 8.0,
@@ -458,7 +553,12 @@
             "shape": "round",
             "output_mode": "advanced",
             "max_lumens": 0.0,
-            "forward_voltage_v": 0.0
+            "forward_voltage_v": 0.0,
+            "die_layout": "monolithic",
+            "die_rows": 1.0,
+            "die_columns": 1.0,
+            "die_gap_mm": 0.1,
+            "die_gap_output": 0.5
         },
         "Luminus SFT60 6500K": {
             "die_length_mm": 2.25,
@@ -510,7 +610,12 @@
             ],
             "output_mode": "advanced",
             "max_lumens": 0.0,
-            "forward_voltage_v": 0.0
+            "forward_voltage_v": 0.0,
+            "die_layout": "monolithic",
+            "die_rows": 1.0,
+            "die_columns": 1.0,
+            "die_gap_mm": 0.1,
+            "die_gap_output": 0.5
         },
         "Luminus SFT70 3000K": {
             "die_length_mm": 2.38,
@@ -528,7 +633,12 @@
             "refractive_index": 1.0,
             "output_mode": "advanced",
             "max_lumens": 0.0,
-            "forward_voltage_v": 0.0
+            "forward_voltage_v": 0.0,
+            "die_layout": "monolithic",
+            "die_rows": 1.0,
+            "die_columns": 1.0,
+            "die_gap_mm": 0.1,
+            "die_gap_output": 0.5
         },
         "Luminus SFT70 6500K": {
             "die_length_mm": 2.38,
@@ -546,7 +656,12 @@
             "refractive_index": 1.0,
             "output_mode": "advanced",
             "max_lumens": 0.0,
-            "forward_voltage_v": 0.0
+            "forward_voltage_v": 0.0,
+            "die_layout": "monolithic",
+            "die_rows": 1.0,
+            "die_columns": 1.0,
+            "die_gap_mm": 0.1,
+            "die_gap_output": 0.5
         },
         "Luminus SFT90 6500K": {
             "die_length_mm": 3.0,
@@ -564,7 +679,12 @@
             "refractive_index": 1.0,
             "output_mode": "advanced",
             "max_lumens": 0.0,
-            "forward_voltage_v": 0.0
+            "forward_voltage_v": 0.0,
+            "die_layout": "monolithic",
+            "die_rows": 1.0,
+            "die_columns": 1.0,
+            "die_gap_mm": 0.1,
+            "die_gap_output": 0.5
         },
         "Lumen Pioneer W5050SQ5 6500K": {
             "die_length_mm": 1.7,
@@ -582,7 +702,12 @@
             "refractive_index": 1.0,
             "output_mode": "advanced",
             "max_lumens": 0.0,
-            "forward_voltage_v": 0.0
+            "forward_voltage_v": 0.0,
+            "die_layout": "monolithic",
+            "die_rows": 1.0,
+            "die_columns": 1.0,
+            "die_gap_mm": 0.1,
+            "die_gap_output": 0.5
         },
         "Cree XHP50.3 HI 4500K": {
             "die_length_mm": 2.95,
@@ -600,7 +725,12 @@
             "refractive_index": 1.0,
             "output_mode": "advanced",
             "max_lumens": 0.0,
-            "forward_voltage_v": 0.0
+            "forward_voltage_v": 0.0,
+            "die_layout": "array",
+            "die_rows": 2.0,
+            "die_columns": 2.0,
+            "die_gap_mm": 0.1,
+            "die_gap_output": 0.5
         },
         "Cree XHP70.3 HI 4000K": {
             "die_length_mm": 4.0,
@@ -618,7 +748,12 @@
             "refractive_index": 1.0,
             "output_mode": "advanced",
             "max_lumens": 0.0,
-            "forward_voltage_v": 0.0
+            "forward_voltage_v": 0.0,
+            "die_layout": "array",
+            "die_rows": 2.0,
+            "die_columns": 2.0,
+            "die_gap_mm": 0.1,
+            "die_gap_output": 0.5
         }
     },
     "reflectors": {
@@ -630,12 +765,18 @@
             "focus_offset_mm": 0.0,
             "reflectivity_smooth": 0.85,
             "reflectivity_op": 0.8,
-            "OP_Factor": 1.0,
             "gasket_reflectivity": 0.0,
             "reflectivity_cylinder": 0.8,
             "transmissivity_lens": 1.0,
             "wall_thickness_mm": 1.0,
-            "surface_finish": "smooth"
+            "surface_finish": "smooth",
+            "lens_finish": "clear",
+            "lens_refractive_index": 1.52,
+            "lens_diffusion_fwhm_deg": 10.0,
+            "surface_roughness_nm": 5.0,
+            "op_dimple_depth_um": 3.0,
+            "op_dimple_pitch_mm": 0.5,
+            "surface_correlation_um": 25.0
         },
         "Convoy S2+/S3/T4": {
             "diameter_mm": 20.0,
@@ -645,12 +786,18 @@
             "focus_offset_mm": 0.0,
             "reflectivity_smooth": 0.85,
             "reflectivity_op": 0.8,
-            "OP_Factor": 1.0,
             "gasket_reflectivity": 0.0,
             "reflectivity_cylinder": 0.8,
             "transmissivity_lens": 1.0,
             "wall_thickness_mm": 1.0,
-            "surface_finish": "smooth"
+            "surface_finish": "smooth",
+            "lens_finish": "clear",
+            "lens_refractive_index": 1.52,
+            "lens_diffusion_fwhm_deg": 10.0,
+            "surface_roughness_nm": 5.0,
+            "op_dimple_depth_um": 3.0,
+            "op_dimple_pitch_mm": 0.5,
+            "surface_correlation_um": 25.0
         },
         "Convoy S2/S6/S8/T6 5mm": {
             "diameter_mm": 21.0,
@@ -660,12 +807,18 @@
             "focus_offset_mm": 0.0,
             "reflectivity_smooth": 0.85,
             "reflectivity_op": 0.8,
-            "OP_Factor": 1.0,
             "gasket_reflectivity": 0.0,
             "reflectivity_cylinder": 0.8,
             "transmissivity_lens": 1.0,
             "wall_thickness_mm": 1.0,
-            "surface_finish": "smooth"
+            "surface_finish": "smooth",
+            "lens_finish": "clear",
+            "lens_refractive_index": 1.52,
+            "lens_diffusion_fwhm_deg": 10.0,
+            "surface_roughness_nm": 5.0,
+            "op_dimple_depth_um": 3.0,
+            "op_dimple_pitch_mm": 0.5,
+            "surface_correlation_um": 25.0
         },
         "Convoy S2/S6/S8/T6 7mm": {
             "diameter_mm": 21.0,
@@ -675,12 +828,18 @@
             "focus_offset_mm": 0.0,
             "reflectivity_smooth": 0.85,
             "reflectivity_op": 0.8,
-            "OP_Factor": 1.0,
             "gasket_reflectivity": 0.0,
             "reflectivity_cylinder": 0.8,
             "transmissivity_lens": 1.0,
             "wall_thickness_mm": 1.0,
-            "surface_finish": "smooth"
+            "surface_finish": "smooth",
+            "lens_finish": "clear",
+            "lens_refractive_index": 1.52,
+            "lens_diffusion_fwhm_deg": 10.0,
+            "surface_roughness_nm": 5.0,
+            "op_dimple_depth_um": 3.0,
+            "op_dimple_pitch_mm": 0.5,
+            "surface_correlation_um": 25.0
         },
         "Convoy S21A/S21B/S21E": {
             "diameter_mm": 23.1,
@@ -690,12 +849,18 @@
             "focus_offset_mm": 0.0,
             "reflectivity_smooth": 0.85,
             "reflectivity_op": 0.8,
-            "OP_Factor": 1.0,
             "gasket_reflectivity": 0.0,
             "reflectivity_cylinder": 0.8,
             "transmissivity_lens": 1.0,
             "wall_thickness_mm": 1.0,
-            "surface_finish": "smooth"
+            "surface_finish": "smooth",
+            "lens_finish": "clear",
+            "lens_refractive_index": 1.52,
+            "lens_diffusion_fwhm_deg": 10.0,
+            "surface_roughness_nm": 5.0,
+            "op_dimple_depth_um": 3.0,
+            "op_dimple_pitch_mm": 0.5,
+            "surface_correlation_um": 25.0
         },
         "Convoy S16": {
             "diameter_mm": 28.0,
@@ -705,12 +870,18 @@
             "focus_offset_mm": 0.0,
             "reflectivity_smooth": 0.85,
             "reflectivity_op": 0.8,
-            "OP_Factor": 1.0,
             "gasket_reflectivity": 0.0,
             "reflectivity_cylinder": 0.8,
             "transmissivity_lens": 1.0,
             "wall_thickness_mm": 1.0,
-            "surface_finish": "smooth"
+            "surface_finish": "smooth",
+            "lens_finish": "clear",
+            "lens_refractive_index": 1.52,
+            "lens_diffusion_fwhm_deg": 10.0,
+            "surface_roughness_nm": 5.0,
+            "op_dimple_depth_um": 3.0,
+            "op_dimple_pitch_mm": 0.5,
+            "surface_correlation_um": 25.0
         },
         "Convoy S11": {
             "diameter_mm": 28.5,
@@ -720,12 +891,18 @@
             "focus_offset_mm": 0.0,
             "reflectivity_smooth": 0.85,
             "reflectivity_op": 0.8,
-            "OP_Factor": 1.0,
             "gasket_reflectivity": 0.0,
             "reflectivity_cylinder": 0.8,
             "transmissivity_lens": 1.0,
             "wall_thickness_mm": 1.0,
-            "surface_finish": "smooth"
+            "surface_finish": "smooth",
+            "lens_finish": "clear",
+            "lens_refractive_index": 1.52,
+            "lens_diffusion_fwhm_deg": 10.0,
+            "surface_roughness_nm": 5.0,
+            "op_dimple_depth_um": 3.0,
+            "op_dimple_pitch_mm": 0.5,
+            "surface_correlation_um": 25.0
         },
         "Convoy M2": {
             "diameter_mm": 28.9,
@@ -735,12 +912,18 @@
             "focus_offset_mm": 0.0,
             "reflectivity_smooth": 0.85,
             "reflectivity_op": 0.8,
-            "OP_Factor": 1.0,
             "gasket_reflectivity": 0.0,
             "reflectivity_cylinder": 0.8,
             "transmissivity_lens": 1.0,
             "wall_thickness_mm": 1.0,
-            "surface_finish": "smooth"
+            "surface_finish": "smooth",
+            "lens_finish": "clear",
+            "lens_refractive_index": 1.52,
+            "lens_diffusion_fwhm_deg": 10.0,
+            "surface_roughness_nm": 5.0,
+            "op_dimple_depth_um": 3.0,
+            "op_dimple_pitch_mm": 0.5,
+            "surface_correlation_um": 25.0
         },
         "Wurkkos TS28": {
             "diameter_mm": 30.5,
@@ -750,12 +933,18 @@
             "focus_offset_mm": 0.0,
             "reflectivity_smooth": 0.85,
             "reflectivity_op": 0.8,
-            "OP_Factor": 1.0,
             "gasket_reflectivity": 0.0,
             "reflectivity_cylinder": 0.8,
             "transmissivity_lens": 1.0,
             "wall_thickness_mm": 1.0,
-            "surface_finish": "smooth"
+            "surface_finish": "smooth",
+            "lens_finish": "clear",
+            "lens_refractive_index": 1.52,
+            "lens_diffusion_fwhm_deg": 10.0,
+            "surface_roughness_nm": 5.0,
+            "op_dimple_depth_um": 3.0,
+            "op_dimple_pitch_mm": 0.5,
+            "surface_correlation_um": 25.0
         },
         "Convoy M1/M21B 7mm": {
             "diameter_mm": 31.8,
@@ -765,12 +954,18 @@
             "focus_offset_mm": 0.0,
             "reflectivity_smooth": 0.85,
             "reflectivity_op": 0.8,
-            "OP_Factor": 1.0,
             "gasket_reflectivity": 0.0,
             "reflectivity_cylinder": 0.8,
             "transmissivity_lens": 1.0,
             "wall_thickness_mm": 1.0,
-            "surface_finish": "smooth"
+            "surface_finish": "smooth",
+            "lens_finish": "clear",
+            "lens_refractive_index": 1.52,
+            "lens_diffusion_fwhm_deg": 10.0,
+            "surface_roughness_nm": 5.0,
+            "op_dimple_depth_um": 3.0,
+            "op_dimple_pitch_mm": 0.5,
+            "surface_correlation_um": 25.0
         },
         "Convoy M1/M21B 10mm": {
             "diameter_mm": 31.8,
@@ -780,12 +975,18 @@
             "focus_offset_mm": 0.0,
             "reflectivity_smooth": 0.85,
             "reflectivity_op": 0.8,
-            "OP_Factor": 1.0,
             "gasket_reflectivity": 0.0,
             "reflectivity_cylinder": 0.8,
             "transmissivity_lens": 1.0,
             "wall_thickness_mm": 1.0,
-            "surface_finish": "orange_peel"
+            "surface_finish": "orange_peel",
+            "lens_finish": "clear",
+            "lens_refractive_index": 1.52,
+            "lens_diffusion_fwhm_deg": 10.0,
+            "surface_roughness_nm": 5.0,
+            "op_dimple_depth_um": 3.0,
+            "op_dimple_pitch_mm": 0.5,
+            "surface_correlation_um": 25.0
         },
         "Convoy M21F": {
             "diameter_mm": 33.1,
@@ -795,12 +996,18 @@
             "focus_offset_mm": 0.0,
             "reflectivity_smooth": 0.85,
             "reflectivity_op": 0.8,
-            "OP_Factor": 1.0,
             "gasket_reflectivity": 0.0,
             "reflectivity_cylinder": 0.8,
             "transmissivity_lens": 1.0,
             "wall_thickness_mm": 1.0,
-            "surface_finish": "smooth"
+            "surface_finish": "smooth",
+            "lens_finish": "clear",
+            "lens_refractive_index": 1.52,
+            "lens_diffusion_fwhm_deg": 10.0,
+            "surface_roughness_nm": 5.0,
+            "op_dimple_depth_um": 3.0,
+            "op_dimple_pitch_mm": 0.5,
+            "surface_correlation_um": 25.0
         },
         "Wurkkos TS23": {
             "diameter_mm": 36.4,
@@ -812,10 +1019,16 @@
             "reflectivity_op": 0.8,
             "reflectivity_cylinder": 0.8,
             "gasket_reflectivity": 0.0,
-            "OP_Factor": 1.0,
             "transmissivity_lens": 1.0,
             "surface_finish": "orange_peel",
-            "wall_thickness_mm": 1.0
+            "wall_thickness_mm": 1.0,
+            "lens_finish": "clear",
+            "lens_refractive_index": 1.52,
+            "lens_diffusion_fwhm_deg": 10.0,
+            "surface_roughness_nm": 5.0,
+            "op_dimple_depth_um": 3.0,
+            "op_dimple_pitch_mm": 0.5,
+            "surface_correlation_um": 25.0
         },
         "Convoy M3": {
             "diameter_mm": 43.9,
@@ -825,12 +1038,18 @@
             "focus_offset_mm": 0.0,
             "reflectivity_smooth": 0.85,
             "reflectivity_op": 0.8,
-            "OP_Factor": 1.0,
             "gasket_reflectivity": 0.0,
             "reflectivity_cylinder": 0.8,
             "transmissivity_lens": 1.0,
             "wall_thickness_mm": 1.0,
-            "surface_finish": "smooth"
+            "surface_finish": "smooth",
+            "lens_finish": "clear",
+            "lens_refractive_index": 1.52,
+            "lens_diffusion_fwhm_deg": 10.0,
+            "surface_roughness_nm": 5.0,
+            "op_dimple_depth_um": 3.0,
+            "op_dimple_pitch_mm": 0.5,
+            "surface_correlation_um": 25.0
         },
         "Convoy M21C/M21D/M21G/M26C 9mm": {
             "diameter_mm": 45.9,
@@ -840,12 +1059,18 @@
             "focus_offset_mm": 0.0,
             "reflectivity_smooth": 0.85,
             "reflectivity_op": 0.8,
-            "OP_Factor": 1.0,
             "gasket_reflectivity": 0.0,
             "reflectivity_cylinder": 0.8,
             "transmissivity_lens": 1.0,
             "wall_thickness_mm": 1.0,
-            "surface_finish": "smooth"
+            "surface_finish": "smooth",
+            "lens_finish": "clear",
+            "lens_refractive_index": 1.52,
+            "lens_diffusion_fwhm_deg": 10.0,
+            "surface_roughness_nm": 5.0,
+            "op_dimple_depth_um": 3.0,
+            "op_dimple_pitch_mm": 0.5,
+            "surface_correlation_um": 25.0
         },
         "Convoy M21C/M21D/M21G/M26C 11mm": {
             "diameter_mm": 45.9,
@@ -855,16 +1080,22 @@
             "focus_offset_mm": 0.0,
             "reflectivity_smooth": 0.85,
             "reflectivity_op": 0.8,
-            "OP_Factor": 1.0,
             "gasket_reflectivity": 0.0,
             "reflectivity_cylinder": 0.8,
             "transmissivity_lens": 1.0,
             "wall_thickness_mm": 1.0,
-            "surface_finish": "orange_peel"
+            "surface_finish": "orange_peel",
+            "lens_finish": "clear",
+            "lens_refractive_index": 1.52,
+            "lens_diffusion_fwhm_deg": 10.0,
+            "surface_roughness_nm": 5.0,
+            "op_dimple_depth_um": 3.0,
+            "op_dimple_pitch_mm": 0.5,
+            "surface_correlation_um": 25.0
         },
         "Noctigon KR1/D1": {
             "diameter_mm": 30.5,
-            "height_mm": 20.4,
+            "height_mm": 20.5,
             "opening_diameter_mm": 7.0,
             "focus_offset_mm": 0.0,
             "thickness_height_mm": 0.5,
@@ -872,10 +1103,16 @@
             "reflectivity_op": 0.8,
             "reflectivity_cylinder": 0.8,
             "gasket_reflectivity": 0.0,
-            "OP_Factor": 1.0,
             "transmissivity_lens": 1.0,
             "surface_finish": "orange_peel",
-            "wall_thickness_mm": 1.0
+            "wall_thickness_mm": 1.0,
+            "lens_finish": "clear",
+            "lens_refractive_index": 1.52,
+            "lens_diffusion_fwhm_deg": 10.0,
+            "surface_roughness_nm": 5.0,
+            "op_dimple_depth_um": 3.0,
+            "op_dimple_pitch_mm": 0.5,
+            "surface_correlation_um": 25.0
         },
         "Convoy 3x21D": {
             "diameter_mm": 85.5,
@@ -887,10 +1124,16 @@
             "reflectivity_op": 0.8,
             "reflectivity_cylinder": 0.8,
             "gasket_reflectivity": 0.0,
-            "OP_Factor": 1.0,
             "transmissivity_lens": 1.0,
             "surface_finish": "smooth",
-            "wall_thickness_mm": 1.0
+            "wall_thickness_mm": 1.0,
+            "lens_finish": "clear",
+            "lens_refractive_index": 1.52,
+            "lens_diffusion_fwhm_deg": 10.0,
+            "surface_roughness_nm": 5.0,
+            "op_dimple_depth_um": 3.0,
+            "op_dimple_pitch_mm": 0.5,
+            "surface_correlation_um": 25.0
         },
         "Convoy 4x18": {
             "diameter_mm": 85.5,
@@ -902,10 +1145,16 @@
             "reflectivity_op": 0.8,
             "reflectivity_cylinder": 0.8,
             "gasket_reflectivity": 0.0,
-            "OP_Factor": 1.0,
             "transmissivity_lens": 1.0,
             "surface_finish": "smooth",
-            "wall_thickness_mm": 1.0
+            "wall_thickness_mm": 1.0,
+            "lens_finish": "clear",
+            "lens_refractive_index": 1.52,
+            "lens_diffusion_fwhm_deg": 10.0,
+            "surface_roughness_nm": 5.0,
+            "op_dimple_depth_um": 3.0,
+            "op_dimple_pitch_mm": 0.5,
+            "surface_correlation_um": 25.0
         },
         "Convoy C8/M21A/M21E": {
             "diameter_mm": 42.0,
@@ -917,10 +1166,16 @@
             "reflectivity_op": 0.8,
             "reflectivity_cylinder": 0.8,
             "gasket_reflectivity": 0.0,
-            "OP_Factor": 1.0,
             "transmissivity_lens": 1.0,
             "surface_finish": "smooth",
-            "wall_thickness_mm": 1.0
+            "wall_thickness_mm": 1.0,
+            "lens_finish": "clear",
+            "lens_refractive_index": 1.52,
+            "lens_diffusion_fwhm_deg": 10.0,
+            "surface_roughness_nm": 5.0,
+            "op_dimple_depth_um": 3.0,
+            "op_dimple_pitch_mm": 0.5,
+            "surface_correlation_um": 25.0
         },
         "Sofirn C8L": {
             "diameter_mm": 43.6,
@@ -932,10 +1187,16 @@
             "reflectivity_op": 0.8,
             "reflectivity_cylinder": 0.8,
             "gasket_reflectivity": 0.0,
-            "OP_Factor": 1.0,
             "transmissivity_lens": 1.0,
             "surface_finish": "orange_peel",
-            "wall_thickness_mm": 1.0
+            "wall_thickness_mm": 1.0,
+            "lens_finish": "clear",
+            "lens_refractive_index": 1.52,
+            "lens_diffusion_fwhm_deg": 10.0,
+            "surface_roughness_nm": 5.0,
+            "op_dimple_depth_um": 3.0,
+            "op_dimple_pitch_mm": 0.5,
+            "surface_correlation_um": 25.0
         },
         "Wurkkos FC11C": {
             "diameter_mm": 20.0,
@@ -947,10 +1208,16 @@
             "reflectivity_op": 0.8,
             "reflectivity_cylinder": 0.8,
             "gasket_reflectivity": 0.0,
-            "OP_Factor": 1.0,
             "transmissivity_lens": 1.0,
             "surface_finish": "orange_peel",
-            "wall_thickness_mm": 1.0
+            "wall_thickness_mm": 1.0,
+            "lens_finish": "clear",
+            "lens_refractive_index": 1.52,
+            "lens_diffusion_fwhm_deg": 10.0,
+            "surface_roughness_nm": 5.0,
+            "op_dimple_depth_um": 3.0,
+            "op_dimple_pitch_mm": 0.5,
+            "surface_correlation_um": 25.0
         },
         "Convoy L21A/L21B 11mm": {
             "diameter_mm": 58.0,
@@ -962,10 +1229,16 @@
             "reflectivity_op": 0.8,
             "reflectivity_cylinder": 0.8,
             "gasket_reflectivity": 0.0,
-            "OP_Factor": 1.0,
             "transmissivity_lens": 1.0,
             "surface_finish": "orange_peel",
-            "wall_thickness_mm": 1.0
+            "wall_thickness_mm": 1.0,
+            "lens_finish": "clear",
+            "lens_refractive_index": 1.52,
+            "lens_diffusion_fwhm_deg": 10.0,
+            "surface_roughness_nm": 5.0,
+            "op_dimple_depth_um": 3.0,
+            "op_dimple_pitch_mm": 0.5,
+            "surface_correlation_um": 25.0
         },
         "Convoy L21A/L21B 9mm": {
             "diameter_mm": 58.0,
@@ -977,10 +1250,16 @@
             "reflectivity_op": 0.8,
             "reflectivity_cylinder": 0.8,
             "gasket_reflectivity": 0.0,
-            "OP_Factor": 1.0,
             "transmissivity_lens": 1.0,
             "surface_finish": "smooth",
-            "wall_thickness_mm": 1.0
+            "wall_thickness_mm": 1.0,
+            "lens_finish": "clear",
+            "lens_refractive_index": 1.52,
+            "lens_diffusion_fwhm_deg": 10.0,
+            "surface_roughness_nm": 5.0,
+            "op_dimple_depth_um": 3.0,
+            "op_dimple_pitch_mm": 0.5,
+            "surface_correlation_um": 25.0
         },
         "Convoy L6": {
             "diameter_mm": 67.6,
@@ -992,10 +1271,16 @@
             "reflectivity_op": 0.8,
             "reflectivity_cylinder": 0.8,
             "gasket_reflectivity": 0.0,
-            "OP_Factor": 1.1,
             "transmissivity_lens": 1.0,
             "surface_finish": "orange_peel",
-            "wall_thickness_mm": 1.0
+            "wall_thickness_mm": 1.0,
+            "lens_finish": "clear",
+            "lens_refractive_index": 1.52,
+            "lens_diffusion_fwhm_deg": 10.0,
+            "surface_roughness_nm": 5.0,
+            "op_dimple_depth_um": 3.0,
+            "op_dimple_pitch_mm": 0.5,
+            "surface_correlation_um": 25.0
         },
         "Convoy L7": {
             "diameter_mm": 67.6,
@@ -1007,14 +1292,20 @@
             "reflectivity_op": 0.8,
             "reflectivity_cylinder": 0.8,
             "gasket_reflectivity": 0.0,
-            "OP_Factor": 1.1,
             "transmissivity_lens": 1.0,
             "surface_finish": "smooth",
-            "wall_thickness_mm": 1.0
+            "wall_thickness_mm": 1.0,
+            "lens_finish": "clear",
+            "lens_refractive_index": 1.52,
+            "lens_diffusion_fwhm_deg": 10.0,
+            "surface_roughness_nm": 5.0,
+            "op_dimple_depth_um": 3.0,
+            "op_dimple_pitch_mm": 0.5,
+            "surface_correlation_um": 25.0
         },
         "Noctigon K1": {
-            "diameter_mm": 64.9,
-            "height_mm": 60.0,
+            "diameter_mm": 65.0,
+            "height_mm": 60.5,
             "opening_diameter_mm": 15.9,
             "focus_offset_mm": 0.0,
             "thickness_height_mm": 1.0,
@@ -1022,10 +1313,16 @@
             "reflectivity_op": 0.8,
             "reflectivity_cylinder": 0.8,
             "gasket_reflectivity": 0.0,
-            "OP_Factor": 1.0,
             "transmissivity_lens": 1.0,
             "surface_finish": "smooth",
-            "wall_thickness_mm": 1.0
+            "wall_thickness_mm": 1.0,
+            "lens_finish": "clear",
+            "lens_refractive_index": 1.52,
+            "lens_diffusion_fwhm_deg": 10.0,
+            "surface_roughness_nm": 5.0,
+            "op_dimple_depth_um": 3.0,
+            "op_dimple_pitch_mm": 0.5,
+            "surface_correlation_um": 25.0
         },
         "Sofirn SP60": {
             "diameter_mm": 65.7,
@@ -1037,10 +1334,16 @@
             "reflectivity_op": 0.8,
             "reflectivity_cylinder": 0.8,
             "gasket_reflectivity": 0.0,
-            "OP_Factor": 1.0,
             "transmissivity_lens": 1.0,
             "surface_finish": "orange_peel",
-            "wall_thickness_mm": 1.0
+            "wall_thickness_mm": 1.0,
+            "lens_finish": "clear",
+            "lens_refractive_index": 1.52,
+            "lens_diffusion_fwhm_deg": 10.0,
+            "surface_roughness_nm": 5.0,
+            "op_dimple_depth_um": 3.0,
+            "op_dimple_pitch_mm": 0.5,
+            "surface_correlation_um": 25.0
         },
         "Sofirn SC33": {
             "diameter_mm": 28.8,
@@ -1052,10 +1355,16 @@
             "reflectivity_op": 0.8,
             "reflectivity_cylinder": 0.8,
             "gasket_reflectivity": 0.0,
-            "OP_Factor": 1.0,
             "transmissivity_lens": 1.0,
             "surface_finish": "orange_peel",
-            "wall_thickness_mm": 1.0
+            "wall_thickness_mm": 1.0,
+            "lens_finish": "clear",
+            "lens_refractive_index": 1.52,
+            "lens_diffusion_fwhm_deg": 10.0,
+            "surface_roughness_nm": 5.0,
+            "op_dimple_depth_um": 3.0,
+            "op_dimple_pitch_mm": 0.5,
+            "surface_correlation_um": 25.0
         },
         "Skilhunt M200 V4": {
             "diameter_mm": 17.6,
@@ -1067,10 +1376,16 @@
             "reflectivity_op": 0.8,
             "reflectivity_cylinder": 0.8,
             "gasket_reflectivity": 0.0,
-            "OP_Factor": 1.0,
             "transmissivity_lens": 1.0,
             "surface_finish": "orange_peel",
-            "wall_thickness_mm": 1.0
+            "wall_thickness_mm": 1.0,
+            "lens_finish": "clear",
+            "lens_refractive_index": 1.52,
+            "lens_diffusion_fwhm_deg": 10.0,
+            "surface_roughness_nm": 5.0,
+            "op_dimple_depth_um": 3.0,
+            "op_dimple_pitch_mm": 0.5,
+            "surface_correlation_um": 25.0
         },
         "Skilhunt M300 V2": {
             "diameter_mm": 24.0,
@@ -1082,10 +1397,16 @@
             "reflectivity_op": 0.8,
             "reflectivity_cylinder": 0.8,
             "gasket_reflectivity": 0.0,
-            "OP_Factor": 1.0,
             "transmissivity_lens": 1.0,
             "surface_finish": "orange_peel",
-            "wall_thickness_mm": 1.0
+            "wall_thickness_mm": 1.0,
+            "lens_finish": "clear",
+            "lens_refractive_index": 1.52,
+            "lens_diffusion_fwhm_deg": 10.0,
+            "surface_roughness_nm": 5.0,
+            "op_dimple_depth_um": 3.0,
+            "op_dimple_pitch_mm": 0.5,
+            "surface_correlation_um": 25.0
         },
         "Olight Seeker 4": {
             "diameter_mm": 29.6,
@@ -1097,10 +1418,16 @@
             "reflectivity_op": 0.8,
             "reflectivity_cylinder": 0.8,
             "gasket_reflectivity": 0.0,
-            "OP_Factor": 1.0,
             "transmissivity_lens": 1.0,
             "surface_finish": "smooth",
-            "wall_thickness_mm": 1.0
+            "wall_thickness_mm": 1.0,
+            "lens_finish": "clear",
+            "lens_refractive_index": 1.52,
+            "lens_diffusion_fwhm_deg": 10.0,
+            "surface_roughness_nm": 5.0,
+            "op_dimple_depth_um": 3.0,
+            "op_dimple_pitch_mm": 0.5,
+            "surface_correlation_um": 25.0
         },
         "Olight Baton Turbo": {
             "diameter_mm": 24.9,
@@ -1112,10 +1439,16 @@
             "reflectivity_op": 0.8,
             "reflectivity_cylinder": 0.8,
             "gasket_reflectivity": 0.0,
-            "OP_Factor": 1.0,
             "transmissivity_lens": 1.0,
             "surface_finish": "smooth",
-            "wall_thickness_mm": 1.0
+            "wall_thickness_mm": 1.0,
+            "lens_finish": "clear",
+            "lens_refractive_index": 1.52,
+            "lens_diffusion_fwhm_deg": 10.0,
+            "surface_roughness_nm": 5.0,
+            "op_dimple_depth_um": 3.0,
+            "op_dimple_pitch_mm": 0.5,
+            "surface_correlation_um": 25.0
         },
         "Olight Javelot": {
             "diameter_mm": 34.5,
@@ -1127,10 +1460,16 @@
             "reflectivity_op": 0.8,
             "reflectivity_cylinder": 0.8,
             "gasket_reflectivity": 0.0,
-            "OP_Factor": 1.0,
             "transmissivity_lens": 1.0,
             "surface_finish": "smooth",
-            "wall_thickness_mm": 1.0
+            "wall_thickness_mm": 1.0,
+            "lens_finish": "clear",
+            "lens_refractive_index": 1.52,
+            "lens_diffusion_fwhm_deg": 10.0,
+            "surface_roughness_nm": 5.0,
+            "op_dimple_depth_um": 3.0,
+            "op_dimple_pitch_mm": 0.5,
+            "surface_correlation_um": 25.0
         },
         "Olight Warrior X4": {
             "diameter_mm": 34.9,
@@ -1142,10 +1481,16 @@
             "reflectivity_op": 0.8,
             "reflectivity_cylinder": 0.8,
             "gasket_reflectivity": 0.0,
-            "OP_Factor": 1.0,
             "transmissivity_lens": 1.0,
             "surface_finish": "smooth",
-            "wall_thickness_mm": 1.0
+            "wall_thickness_mm": 1.0,
+            "lens_finish": "clear",
+            "lens_refractive_index": 1.52,
+            "lens_diffusion_fwhm_deg": 10.0,
+            "surface_roughness_nm": 5.0,
+            "op_dimple_depth_um": 3.0,
+            "op_dimple_pitch_mm": 0.5,
+            "surface_correlation_um": 25.0
         },
         "Olight Warrior X3": {
             "diameter_mm": 33.0,
@@ -1157,10 +1502,16 @@
             "reflectivity_op": 0.8,
             "reflectivity_cylinder": 0.8,
             "gasket_reflectivity": 0.0,
-            "OP_Factor": 1.0,
             "transmissivity_lens": 1.0,
             "surface_finish": "smooth",
-            "wall_thickness_mm": 1.0
+            "wall_thickness_mm": 1.0,
+            "lens_finish": "clear",
+            "lens_refractive_index": 1.52,
+            "lens_diffusion_fwhm_deg": 10.0,
+            "surface_roughness_nm": 5.0,
+            "op_dimple_depth_um": 3.0,
+            "op_dimple_pitch_mm": 0.5,
+            "surface_correlation_um": 25.0
         },
         "Armytek Prime C2 Pro Max": {
             "diameter_mm": 35.8,
@@ -1172,10 +1523,16 @@
             "reflectivity_op": 0.8,
             "reflectivity_cylinder": 0.8,
             "gasket_reflectivity": 0.0,
-            "OP_Factor": 1.0,
             "transmissivity_lens": 1.0,
             "surface_finish": "smooth",
-            "wall_thickness_mm": 1.0
+            "wall_thickness_mm": 1.0,
+            "lens_finish": "clear",
+            "lens_refractive_index": 1.52,
+            "lens_diffusion_fwhm_deg": 10.0,
+            "surface_roughness_nm": 5.0,
+            "op_dimple_depth_um": 3.0,
+            "op_dimple_pitch_mm": 0.5,
+            "surface_correlation_um": 25.0
         },
         "Jetbeam M37 Pro": {
             "diameter_mm": 33.0,
@@ -1187,10 +1544,16 @@
             "reflectivity_op": 0.8,
             "reflectivity_cylinder": 0.8,
             "gasket_reflectivity": 0.0,
-            "OP_Factor": 1.0,
             "transmissivity_lens": 1.0,
             "surface_finish": "smooth",
-            "wall_thickness_mm": 1.0
+            "wall_thickness_mm": 1.0,
+            "lens_finish": "clear",
+            "lens_refractive_index": 1.52,
+            "lens_diffusion_fwhm_deg": 10.0,
+            "surface_roughness_nm": 5.0,
+            "op_dimple_depth_um": 3.0,
+            "op_dimple_pitch_mm": 0.5,
+            "surface_correlation_um": 25.0
         },
         "Nitecore EDC33": {
             "diameter_mm": 22.7,
@@ -1202,10 +1565,16 @@
             "reflectivity_op": 0.8,
             "reflectivity_cylinder": 0.8,
             "gasket_reflectivity": 0.0,
-            "OP_Factor": 1.0,
             "transmissivity_lens": 1.0,
             "surface_finish": "orange_peel",
-            "wall_thickness_mm": 1.0
+            "wall_thickness_mm": 1.0,
+            "lens_finish": "clear",
+            "lens_refractive_index": 1.52,
+            "lens_diffusion_fwhm_deg": 10.0,
+            "surface_roughness_nm": 5.0,
+            "op_dimple_depth_um": 3.0,
+            "op_dimple_pitch_mm": 0.5,
+            "surface_correlation_um": 25.0
         },
         "Nitecore EDC35": {
             "diameter_mm": 26.7,
@@ -1217,10 +1586,16 @@
             "reflectivity_op": 0.8,
             "reflectivity_cylinder": 0.8,
             "gasket_reflectivity": 0.0,
-            "OP_Factor": 1.0,
             "transmissivity_lens": 1.0,
             "surface_finish": "orange_peel",
-            "wall_thickness_mm": 1.0
+            "wall_thickness_mm": 1.0,
+            "lens_finish": "clear",
+            "lens_refractive_index": 1.52,
+            "lens_diffusion_fwhm_deg": 10.0,
+            "surface_roughness_nm": 5.0,
+            "op_dimple_depth_um": 3.0,
+            "op_dimple_pitch_mm": 0.5,
+            "surface_correlation_um": 25.0
         },
         "Thrunite Catapult Pro": {
             "diameter_mm": 58.9,
@@ -1232,10 +1607,16 @@
             "reflectivity_op": 0.8,
             "reflectivity_cylinder": 0.8,
             "gasket_reflectivity": 0.0,
-            "OP_Factor": 1.0,
             "transmissivity_lens": 1.0,
             "surface_finish": "smooth",
-            "wall_thickness_mm": 1.0
+            "wall_thickness_mm": 1.0,
+            "lens_finish": "clear",
+            "lens_refractive_index": 1.52,
+            "lens_diffusion_fwhm_deg": 10.0,
+            "surface_roughness_nm": 5.0,
+            "op_dimple_depth_um": 3.0,
+            "op_dimple_pitch_mm": 0.5,
+            "surface_correlation_um": 25.0
         },
         "Thrunite TC20 V2": {
             "diameter_mm": 35.1,
@@ -1247,10 +1628,16 @@
             "reflectivity_op": 0.8,
             "reflectivity_cylinder": 0.8,
             "gasket_reflectivity": 0.0,
-            "OP_Factor": 1.0,
             "transmissivity_lens": 1.0,
             "surface_finish": "orange_peel",
-            "wall_thickness_mm": 1.0
+            "wall_thickness_mm": 1.0,
+            "lens_finish": "clear",
+            "lens_refractive_index": 1.52,
+            "lens_diffusion_fwhm_deg": 10.0,
+            "surface_roughness_nm": 5.0,
+            "op_dimple_depth_um": 3.0,
+            "op_dimple_pitch_mm": 0.5,
+            "surface_correlation_um": 25.0
         },
         "Wildtrail WT90": {
             "diameter_mm": 91.5,
@@ -1262,10 +1649,16 @@
             "reflectivity_op": 0.8,
             "reflectivity_cylinder": 0.8,
             "gasket_reflectivity": 0.0,
-            "OP_Factor": 1.0,
             "transmissivity_lens": 1.0,
             "surface_finish": "smooth",
-            "wall_thickness_mm": 1.0
+            "wall_thickness_mm": 1.0,
+            "lens_finish": "clear",
+            "lens_refractive_index": 1.52,
+            "lens_diffusion_fwhm_deg": 10.0,
+            "surface_roughness_nm": 5.0,
+            "op_dimple_depth_um": 3.0,
+            "op_dimple_pitch_mm": 0.5,
+            "surface_correlation_um": 25.0
         }
     },
     "gaskets": {
@@ -1412,6 +1805,14 @@
             "wall_shape": "round",
             "thickness_mm": 0.7,
             "total_height_mm": 1.2
+        },
+        "None": {
+            "outer_diameter_mm": 10.0,
+            "inner_diameter_mm": 10.0,
+            "emitter_size_mm": 10.0,
+            "wall_shape": "round",
+            "thickness_mm": 0.0,
+            "total_height_mm": 0.0
         }
     }
 }

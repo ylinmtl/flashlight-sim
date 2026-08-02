@@ -11,7 +11,7 @@ from typing import NamedTuple, Optional
 import numpy as np
 
 from .config import SimulationConfig
-from .hardware import DIE_SHAPES, spec_or_default
+from .hardware import DIE_SHAPES, LENS_FINISHES, spec_or_default
 
 
 # Probes per axis used to work out how much of a boundary cell lies on the die.
@@ -19,6 +19,15 @@ from .hardware import DIE_SHAPES, spec_or_default
 # circle or a chamfered die within about 0.2% of its true value. The cost is a
 # few milliseconds once per simulation, so accuracy is worth more than speed
 # here. Raising it further converges roughly in proportion to 1 / probes.
+# Full width at half maximum of a Gaussian, in standard deviations. Lens
+# diffusion is quoted as a beam width because that is what a datasheet
+# prints, but the maths wants a standard deviation.
+FWHM_PER_SIGMA = 2.354820045
+
+# RMS slope of a sinusoidal texture is 2*pi*amplitude/(period*sqrt(2)), and
+# the dimple depth quoted is peak to valley, so twice the amplitude.
+DIMPLE_SLOPE_PER_ASPECT = 2.2214
+
 DIE_SUBSAMPLES = 8
 
 
@@ -177,6 +186,56 @@ class EmitterOffset(NamedTuple):
 NO_EMITTER_OFFSET = EmitterOffset()
 
 
+def _surface_scatter_sigma(reflector: dict, finish: str,
+                           config: "SimulationConfig") -> float:
+    """How much the bowl scatters a reflected ray, as a standard deviation.
+
+    Two textures, both described by their physical size rather than by the
+    blur they happen to produce:
+
+    * Microroughness, tens of nanometres high, left by polishing or moulding
+      the substrate. The coating follows it, so the coating's own smoothness
+      is beside the point. This is what a smooth reflector has.
+    * Orange peel, micrometres deep and spaced in tenths of a millimetre,
+      put there on purpose to soften the beam.
+
+    A reflector is one or the other, never both, so only the texture that
+    belongs to the chosen finish is read. Both are converted the same way: a
+    surface tilted by an angle turns a reflected ray by twice that angle, and
+    what sets the tilt is not height on its own but height against the
+    distance over which it varies. The same bumps spread further apart are
+    gentler.
+
+    Args:
+        reflector: Reflector specs.
+        finish: "smooth" or "orange_peel". The dimples only exist on the latter.
+        config: Active configuration.
+
+    Returns:
+        Standard deviation of the scattering, in radians. Zero disables the
+        scattering entirely, which is worth doing: it is applied per ray per
+        bounce, and skipping it is a measurable saving.
+    """
+    slope_squared = 0.0
+    if finish == "smooth":
+        height_m = spec_or_default(reflector, "reflector",
+                                   "surface_roughness_nm", config) * 1e-9
+        correlation_m = spec_or_default(reflector, "reflector",
+                                        "surface_correlation_um", config) * 1e-6
+        if correlation_m > 0.0:
+            slope_squared = (math.sqrt(2.0) * height_m / correlation_m) ** 2
+
+    if finish == "orange_peel":
+        pitch_m = spec_or_default(reflector, "reflector",
+                                  "op_dimple_pitch_mm", config) * 1e-3
+        depth_m = spec_or_default(reflector, "reflector",
+                                  "op_dimple_depth_um", config) * 1e-6
+        if pitch_m > 0.0:
+            slope_squared += (DIMPLE_SLOPE_PER_ASPECT * depth_m / pitch_m) ** 2
+
+    return 2.0 * math.sqrt(slope_squared)
+
+
 def get_sim_geometry(reflector: dict, emitter: dict, gasket: dict, finish: str,
                      config: SimulationConfig,
                      emitter_offset: EmitterOffset = NO_EMITTER_OFFSET) -> dict:
@@ -198,7 +257,7 @@ def get_sim_geometry(reflector: dict, emitter: dict, gasket: dict, finish: str,
 
     Returns:
         A dict of scalars consumed by the tracing kernels, plus three values
-        used for reporting: effective_d_hole, focus_delta and op_multiplier.
+        used for reporting: effective_d_hole and focus_delta.
     """
     # Inner diameter of the reflective surface. The spec is one wall, so it
     # comes off the diameter twice, once on each side.
@@ -290,12 +349,19 @@ def get_sim_geometry(reflector: dict, emitter: dict, gasket: dict, finish: str,
         # Fraction of flux surviving the lens.
         "transmissivity_lens": spec_or_default(
             reflector, "reflector", "transmissivity_lens", config),
+        "scatter_sigma_rad": _surface_scatter_sigma(reflector, finish, config),
+        "lens_finish_code": LENS_FINISHES.index(
+            spec_or_default(reflector, "reflector", "lens_finish", config)),
+        "lens_diffusion_rad": math.radians(spec_or_default(
+            reflector, "reflector", "lens_diffusion_fwhm_deg",
+            config)) / FWHM_PER_SIGMA,
+        "lens_index": spec_or_default(
+            reflector, "reflector", "lens_refractive_index", config),
         "emitter_offset_x": emitter_offset.x_mm,
         "emitter_offset_y": emitter_offset.y_mm,
         # Reported, not traced:
         "effective_d_hole": effective_d_hole,
         "focus_delta": ez_base - focal_length,
-        "op_multiplier": spec_or_default(reflector, "reflector", "OP_Factor", config),
     }
 
 
@@ -435,9 +501,174 @@ def _cell_coverage(x_lo, x_hi, y_lo, y_hi, inside_test, subsamples: int):
                           len(x_lo), subsamples).mean(axis=(1, 3))
 
 
+def die_array_layout(emitter: dict, config: "SimulationConfig"):
+    """Works out the grid of dies an emitter is made of.
+
+    A monolithic emitter is treated as a one by one array with no gap, so the
+    same code path serves both and there is nothing special to remember.
+
+    Args:
+        emitter: Emitter specs.
+        config: Active configuration.
+
+    Returns:
+        (rows, columns, gap_mm, gap_output). gap_output is how brightly the
+        phosphor between the dies emits, relative to a die itself.
+    """
+    layout = spec_or_default(emitter, "emitter", "die_layout", config)
+    if layout != "array":
+        return 1, 1, 0.0, 0.0
+
+    rows = max(1, int(round(float(spec_or_default(
+        emitter, "emitter", "die_rows", config)))))
+    columns = max(1, int(round(float(spec_or_default(
+        emitter, "emitter", "die_columns", config)))))
+    gap = max(0.0, float(spec_or_default(emitter, "emitter", "die_gap_mm", config)))
+    output = min(1.0, max(0.0, float(spec_or_default(
+        emitter, "emitter", "die_gap_output", config))))
+    return rows, columns, gap, output
+
+
+def die_array_extent(emitter: dict, config: "SimulationConfig"):
+    """Overall size of the emitting area, dies and gaps together.
+
+    This is simply what the specs say. Die Length and Width describe the whole
+    emitting surface whether it is one die or a grid of them, so splitting an
+    emitter into an array never changes how much of the package it covers: the
+    same area is divided up, not multiplied.
+
+    Args:
+        emitter: Emitter specs.
+        config: Active configuration.
+
+    Returns:
+        (length_mm, width_mm) across the whole emitting area.
+    """
+    length = float(emitter["die_length_mm"])
+
+    # A round die is defined by one dimension, so its width follows its length
+    # whatever die_width_mm happens to say.
+    if spec_or_default(emitter, "emitter", "shape", config) == "round":
+        return length, length
+    return length, float(emitter.get("die_width_mm", length))
+
+
+def die_cell_size(emitter: dict, shape: str, config: "SimulationConfig"):
+    """Size of one die, once the gaps have taken their share of the total.
+
+    Laying n dies across a span T with n-1 gaps of g between them leaves each
+    die (T - (n-1)g) / n. A monolithic emitter is a one by one array with no
+    gap, so it comes back with the full span and needs no special case.
+
+    Round dies have to stay circular, so when the rows and columns divide the
+    span differently the smaller of the two is used and the array sits inside
+    the specified size rather than overflowing one way.
+
+    Args:
+        emitter: Emitter specs.
+        shape: Die shape, already resolved against the settings default.
+        config: Active configuration.
+
+    Returns:
+        (length_mm, width_mm) of a single die, never below zero.
+    """
+    rows, columns, gap, _ = die_array_layout(emitter, config)
+    total_length, total_width = die_array_extent(emitter, config)
+
+    length = max(0.0, (total_length - (columns - 1) * gap) / columns)
+    width = max(0.0, (total_width - (rows - 1) * gap) / rows)
+
+    if shape == "round":
+        length = width = min(length, width)
+    return length, width
+
+
+def die_centres(count: int, cell: float, gap: float) -> np.ndarray:
+    """Where each die sits along one axis, measured from the array's middle.
+
+    The block of dies is centred on the emitter. That matters when the dies do
+    not fill the span they are given, which happens to a round array whose rows
+    and columns divide the total differently: the dies take the smaller size to
+    stay circular, and the block is then centred in what is left.
+
+    Args:
+        count: How many dies lie along this axis.
+        cell: One die's size along it.
+        gap: Space between neighbouring dies.
+
+    Returns:
+        The centre of each die, in millimetres from the middle.
+    """
+    used = count * cell + (count - 1) * gap
+    return -used / 2.0 + cell / 2.0 + np.arange(count) * (cell + gap)
+
+
+def _array_offset(probe, centres):
+    """Distance from each probe to the nearest die centre on one axis.
+
+    Measured against the real centres rather than by folding the coordinate
+    into a repeating pitch. Folding assumes the dies fill the span exactly, and
+    invents extra rows the moment they do not.
+
+    Args:
+        probe: Coordinates in millimetres.
+        centres: Die centres along this axis.
+
+    Returns:
+        Distance from the nearest centre, matching the probe's shape.
+    """
+    if len(centres) == 1:
+        return np.abs(probe - centres[0])
+    return np.min(np.abs(probe[..., None] - centres[None, :]), axis=-1)
+
+
+def _array_die_test(emitter: dict, shape: str, config: "SimulationConfig"):
+    """Builds a test for whether a point lies on a die rather than a gap.
+
+    The dies keep their own shape: an array of round dies is a grid of
+    circles, not one large circle carved into a grid. Each probe is folded
+    back to its nearest die centre and then judged against a single die.
+
+    Args:
+        emitter: Emitter specs.
+        shape: Die shape, already resolved against the settings default.
+        config: Active configuration.
+
+    Returns:
+        A function of (x, y) returning True on a die, or None when the
+        emitter is monolithic and there are no gaps to find.
+    """
+    rows, columns, gap, _ = die_array_layout(emitter, config)
+    if rows == 1 and columns == 1:
+        return None
+
+    die_length, die_width = die_cell_size(emitter, shape, config)
+    total_length, total_width = die_array_extent(emitter, config)
+    across = die_centres(columns, die_length, gap)
+    down = die_centres(rows, die_width, gap)
+
+    def on_die(probe_x, probe_y):
+        """True where a probe lies on one of the dies."""
+        # Folding wraps, so a probe beyond the block would come back round
+        # onto a die that is not there. Nothing outside the array counts.
+        inside = ((np.abs(probe_x) <= total_length / 2.0 + 1e-12)
+                  & (np.abs(probe_y) <= total_width / 2.0 + 1e-12))
+
+        from_x = _array_offset(probe_x, across)
+        from_y = _array_offset(probe_y, down)
+        if shape == "round":
+            radius = die_length / 2.0
+            return inside & (from_x ** 2 + from_y ** 2 <= radius ** 2 + 1e-12)
+        return inside & ((from_x <= die_length / 2.0 + 1e-12)
+                         & (from_y <= die_width / 2.0 + 1e-12))
+
+    return on_die
+
+
 def _build_emitter_elements(emitter: dict, elements_per_side: int, shape: str,
                             outline: Optional[np.ndarray] = None,
-                            subsamples: int = DIE_SUBSAMPLES):
+                            subsamples: int = DIE_SUBSAMPLES,
+                            config: "SimulationConfig" = None):
     """Subdivides the light emitting surface into area weighted point sources.
 
     The die's bounding box is covered with a grid of sample points, the
@@ -477,19 +708,30 @@ def _build_emitter_elements(emitter: dict, elements_per_side: int, shape: str,
             """True where a probe lies on the polygon die."""
             return _points_in_polygon(probe_x, probe_y, outline, tolerance)
     else:
-        die_length = emitter["die_length_mm"]
-        die_width = die_length if shape == "round" else emitter["die_width_mm"]
+        # An array spans every die and the gaps between them, so the grid
+        # has to cover the whole block rather than one die.
+        if config is not None:
+            die_length, die_width = die_array_extent(emitter, config)
+        else:
+            die_length = emitter["die_length_mm"]
+            die_width = (die_length if shape == "round"
+                         else emitter["die_width_mm"])
         min_x, max_x = -die_length / 2.0, die_length / 2.0
         min_y, max_y = -die_width / 2.0, die_width / 2.0
 
-        if shape == "round":
+        is_array = (config is not None
+                    and die_array_layout(emitter, config)[:2] != (1, 1))
+        if shape == "round" and not is_array:
             radius_sq = (die_length / 2.0) ** 2
 
             def inside_test(probe_x, probe_y):
                 """True where a probe lies on the circular die."""
                 return probe_x ** 2 + probe_y ** 2 <= radius_sq
         else:
-            inside_test = None  # A rectangle fills its own bounding box.
+            # A rectangle fills its own bounding box, and an array is
+            # bounded by its block: which parts of that block emit is left
+            # to the die test, which knows the shape of each die.
+            inside_test = None
 
     sample_x = np.linspace(min_x, max_x, elements_per_side)
     sample_y = np.linspace(min_y, max_y, elements_per_side)
@@ -499,8 +741,19 @@ def _build_emitter_elements(emitter: dict, elements_per_side: int, shape: str,
     coverage = (np.ones((len(y_lo), len(x_lo))) if inside_test is None
                 else _cell_coverage(x_lo, x_hi, y_lo, y_hi, inside_test, subsamples))
     weight = (np.outer(y_hi - y_lo, x_hi - x_lo) * coverage).ravel()
-
     grid_x, grid_y = np.meshgrid(sample_x, sample_y)
+
+    # On an array the phosphor between the dies still emits, just less
+    # brightly. A cell straddling the edge of a die is part one and part the
+    # other, so how much of it is die is measured the same way a curved edge
+    # is measured, rather than judged by where its centre happens to fall.
+    if config is not None and shape != "polygon":
+        on_die = _array_die_test(emitter, shape, config)
+        if on_die is not None:
+            _, _, _, gap_output = die_array_layout(emitter, config)
+            die_share = _cell_coverage(x_lo, x_hi, y_lo, y_hi, on_die,
+                                       subsamples).ravel()
+            weight = weight * (die_share + (1.0 - die_share) * gap_output)
     emitting = weight > 0.0
     if not emitting.any():
         raise ValueError(

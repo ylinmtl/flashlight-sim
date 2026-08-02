@@ -74,8 +74,10 @@ def _style_dark_axes(ax) -> None:
 
 
 def render_intensity_profile(slice_lux: np.ndarray, dist_array: np.ndarray,
-                             suffix_name: str, title_str: str, save_path: Optional[str],
-                             config: SimulationConfig) -> None:
+                             suffix_name: str, title_str: str,
+                             save_path: Optional[str],
+                             config: SimulationConfig,
+                             always_save: bool = False):
     """Renders and optionally saves one intensity profile through the beam.
 
     Args:
@@ -85,6 +87,11 @@ def render_intensity_profile(slice_lux: np.ndarray, dist_array: np.ndarray,
         title_str: Title block shared with the wall shot.
         save_path: Wall shot path the profile filename is derived from, or None.
         config: Active configuration.
+        always_save: Writes the file even when export_plots is off.
+
+    Returns:
+        The Matplotlib figure, so the caller can display it as well as save
+        it. The batch path ignores this and simply lets it be collected.
     """
     slice_cd = slice_lux * (config.target_distance_m ** 2)
     angles = np.degrees(np.arctan(dist_array / config.target_distance_m))
@@ -104,14 +111,12 @@ def render_intensity_profile(slice_lux: np.ndarray, dist_array: np.ndarray,
     plt.title(f"{title_str}\n[Intensity Profile: {suffix_name}]", color="#CCCCCC", pad=15)
     plt.tight_layout()
 
-    if save_path and config.export_plots:
+    if save_path and (always_save or config.export_plots):
         base, extension = os.path.splitext(save_path)
         plt.savefig(f"{base}_{suffix_name}{extension}", facecolor="black",
                     edgecolor="none", dpi=150, bbox_inches="tight")
 
-    # This figure is never handed back to the GUI, so release it or the Agg
-    # backend accumulates one per profile for the life of the process.
-    plt.close(figure)
+    return figure
 
 
 def _format_exposure_caption(config: SimulationConfig) -> str:
@@ -186,6 +191,8 @@ class WallShot(NamedTuple):
         geometry_text: The beam geometry overlay.
         modes_text: The output table overlay.
         filename: What to call the PNG if it is exported again.
+        axis_distance: Distance across the wall for the straight slices.
+        diagonal_distance: Distance across the wall for the 45 degree slice.
     """
 
     wall_lux: np.ndarray
@@ -193,6 +200,48 @@ class WallShot(NamedTuple):
     geometry_text: str
     modes_text: str
     filename: str
+    axis_distance: np.ndarray
+    diagonal_distance: np.ndarray
+
+
+# The plots a finished run can produce, in the order they are offered. The
+# wall shot is the camera's view of the beam; the rest are slices through it.
+PLOT_NAMES = ("Wall Shot", "X-Axis", "Y-Axis", "45-Deg")
+
+
+def render_plot(shot: WallShot, name: str, config: SimulationConfig,
+                save_path: Optional[str] = None, always_save: bool = False):
+    """Draws any one of a finished run's plots.
+
+    Everything here comes from stored arrays, so a plot can be looked at, or
+    exported, without tracing the beam again.
+
+    Args:
+        shot: The stored render inputs from a completed simulation.
+        name: One of PLOT_NAMES.
+        config: Active configuration.
+        save_path: PNG to write, or None to render without saving.
+        always_save: Writes the file even when export_plots is off.
+
+    Returns:
+        The Matplotlib figure.
+
+    Raises:
+        ValueError: If the name is not one of PLOT_NAMES.
+    """
+    if name == "Wall Shot":
+        return render_wall_shot(shot, config, save_path, always_save)
+
+    centre = shot.wall_lux.shape[0] // 2
+    slices = {"X-Axis": (shot.wall_lux[centre, :], shot.axis_distance),
+              "Y-Axis": (shot.wall_lux[:, centre], shot.axis_distance),
+              "45-Deg": (np.diagonal(shot.wall_lux), shot.diagonal_distance)}
+    if name not in slices:
+        raise ValueError(f"Unknown plot {name!r}; expected one of {PLOT_NAMES}.")
+
+    values, distance = slices[name]
+    return render_intensity_profile(values, distance, name, shot.title,
+                                    save_path, config, always_save)
 
 
 def render_wall_shot(shot: WallShot, config: SimulationConfig,
@@ -343,20 +392,7 @@ def generate_flashlight_plot(emitter_name: str, reflector_name: str, gasket_name
     if offset_text:
         title_str += f" | {offset_text}"
 
-    shot = WallShot(illumination.total_lux, title_str,
-                    _format_beam_geometry(metrics, config),
-                    _format_output_modes(emitter, max_amps, max_cd,
-                                         illumination.total_lumens,
-                                         illumination.delivered_lumens,
-                                         config),
-                    _plot_filename(reflector_name, emitter_name,
-                                   gasket_name, finish_type))
-
     figure = None
-    if config.plot_wall_shot:
-        if log_callback:
-            log_callback("Rendering final camera visualization...")
-        figure = render_wall_shot(shot, config, save_path)
 
     if config.export_ies and save_path:
         watts = max_amps * forward_voltage(emitter, max_amps, config)
@@ -379,22 +415,43 @@ def generate_flashlight_plot(emitter_name: str, reflector_name: str, gasket_name
             log_callback(summary)
 
     # Slices through the centre of the wall, in metres from the beam axis.
+    # They are worked out before the shot is packed up, so a profile can be
+    # redrawn later without tracing the beam again.
     axis_distance = np.linspace(-config.wall_radius_m, config.wall_radius_m,
                                 config.sim_grid_res)
     centre = int((config.sim_grid_res - 1) / 2.0)
+    diagonal_distance = np.linspace(-config.wall_radius_m * math.sqrt(2),
+                                    config.wall_radius_m * math.sqrt(2),
+                                    config.sim_grid_res)
 
-    if config.plot_intensity_x:
-        render_intensity_profile(illumination.total_lux[centre, :], axis_distance,
-                                 "X-Axis", title_str, save_path, config)
-    if config.plot_intensity_y:
-        render_intensity_profile(illumination.total_lux[:, centre], axis_distance,
-                                 "Y-Axis", title_str, save_path, config)
-    if config.plot_intensity_45:
-        diagonal_distance = np.linspace(-config.wall_radius_m * math.sqrt(2),
-                                        config.wall_radius_m * math.sqrt(2),
-                                        config.sim_grid_res)
-        render_intensity_profile(np.diagonal(illumination.total_lux), diagonal_distance,
-                                 "45-Deg", title_str, save_path, config)
+    shot = WallShot(illumination.total_lux, title_str,
+                    _format_beam_geometry(metrics, config),
+                    _format_output_modes(emitter, max_amps, max_cd,
+                                         illumination.total_lumens,
+                                         illumination.delivered_lumens,
+                                         config),
+                    _plot_filename(reflector_name, emitter_name,
+                                   gasket_name, finish_type),
+                    axis_distance, diagonal_distance)
+
+    if config.plot_wall_shot:
+        if log_callback:
+            log_callback("Rendering final camera visualization...")
+        figure = render_wall_shot(shot, config, save_path)
+
+    # Each profile hands its figure back so the GUI can show it. Here only
+    # the file is wanted, so the figure is released straight away rather
+    # than left for the Agg backend to accumulate.
+    for wanted, values, distance, label in (
+            (config.plot_intensity_x, illumination.total_lux[centre, :],
+             axis_distance, "X-Axis"),
+            (config.plot_intensity_y, illumination.total_lux[:, centre],
+             axis_distance, "Y-Axis"),
+            (config.plot_intensity_45, np.diagonal(illumination.total_lux),
+             diagonal_distance, "45-Deg")):
+        if wanted:
+            plt.close(render_intensity_profile(values, distance, label,
+                                               title_str, save_path, config))
 
     return figure, {
         "Reflector": reflector_name,

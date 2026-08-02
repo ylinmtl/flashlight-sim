@@ -14,8 +14,10 @@ import sys
 import traceback
 
 from PyQt6 import uic
+from PyQt6.QtGui import QGuiApplication
 from PyQt6.QtCore import QThread, pyqtSignal
 from PyQt6.QtWidgets import (QApplication, QCheckBox, QComboBox, QDialog,
+                             QFileDialog, QListWidgetItem,
                              QSlider,
                              QFormLayout, QGroupBox, QHBoxLayout, QInputDialog,
                              QLineEdit,
@@ -25,35 +27,70 @@ from PyQt6.QtWidgets import (QApplication, QCheckBox, QComboBox, QDialog,
 # Matplotlib's Qt canvas, used to embed the engine's figure in the window.
 from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.colors import to_rgba_array
+from matplotlib.text import Text
 from matplotlib.figure import Figure
+import matplotlib.pyplot as plt
 import numpy as np
 from mpl_toolkits.mplot3d.art3d import Poly3DCollection
 
-from core import (DIE_SHAPES, GASKET_WALL_SHAPES, OUTPUT_MODES,
+from core import (DIE_LAYOUTS, DIE_SHAPES, GASKET_WALL_SHAPES,
+                  die_array_extent, die_array_layout, die_cell_size,
+                  die_centres,
+                  LENS_FINISHES,
+                  OUTPUT_MODES,
                     SPEC_DEFAULT_SETTINGS, SURFACE_FINISHES, EmitterOffset,
                     HardwareLibrary, SimulationConfig,
                     effective_bore_diameter, emitter_die_outline,
                     emitter_footprint_diagonal, get_sim_geometry,
-                    render_wall_shot, resource_path, run_simulation_job,
+                    PLOT_NAMES, render_plot, render_wall_shot,
+                  resource_path, run_simulation_job,
                     spec_or_default)
 
 # Specs shown for each hardware kind, in the order they appear in the form. Each
 # one maps to a QLineEdit in mainwindow.ui named <prefix><spec>, for example
 # reflector "diameter_mm" -> txtRef_diameter_mm.
+# Every spec the hardware forms show, in the order they appear and under the
+# heading they sit below. Grouping keeps a long form readable: the reflector
+# alone has seventeen specs, and hunting for one in a flat list is tedious.
+# This is the single source of truth for the form; mainwindow.ui is generated
+# to match, so a field added here needs a row added there under the same
+# heading.
+SPEC_GROUPS = {
+    "reflector": (
+        ("Geometry", ("diameter_mm", "height_mm", "opening_diameter_mm",
+                      "focus_offset_mm", "wall_thickness_mm",
+                      "thickness_height_mm")),
+        ("Reflective Surface", ("surface_finish", "surface_roughness_nm",
+                                "surface_correlation_um", "op_dimple_pitch_mm",
+                                "op_dimple_depth_um", "reflectivity_smooth",
+                                "reflectivity_op", "reflectivity_cylinder",
+                                "gasket_reflectivity")),
+        ("Front Lens", ("transmissivity_lens", "lens_finish",
+                        "lens_diffusion_fwhm_deg", "lens_refractive_index")),
+    ),
+    "emitter": (
+        ("Output", ("output_mode", "max_current_amps", "max_lumens",
+                    "forward_voltage_v", "vf_turn_on_v", "vf_scale",
+                    "base_efficacy_lm_w", "droop_factor")),
+        ("Package", ("footprint_x_mm", "footprint_y_mm", "height_mm",
+                     "dome_size_mm", "refractive_index")),
+        ("Die", ("shape", "die_length_mm", "die_width_mm", "die_outline",
+                 "die_layout", "die_rows", "die_columns", "die_gap_mm",
+                 "die_gap_output")),
+    ),
+    "gasket": (
+        ("Dimensions", ("outer_diameter_mm", "inner_diameter_mm",
+                        "emitter_size_mm", "wall_shape")),
+        ("Height", ("thickness_mm", "total_height_mm")),
+    ),
+}
+
+# The specs of each kind, flattened out of the groups above. Everything that
+# reads or writes a catalogue entry works from this, and never needs to know
+# how the form is arranged.
 SPEC_FIELDS = {
-    "reflector": ("diameter_mm", "height_mm", "opening_diameter_mm",
-                  "focus_offset_mm", "wall_thickness_mm", "thickness_height_mm",
-                  "surface_finish", "reflectivity_smooth", "reflectivity_op",
-                  "reflectivity_cylinder", "gasket_reflectivity", "OP_Factor",
-                  "transmissivity_lens"),
-    "emitter": ("max_current_amps", "output_mode", "max_lumens",
-                "forward_voltage_v", "vf_turn_on_v", "vf_scale",
-                "base_efficacy_lm_w", "droop_factor",
-                "footprint_x_mm", "footprint_y_mm", "height_mm",
-                "dome_size_mm", "refractive_index", "die_length_mm", "die_width_mm",
-                "shape", "die_outline"),
-    "gasket": ("outer_diameter_mm", "inner_diameter_mm", "emitter_size_mm",
-               "wall_shape", "thickness_mm", "total_height_mm"),
+    kind: tuple(field for _, fields in groups for field in fields)
+    for kind, groups in SPEC_GROUPS.items()
 }
 
 FIELD_WIDGET_PREFIX = {
@@ -75,12 +112,16 @@ EMITTER_DIE_COLOUR = "#FF9E1B"     # the light emitting surface itself
 EMITTER_DIE_EDGE_COLOUR = "#C77B14"
 EMITTER_DOME_COLOUR = "#CBE7F5"
 
-# The reflector is drawn as a single opaque silver body, stroked along
-# its own mesh so the shape reads. The gasket and emitter go on after
-# it, so they stay visible without the shell having to be see through.
-REFLECTOR_COLOUR = "#C6C8CC"
+# The reflector is drawn as a single opaque silver body, stroked along its
+# own mesh so the shape reads. It is the backdrop everything else sits in,
+# so it is the darkest of the three: a bowl, a gasket and an emitter within
+# thirteen shades of each other read as one blob however well they are
+# sorted, which is what made the parts look like they were bleeding
+# together. Cool silver here, warm cream for the gasket, white for the
+# emitter, so the eye separates them by hue as well as by brightness.
+REFLECTOR_COLOUR = "#A9AEB6"
 REFLECTOR_ALPHA = 1.0
-REFLECTOR_EDGE_COLOUR = "#94969B"
+REFLECTOR_EDGE_COLOUR = "#7C818A"
 
 # How much wider than the parts themselves the gasket preview draws. The
 # seat sits proud of the wall so its edge stays visible behind it, and
@@ -105,12 +146,90 @@ BLANK_EMITTER = {"footprint_x_mm": 0.0, "footprint_y_mm": 0.0,
                  "refractive_index": 1.0}
 BLANK_GASKET = {"thickness_mm": 0.0, "total_height_mm": 0.0,
                 "inner_diameter_mm": 0.0}
-GASKET_EMITTER_CLEARANCE_MM = 0.1
+# How much wider the seat window is than the emitter it clears, measured
+# across the opening rather than per side: a 7 mm emitter looks through a
+# 7.1 mm window, so the two edges are visibly separate in the picture.
+GASKET_WINDOW_OFFSET_MM = 0.1
 
-# The gasket is a rubber part, so it is drawn darker than the metal around it
-# and near enough opaque to read against the reflector behind it.
-GASKET_COLOUR = "#D8D5CE"
-GASKET_EDGE_COLOUR = "#6B6960"
+# The gasket is warm cream and fully opaque: darker than the emitter's top
+# face and lighter than its base, as a silicone gasket is, and warm where
+# the metal around it is cool. The four parts used to sit within thirteen
+# shades of each other, which is why they looked like they were bleeding
+# together however well they were sorted; they are now spaced evenly and
+# separated by hue as well as brightness.
+GASKET_COLOUR = "#EFE3CC"
+GASKET_EDGE_COLOUR = "#8A7F68"
+
+# Rings the gasket's flat faces are split into. They are the widest
+# surfaces in the assembly, and a depth sorter places a polygon by a
+# single number, so one quad spanning the whole seat can be judged
+# nearer than the emitter it surrounds and drawn over the top of it.
+GASKET_RADIAL_BANDS = 6
+
+# Height the emitter is raised by in the assembly view, to keep it off
+# the gasket seat's plane. A common build has an emitter exactly as
+# tall as the seat thickness, which lands the two surfaces on the same
+# plane; a micron of separation resolves that and cannot be seen.
+ASSEMBLY_Z_NUDGE_MM = 0.001
+
+# How much the orange peel dimples are exaggerated in the reflector
+# preview, and how deep they are allowed to get. A real texture is a
+# few micrometres deep on a bowl tens of millimetres across, which
+# would be invisible; these turn the depth-to-pitch ratio into a
+# fraction of the bowl radius that can actually be seen, with a cap so
+# an extreme texture cannot turn the bowl inside out.
+# Parts that occupy the same space are drawn in this colour, so an
+# interference is obvious in the picture and not only in the warnings.
+# Left clear around the window when it is capped to the display, so it
+# does not sit flush against a taskbar or a dock.
+WINDOW_SCREEN_MARGIN_PX = 48
+
+# The size the window opens at, before the layout and the screen have
+# their say. Qt will not go below what the widgets need, so a request
+# narrower than the three columns simply gets the columns' width.
+WINDOW_DEFAULT_WIDTH_PX = 800
+WINDOW_DEFAULT_HEIGHT_PX = 1000
+
+# Spec inputs are sized in digits rather than pixels. A hard pixel width
+# is wrong on any display whose font is not the one it was chosen on:
+# too wide on a small screen, too narrow to read on a scaled one.
+FIELD_WIDTH_IN_DIGITS = 11
+FIELD_MIN_WIDTH_PX = 64
+
+# Room left around a column beyond its widest caption, for the form's
+# own margins, the gap to the input and the scrollbar when one appears.
+COLUMN_PADDING_PX = 40
+
+# Room a drop down needs beyond its text, for the arrow and the frame.
+COMBO_ARROW_ALLOWANCE_PX = 34
+
+# Figure height the plot fonts were chosen against. Text is scaled by
+# how the figure compares with this, so a panel half the size gets half
+# the type instead of the same type overlapping itself.
+FIGURE_REFERENCE_HEIGHT_IN = 10.0
+FIGURE_MIN_FONT_SCALE = 0.35
+
+CLASH_COLOUR = "#D2544B"
+CLASH_TOLERANCE_MM = 0.01
+
+# How the front lens looks. Clear glass shows only as a rim, since a pane
+# that hides nothing should not be drawn hiding things. Frosted glass is
+# milky and does obscure the bowl, and a film adds a layer over a clear
+# pane. The standoff keeps whichever it is in front of the rim.
+LENS_APPEARANCE = {
+    "clear_rim": ("#9FC4DA", 0.55),
+    "frosted": ("#E4ECF1", 0.38),
+    "film": ("#BFD8E8", 0.14),
+    "film_layer": ("#D6E4EC", 0.30),
+}
+
+# Where the clear lens rim starts, as a fraction of the mouth radius.
+LENS_RIM_INNER_FRACTION = 0.93
+LENS_STANDOFF_MM = 0.15
+LENS_FILM_THICKNESS_MM = 0.12
+
+DIMPLE_PREVIEW_EXAGGERATION = 5.8
+DIMPLE_PREVIEW_MAX_AMPLITUDE = 0.08
 
 # Both previews sit on black, like the simulated beam shot does.
 PREVIEW_BACKGROUND = "#000000"
@@ -121,17 +240,28 @@ PREVIEW_TEXT_COLOUR = "#FFFFFF"
 # the slider at its end stop.
 EXPOSURE_SLIDER_RANGE_EV = 10.0
 
+# Where the results tab sits in the bar. It is hidden until a run has
+# produced something for it to hold.
+RESULTS_TAB_INDEX = 1
+
 # Zoom applied per mouse wheel step in a 3D preview.
 PREVIEW_ZOOM_STEP = 1.15
 
 # Specs the form offers as a drop down, mapped to the values the engine
 # accepts. The box shows each value capitalised, with underscores as spaces,
 # while the catalogue keeps the plain value listed here.
+# Specs that are counts rather than measurements. They are stored as
+# numbers like everything else, but "2.0 rows" reads like an invitation
+# to type 2.5, so they are shown without a decimal point.
+INTEGER_SPECS = frozenset({"die_rows", "die_columns"})
+
 CHOICE_SPECS = {
     "shape": DIE_SHAPES,
     "surface_finish": SURFACE_FINISHES,
     "wall_shape": GASKET_WALL_SHAPES,
     "output_mode": OUTPUT_MODES,
+    "lens_finish": LENS_FINISHES,
+    "die_layout": DIE_LAYOUTS,
 }
 
 # Specs only meaningful for certain choices, as spec -> (deciding spec,
@@ -139,6 +269,19 @@ CHOICE_SPECS = {
 # outline box is not offered for a die that has no outline.
 CONDITIONAL_SPECS = {
     "die_outline": ("shape", frozenset({"polygon"})),
+    # A reflector is smooth or textured, never both, so each finish shows
+    # only the numbers that describe it and the reflectivity it uses.
+    "surface_roughness_nm": ("surface_finish", frozenset({"smooth"})),
+    "surface_correlation_um": ("surface_finish", frozenset({"smooth"})),
+    "reflectivity_smooth": ("surface_finish", frozenset({"smooth"})),
+    "op_dimple_pitch_mm": ("surface_finish", frozenset({"orange_peel"})),
+    "op_dimple_depth_um": ("surface_finish", frozenset({"orange_peel"})),
+    "reflectivity_op": ("surface_finish", frozenset({"orange_peel"})),
+    "die_rows": ("die_layout", frozenset({"array"})),
+    "die_columns": ("die_layout", frozenset({"array"})),
+    "die_gap_mm": ("die_layout", frozenset({"array"})),
+    "die_gap_output": ("die_layout", frozenset({"array"})),
+    "lens_diffusion_fwhm_deg": ("lens_finish", frozenset({"frosted", "film"})),
     "max_lumens": ("output_mode", frozenset({"simple"})),
     "forward_voltage_v": ("output_mode", frozenset({"simple"})),
     "vf_turn_on_v": ("output_mode", frozenset({"advanced"})),
@@ -163,9 +306,14 @@ LIST_SPECS = frozenset({"die_outline"})
 # deliberately absent from SPEC_FIELDS so that saving a reflector discards
 # them, and they reset to zero whenever the form is reloaded.
 RUN_ONLY_REFLECTOR_FIELDS = (
-    ("emitter_offset_distance_mm", "Emitter Offset Distance (mm)"),
-    ("emitter_offset_angle_deg", "Emitter Offset Angle (° CW from up)"),
+    ("emitter_offset_distance_mm", "Offset Distance (mm)"),
+    ("emitter_offset_angle_deg", "Offset Angle (° CW from up)"),
 )
+
+# The heading the run-only inputs sit under. They are not specs, they are
+# not saved, and they belong to the run rather than the part, so they always
+# come last whatever else the reflector form gains.
+RUN_ONLY_GROUP_TITLE = "Emitter Centring"
 
 # Settings offered by the settings dialog, grouped exactly as they are stored,
 # mapping each attribute of SimulationConfig to its human readable label.
@@ -186,6 +334,13 @@ SETTING_LABELS = {
         "ies_vertical_step_deg": "IES Vertical Step (deg)",
         "ies_horizontal_step_deg": "IES Horizontal Step (deg)",
         "ies_max_vertical_angle_deg": "IES Max Vertical Angle (deg)",
+    },
+    "Spherical Projection": {
+        "use_spherical_projection": "Use Spherical Projection",
+        "dome_angle_deg": "Dome Angle (deg)",
+        "dome_polar_step_deg": "Dome Polar Step (deg)",
+        "dome_azimuth_step_deg": "Dome Azimuth Step (deg)",
+        "dome_memory_budget_mb": "Dome Memory Budget (MB)",
     },
     "Simulation Space & Constraints": {
         "use_gpu": "Use GPU Acceleration (CUDA)",
@@ -217,10 +372,15 @@ SETTING_LABELS = {
         "default_reflectivity_op": "Default Reflectivity (Orange Peel)",
         "default_reflectivity_cylinder": "Default Reflectivity (Cylinder)",
         "default_gasket_reflectivity": "Default Reflectivity (Gasket)",
-        "default_op_blur_strength": "Orange Peel Blur Strength",
-        "default_op_factor": "Default OP Factor",
         "default_transmissivity_lens": "Default Lens Transmissivity",
         "default_surface_finish": "Default Surface Finish",
+        "default_surface_roughness_nm": "Default Surface Roughness (nm RMS)",
+        "default_surface_correlation_um": "Default Roughness Scale (µm)",
+        "default_op_dimple_pitch_mm": "Default Orange Peel Pitch (mm)",
+        "default_op_dimple_depth_um": "Default Orange Peel Depth (µm)",
+        "default_lens_finish": "Default Lens Finish",
+        "default_lens_diffusion_fwhm_deg": "Default Lens Diffusion (° FWHM)",
+        "default_lens_refractive_index": "Default Lens Refractive Index",
         "spill_visible_threshold_lux": "Spill Visible Threshold (Lux)",
         "corona_visible_threshold": "Corona Visible Threshold",
         "hotspot_fwhm_threshold": "Hotspot FWHM Threshold",
@@ -235,6 +395,11 @@ SETTING_LABELS = {
         "default_dome_size_mm": "Default Emitter Dome Size (mm)",
         "default_refractive_index": "Default Emitter Refractive Index",
         "default_emitter_shape": "Default Emitter Die Shape",
+        "default_die_layout": "Default Die Layout",
+        "default_die_rows": "Default Die Rows",
+        "default_die_columns": "Default Die Columns",
+        "default_die_gap_mm": "Default Die Gap (mm)",
+        "default_die_gap_output": "Default Gap Output (fraction)",
         "default_emitter_output_mode": "Default Emitter Output Mode",
         "default_max_lumens": "Default Max Lumens (lm)",
         "default_forward_voltage_v": "Default Voltage (V)",
@@ -446,7 +611,7 @@ def _aperture_radius(angle, half_size=None, radius=None):
     return half_size / np.maximum(np.abs(np.cos(angle)), np.abs(np.sin(angle)))
 
 
-def _ring_surface(inner, outer, height, segments=192):
+def _ring_surface(inner, outer, height, segments=192, bands=1):
     """Builds a flat ring at one height, between an inner and an outer radius.
 
     Args:
@@ -454,6 +619,11 @@ def _ring_surface(inner, outer, height, segments=192):
         outer: Outer radius, in the same form.
         height: Height of the plane the ring lies in.
         segments: Steps around the turn.
+        bands: How many rings to split the span into. One wide quad reaching
+            from the hole to the rim covers a lot of depth, and a depth
+            sorter has only one number to place it by, so it can end up in
+            front of something it surrounds. Splitting it radially gives
+            each piece a depth close to where it actually is.
 
     Returns:
         (x, y, z) arrays shaped for plot_surface.
@@ -461,7 +631,8 @@ def _ring_surface(inner, outer, height, segments=192):
     angle = np.linspace(0.0, 2.0 * np.pi, segments)[:, None]
     inner = np.broadcast_to(np.asarray(inner, dtype=float).reshape(-1, 1), angle.shape)
     outer = np.broadcast_to(np.asarray(outer, dtype=float).reshape(-1, 1), angle.shape)
-    radii = np.concatenate([inner, outer], axis=1)
+    steps = np.linspace(0.0, 1.0, max(1, bands) + 1)[None, :]
+    radii = inner + (outer - inner) * steps
     return (radii * np.cos(angle), radii * np.sin(angle),
             np.full_like(radii, float(height)))
 
@@ -605,6 +776,54 @@ class SquarePreview(QWidget):
         axes.text(0.5, 0.5, text, ha="center", va="center", wrap=True,
                   fontsize=7, color=PREVIEW_TEXT_COLOUR)
         self.canvas.draw_idle()
+
+
+class PlotExportDialog(QDialog):
+    """Asks which of a run's plots to write out.
+
+    A tick per plot rather than a single save of whatever is on screen, because
+    wanting all four at once is the common case and clicking through them one
+    at a time to export each would be tedious.
+    """
+
+    def __init__(self, parent=None):
+        """Builds the dialog with every plot ticked."""
+        super().__init__(parent)
+        self.setWindowTitle("Save Plots")
+
+        layout = QVBoxLayout(self)
+        self.boxes = {}
+        for name in PLOT_NAMES:
+            box = QCheckBox(name, self)
+            box.setChecked(True)
+            layout.addWidget(box)
+            self.boxes[name] = box
+
+        buttons = QHBoxLayout()
+        save = QPushButton("Save", self)
+        save.clicked.connect(lambda *_: self.accept())
+        cancel = QPushButton("Cancel", self)
+        cancel.clicked.connect(lambda *_: self.reject())
+        buttons.addWidget(save)
+        buttons.addWidget(cancel)
+        layout.addLayout(buttons)
+
+    def chosen(self):
+        """Returns the ticked plot names, in the order they are offered."""
+        return [name for name, box in self.boxes.items() if box.isChecked()]
+
+    @staticmethod
+    def choose(parent):
+        """Runs the dialog.
+
+        Args:
+            parent: Window to sit over.
+
+        Returns:
+            The plot names to save, or an empty list if cancelled.
+        """
+        dialog = PlotExportDialog(parent)
+        return dialog.chosen() if dialog.exec() else []
 
 
 class SimulationWorker(QThread):
@@ -835,8 +1054,20 @@ class MainWindow(QMainWindow):
         self.setup_canvas()
         self.setup_previews()
         self.setup_camera_controls()
+        self.setup_results_tab()
         self.setup_hardware_widgets()
         self.connect_signals()
+
+        # Both of these need the forms to exist: one measures the inputs it
+        # is resizing, the other caps a window whose layout is by then
+        # settled. Fitting the screen goes last so it sees the final size.
+        self.scale_input_widths()
+        self.fit_to_screen()
+
+        # Put the buttons in their idle state, which is also what hides the
+        # separate stop button. Without this it sits there on first launch
+        # until the first run ends and tidies it away.
+        self.set_controls_running(False)
 
         for kind in SPEC_FIELDS:
             self.reload_fields(kind)
@@ -996,15 +1227,24 @@ class MainWindow(QMainWindow):
                               linewidth=0.2, antialiased=True)
 
         # The bowl itself, stippled when the reflector is orange peel so the
-        # finish is visible rather than only being a number in the form. The
-        # dimples are scaled by the reflector's own OP factor, and shading is
-        # what makes them read, so the surface is left opaque enough to shade.
+        # finish is visible rather than only being a pair of numbers in the
+        # form. The dimples are drawn far larger and fewer than the real
+        # ones: a 0.5 mm texture on a 25 mm bowl is over three hundred
+        # dimples around, which no preview mesh can resolve and which would
+        # alias into a mess. What is kept faithful is their steepness, since
+        # depth against pitch is what decides how much the finish scatters,
+        # so a coarser or deeper texture looks coarser or deeper here too.
         bowl_z = bowl_r ** 2 / (4.0 * focal_length)
         if finish == "orange_peel":
-            strength = float(spec_or_default(reflector, "reflector", "OP_Factor",
-                                             self.config))
-            bowl = _dimpled_revolution(bowl_r, bowl_z, 240,
-                                       0.035 * max(strength, 0.1), 40, 8)
+            pitch_mm = float(spec_or_default(reflector, "reflector",
+                                             "op_dimple_pitch_mm", self.config))
+            depth_mm = float(spec_or_default(reflector, "reflector",
+                                             "op_dimple_depth_um",
+                                             self.config)) / 1000.0
+            aspect = depth_mm / pitch_mm if pitch_mm > 0.0 else 0.0
+            amplitude = min(aspect * DIMPLE_PREVIEW_EXAGGERATION,
+                            DIMPLE_PREVIEW_MAX_AMPLITUDE)
+            bowl = _dimpled_revolution(bowl_r, bowl_z, 240, amplitude, 40, 8)
         else:
             bowl = _revolved_surface(bowl_r, bowl_z)
         # No stroke on the bowl itself: at the resolution the dimples
@@ -1022,23 +1262,49 @@ class MainWindow(QMainWindow):
                               linewidth=0.2, antialiased=True)
 
         # The gasket sits on the same board as the emitter, its seat filling
-        # the gap up to the reflector and its wall rising into the bore. It
-        # goes on before the emitter, so the emitter stays on top of it.
+        # the gap up to the reflector and its wall rising into the bore.
+        # Both go into one collection so they sort against each other: a
+        # gasket wall standing in front of the emitter hides it, instead of
+        # the emitter showing through as though the rubber were glass.
+        clashes = self.detect_clashes(geom, reflector, emitter, gasket)
+        shared_faces, shared_colours, shared_edges = [], [], []
+
+        def collect(part_faces, part_colours, part_edges):
+            """Adds one part's faces to the shared collection."""
+            shared_faces.extend(part_faces)
+            shared_colours.extend(part_colours)
+            shared_edges.extend(part_edges)
+
         lowest = []
         if gasket is not None:
             thickness = float(spec_or_default(gasket, "gasket", "thickness_mm",
                                               self.config))
-            drawn = self.add_gasket(axes, gasket, z_bottom - thickness)
+            drawn = self.add_gasket(
+                axes, gasket, z_bottom - thickness, collect,
+                CLASH_COLOUR if "gasket" in clashes else None)
             if drawn is not None:
                 lowest.append(drawn["base_z"])
 
         if emitter is not None:
-            drawn = self.add_emitter(axes, emitter, geom["ez_base"],
-                                     geom["emitter_offset_x"],
-                                     geom["emitter_offset_y"])
+            # An emitter as tall as the gasket seat puts its top face on
+            # exactly the plane of the seat around it, and two coplanar
+            # surfaces have no answer to which is in front: the gasket wins
+            # in patches and appears to spill over the package. Lifting the
+            # emitter by a fraction of a micron settles it, and is far below
+            # anything the picture can show.
+            drawn = self.add_emitter(
+                axes, emitter, geom["ez_base"] + ASSEMBLY_Z_NUDGE_MM,
+                geom["emitter_offset_x"], geom["emitter_offset_y"], collect,
+                CLASH_COLOUR if "emitter" in clashes else None)
             if drawn is not None:
                 lowest.append(drawn["base_z"])
 
+        if shared_faces:
+            axes.add_collection3d(_SolidFaces(
+                shared_faces, shared_colours, shared_edges,
+                linewidths=0.6, zsort="max"))
+
+        self.add_lens(axes, reflector, radius_max, outer_radius, z_max_cut)
         emitter_low = min(lowest) if lowest else None
 
         # True proportions, so a deep reflector looks deep. The emitter can sit
@@ -1057,7 +1323,8 @@ class MainWindow(QMainWindow):
         preview.figure.subplots_adjust(left=0.0, right=1.0, bottom=0.0, top=1.0)
         preview.canvas.draw_idle()
 
-    def add_emitter(self, axes, emitter, die_z, offset_x=0.0, offset_y=0.0):
+    def add_emitter(self, axes, emitter, die_z, offset_x=0.0, offset_y=0.0,
+                    collect=None, tint=None):
         """Draws the emitter package, die and dome as an opaque solid.
 
         Both previews call this, so the emitter looks the same on its own as it
@@ -1096,12 +1363,13 @@ class MainWindow(QMainWindow):
             return None  # The reflector is still worth showing without it.
 
         base_z = die_z - package_height
-        die_corners = self.die_corners(shape, outline, die_length, die_width)
+        dies = self.die_positions(emitter, shape, outline, die_length, die_width)
         package = [(offset_x - footprint_x / 2.0, offset_y - footprint_y / 2.0),
                    (offset_x + footprint_x / 2.0, offset_y - footprint_y / 2.0),
                    (offset_x + footprint_x / 2.0, offset_y + footprint_y / 2.0),
                    (offset_x - footprint_x / 2.0, offset_y + footprint_y / 2.0)]
-        die_corners = [(x + offset_x, y + offset_y) for x, y in die_corners]
+        dies = [[(x + offset_x, y + offset_y) for x, y in die]
+                for die in dies]
 
         faces, colours, edges = [], [], []
 
@@ -1129,12 +1397,24 @@ class MainWindow(QMainWindow):
         # pick between them arbitrarily. Lifting it by a thousandth of the
         # package height settles that without being a thickness anyone notices.
         die_draw_z = die_z + max(package_height, 0.1) * 1e-3
-        faces.append([(x, y, die_draw_z) for x, y in die_corners])
-        colours.append(EMITTER_DIE_COLOUR)
-        edges.append(EMITTER_DIE_EDGE_COLOUR)
+        for die in dies:
+            faces.append([(x, y, die_draw_z) for x, y in die])
+            colours.append(EMITTER_DIE_COLOUR)
+            edges.append(EMITTER_DIE_EDGE_COLOUR)
 
-        axes.add_collection3d(_SolidFaces(
-            faces, colours, edges, linewidths=0.8, zsort="max"))
+        if tint is not None:
+            colours = [tint] * len(faces)
+
+        # Handing the faces back rather than drawing them lets the caller put
+        # this part and its neighbours into one collection. That is what
+        # makes them hide each other: Matplotlib sorts faces within a
+        # collection but has no way to interleave two of them, so an emitter
+        # drawn separately always floats in front of the gasket around it.
+        if collect is not None:
+            collect(faces, colours, edges)
+        else:
+            axes.add_collection3d(_SolidFaces(
+                faces, colours, edges, linewidths=0.8, zsort="max"))
 
         if dome_radius > 0.0:
             dome_x, dome_y, dome_z = _dome_surface(dome_radius, die_z)
@@ -1146,7 +1426,10 @@ class MainWindow(QMainWindow):
             "base_z": base_z,
             "top_z": die_z + dome_radius,
             "reach": max(footprint_x, footprint_y, 2.0 * dome_radius) / 2.0,
-            "die_area": abs(_outline_area(np.asarray(die_corners, dtype=float))),
+            # Every die counts: an array of four emits four dies worth,
+            # which is the figure the caption should carry.
+            "die_area": sum(abs(_outline_area(np.asarray(die, dtype=float)))
+                            for die in dies),
             "footprint": (footprint_x, footprint_y),
         }
 
@@ -1215,6 +1498,37 @@ class MainWindow(QMainWindow):
                        float(emitter["footprint_y_mm"]))
         return max(0.0, dome) / 2.0
 
+    def die_positions(self, emitter, shape, outline, die_length, die_width):
+        """Returns every die's outline, one entry per die on the emitter.
+
+        Die Length and Width describe the whole emitting area, so an array
+        divides that area rather than repeating it: the dies shrink to make
+        room for the gaps between them. The same helpers the tracer uses work
+        out how big each die ends up and where it sits, so the picture and the
+        simulation cannot disagree about the emitter.
+
+        Args:
+            emitter: Emitter specs.
+            shape: Die shape, already resolved against the settings default.
+            outline: Vertices from emitter_die_outline, or None.
+            die_length: Whole emitting area along x, in millimetres.
+            die_width: Whole emitting area along y, in millimetres.
+
+        Returns:
+            A list of dies, each a list of (x, y) pairs.
+        """
+        rows, columns, gap, _ = die_array_layout(emitter, self.config)
+        if rows == 1 and columns == 1:
+            return [self.die_corners(shape, outline, die_length, die_width)]
+
+        cell_length, cell_width = die_cell_size(emitter, shape, self.config)
+        corners = self.die_corners(shape, outline, cell_length, cell_width)
+        across = die_centres(columns, cell_length, gap)
+        down = die_centres(rows, cell_width, gap)
+
+        return [[(x + centre_x, y + centre_y) for x, y in corners]
+                for centre_y in down for centre_x in across]
+
     @staticmethod
     def die_corners(shape, outline, die_length, die_width):
         """Returns the die outline as (x, y) pairs, whatever the shape.
@@ -1239,7 +1553,154 @@ class MainWindow(QMainWindow):
                 (die_length / 2.0, die_width / 2.0),
                 (-die_length / 2.0, die_width / 2.0)]
 
-    def add_gasket(self, axes, gasket, base_z):
+    def detect_clashes(self, geom, reflector, emitter, gasket):
+        """Finds parts that occupy the same space, so they can be flagged red.
+
+        Only genuine interference counts. A gasket standing taller than the
+        emitter is not a fault, it is the normal arrangement: the wall rises
+        past the package to meet the reflector, and a domed emitter often looks
+        through the aperture from below. What matters is whether two solids
+        would have to be in the same place at the same time.
+
+        Three ways that can happen:
+
+        * The gasket is wider than the bore it seats in, so it cannot go in.
+        * Its wall is wider than the bowl at the height it reaches. Standing
+          proud of the bore is fine on its own, since the parabola widens as
+          it climbs; being wider than the parabola is not.
+        * An opening in the gasket is narrower than the emitter passing through
+          it, over the height where the two overlap. The seat is checked
+          against its window, and the wall against its aperture, but the wall
+          only where the package actually reaches into it.
+
+        Args:
+            geom: The traced geometry, which already knows where each part sits.
+            reflector: Reflector specs, or None.
+            emitter: Emitter specs, or None.
+            gasket: Gasket specs, or None.
+
+        Returns:
+            A dict of part name to the reason it clashes. Empty when the stack
+            fits together.
+        """
+        clashes = {}
+        if gasket is None:
+            return clashes
+
+        try:
+            outer = float(spec_or_default(gasket, "gasket", "outer_diameter_mm",
+                                          self.config))
+            inner = float(spec_or_default(gasket, "gasket", "inner_diameter_mm",
+                                          self.config))
+            window = float(spec_or_default(gasket, "gasket", "emitter_size_mm",
+                                           self.config))
+            wall_shape = spec_or_default(gasket, "gasket", "wall_shape", self.config)
+            thickness = float(spec_or_default(gasket, "gasket", "thickness_mm",
+                                              self.config))
+        except (KeyError, ValueError, TypeError):
+            return clashes
+
+        def clash(reason, *parts):
+            """Records one interference against every part involved."""
+            for part in parts:
+                clashes.setdefault(part, reason)
+
+        bore = geom["r_hole"] * 2.0
+        if outer > bore + CLASH_TOLERANCE_MM:
+            clash(f"gasket outer {outer:.2f} mm will not fit the {bore:.2f} mm bore",
+                  "gasket")
+
+        # What the reflector leaves room for depends on how high up you
+        # look: a straight bore up to the shelf, then the parabola, which
+        # only widens from there. Standing proud of the bore is therefore
+        # fine on its own; being wider than whatever is there is not.
+        if geom["z_gasket_top"] <= geom["z_hole_top"]:
+            clearance = geom["r_hole"]
+        else:
+            clearance = math.sqrt(4.0 * geom["focal_length"]
+                                  * geom["z_gasket_top"])
+        if outer / 2.0 > clearance + CLASH_TOLERANCE_MM:
+            clash(f"gasket is {outer:.2f} mm across where the reflector "
+                  f"leaves {clearance * 2.0:.2f} mm", "gasket")
+
+        if emitter is None:
+            return clashes
+
+        try:
+            footprint_x = float(emitter["footprint_x_mm"])
+            footprint_y = float(emitter["footprint_y_mm"])
+            height = float(emitter["height_mm"])
+        except (KeyError, ValueError, TypeError):
+            return clashes
+
+        widest = max(footprint_x, footprint_y)
+        diagonal = math.hypot(footprint_x, footprint_y)
+
+        if widest > window + CLASH_TOLERANCE_MM:
+            clash(f"emitter {widest:.2f} mm is wider than the {window:.2f} mm "
+                  f"gasket window", "gasket", "emitter")
+
+        # The wall only matters where the package rises into it. A package
+        # shorter than the seat never reaches the wall at all.
+        if height > thickness + CLASH_TOLERANCE_MM:
+            if wall_shape == "round":
+                if diagonal > inner + CLASH_TOLERANCE_MM:
+                    clash(f"emitter corners span {diagonal:.2f} mm, wider than the "
+                          f"{inner:.2f} mm gasket aperture", "gasket", "emitter")
+            elif widest > window + CLASH_TOLERANCE_MM:
+                clash(f"emitter {widest:.2f} mm will not pass the {window:.2f} mm "
+                      f"square gasket aperture", "gasket", "emitter")
+
+        return clashes
+
+    def add_lens(self, axes, reflector, radius_max, outer_radius, top_z):
+        """Draws the front lens across the mouth of the reflector.
+
+        A clear lens is drawn as a rim and nothing else. Filling the mouth with
+        a pane, however faint, lays a wash over the whole bowl and the parts
+        sitting in it, which is worse than misleading: a clear lens is invisible
+        in life, so a picture that shows one is showing something that is not
+        there. The rim says it is fitted without hiding anything.
+
+        A frosted lens or an applied film does obscure what is behind it, so
+        those are drawn as a pane, and a film gets its own layer above the glass.
+
+        Args:
+            axes: 3D axes to draw on.
+            reflector: Reflector specs.
+            radius_max: Radius of the bowl at the mouth, in millimetres.
+            outer_radius: Outer radius of the reflector body, in millimetres.
+            top_z: Height of the rim.
+        """
+        try:
+            finish = spec_or_default(reflector, "reflector", "lens_finish",
+                                     self.config)
+        except (KeyError, ValueError, TypeError):
+            return
+
+        radius = max(outer_radius, radius_max)
+        seat = top_z + LENS_STANDOFF_MM
+
+        if finish == "clear":
+            colour, alpha = LENS_APPEARANCE["clear_rim"]
+            axes.plot_surface(
+                *_ring_surface(radius * LENS_RIM_INNER_FRACTION, radius, seat, 96),
+                color=colour, alpha=alpha, linewidth=0, antialiased=True)
+            return
+
+        colour, alpha = LENS_APPEARANCE[finish]
+        axes.plot_surface(*_ring_surface(0.0, radius, seat, 96), color=colour,
+                          alpha=alpha, linewidth=0, antialiased=True)
+
+        # A film is stuck on, so it is drawn as a separate layer above the
+        # glass, slightly inset the way a cut sheet sits inside the bezel.
+        if finish == "film":
+            film_colour, film_alpha = LENS_APPEARANCE["film_layer"]
+            axes.plot_surface(
+                *_ring_surface(0.0, radius * 0.97, seat + LENS_FILM_THICKNESS_MM, 96),
+                color=film_colour, alpha=film_alpha, linewidth=0, antialiased=True)
+
+    def add_gasket(self, axes, gasket, base_z, collect=None, tint=None):
         """Draws the gasket as the two stacked shapes it is made of.
 
         The lower shape is the seat: a disc a little wider than the gasket, with
@@ -1280,7 +1741,7 @@ class MainWindow(QMainWindow):
         wall_radius = outer / 2.0
         # The window always clears the package by the same margin a side, so
         # the seat never covers the emitter whatever the wall above it does.
-        window_half = emitter_size / 2.0 + GASKET_EMITTER_CLEARANCE_MM
+        window_half = (emitter_size + GASKET_WINDOW_OFFSET_MM) / 2.0
 
         seat_top = base_z + thickness
         wall_top = base_z + max(total_height, thickness)
@@ -1310,16 +1771,21 @@ class MainWindow(QMainWindow):
         faces = []
         for surface, direction in (
                 # The seat: underside, rim, and the window through it.
-                (_ring_surface(window, seat_radius, base_z, steps), "down"),
+                (_ring_surface(window, seat_radius, base_z, steps,
+                               GASKET_RADIAL_BANDS), "down"),
                 (_wall_surface(seat_radius, base_z, seat_top, steps), "out"),
                 (_wall_surface(window, base_z, seat_top, steps), "in"),
                 # Its top, in the two bands the wall above does not cover.
-                (_ring_surface(window, seat_inner_top, seat_top, steps), "up"),
-                (_ring_surface(wall_radius, seat_radius, seat_top, steps), "up"),
+                (_ring_surface(window, seat_inner_top, seat_top, steps,
+                               GASKET_RADIAL_BANDS), "up"),
+                (_ring_surface(wall_radius, seat_radius, seat_top, steps,
+                               GASKET_RADIAL_BANDS), "up"),
                 # The wall standing on it. Its underside exists only where
                 # the seat has a hole beneath it to be seen through.
-                (_ring_surface(aperture, wall_underside, seat_top, steps), "down"),
-                (_ring_surface(aperture, wall_radius, wall_top, steps), "up"),
+                (_ring_surface(aperture, wall_underside, seat_top, steps,
+                               GASKET_RADIAL_BANDS), "down"),
+                (_ring_surface(aperture, wall_radius, wall_top, steps,
+                               GASKET_RADIAL_BANDS), "up"),
                 (_wall_surface(wall_radius, seat_top, wall_top, steps), "out"),
                 (_wall_surface(aperture, seat_top, wall_top, steps), "in")):
             faces.extend(_solid_quads(surface, direction))
@@ -1327,9 +1793,14 @@ class MainWindow(QMainWindow):
         # The mesh itself is the edging: stroking each quad costs nothing to
         # build, and the strokes are culled and depth sorted with the faces
         # they belong to, so an edge behind the gasket stays behind it.
-        axes.add_collection3d(_SolidFaces(
-            faces, [GASKET_COLOUR] * len(faces),
-            [GASKET_EDGE_COLOUR] * len(faces), linewidths=0.35, zsort="max"))
+        colours = [tint or GASKET_COLOUR] * len(faces)
+
+        edges = [GASKET_EDGE_COLOUR] * len(faces)
+        if collect is not None:
+            collect(faces, colours, edges)
+        else:
+            axes.add_collection3d(_SolidFaces(faces, colours, edges,
+                                              linewidths=0.35, zsort="max"))
 
         return {"reach": seat_radius, "top_z": wall_top, "base_z": base_z}
 
@@ -1381,6 +1852,8 @@ class MainWindow(QMainWindow):
             setting = SPEC_DEFAULT_SETTINGS[kind].get(field)
             value = "" if setting is None else getattr(self.config, setting, "")
             value = overrides.get(field, value)
+            if field in INTEGER_SPECS and value != "":
+                value = int(round(float(value)))
             if isinstance(widget, QComboBox):
                 widget.setCurrentIndex(widget.findData(str(value)))
             else:
@@ -1536,10 +2009,25 @@ class MainWindow(QMainWindow):
         except (KeyError, ValueError, TypeError):
             return []
 
+        messages = []
         if diameter > 0.0 and height > 0.0 and opening == 0.0:
-            return [f"No opening size: assuming {bore:.2f} mm "
-                    f"(footprint diagonal)."]
-        return []
+            messages.append(f"No opening size: assuming {bore:.2f} mm "
+                            f"(footprint diagonal).")
+
+        # Whatever the preview paints red, say why in words as well.
+        gasket = self.current_specs("gasket")
+        if gasket is not None:
+            try:
+                geom = get_sim_geometry(reflector, emitter, gasket, "smooth",
+                                        self.config)
+            except (KeyError, ValueError, TypeError, ZeroDivisionError):
+                geom = None
+            if geom is not None:
+                for reason in dict.fromkeys(
+                        self.detect_clashes(geom, reflector, emitter,
+                                            gasket).values()):
+                    messages.append(f"Clash: {reason}.")
+        return messages
 
     def _emitter_warnings(self, reflector, emitter):
         """Warns when the emitter package will not pass through the bore.
@@ -1563,10 +2051,33 @@ class MainWindow(QMainWindow):
 
         # An opening of zero is assumed from this very diagonal, so there is
         # nothing to compare against; the reflector column says so instead.
+        messages = []
         if opening > 0.0 and diagonal > opening + FIT_TOLERANCE_MM:
-            return [f"Footprint diagonal {diagonal:.2f} mm > "
-                    f"opening {opening:.2f} mm."]
-        return []
+            messages.append(f"Footprint diagonal {diagonal:.2f} mm > "
+                            f"opening {opening:.2f} mm.")
+
+        # The dies share the area they are given, so an array cannot grow
+        # past its own specification. What it can do is share it out until
+        # there is nothing left, once the gaps account for the whole span.
+        shape = spec_or_default(emitter, "emitter", "shape", self.config)
+        try:
+            emitting_x, emitting_y = die_array_extent(emitter, self.config)
+            cell_length, cell_width = die_cell_size(emitter, shape, self.config)
+            footprint_x = float(emitter["footprint_x_mm"])
+            footprint_y = float(emitter["footprint_y_mm"])
+        except (KeyError, ValueError, TypeError):
+            return messages
+
+        if min(cell_length, cell_width) <= 0.0:
+            rows, columns, gap, _ = die_array_layout(emitter, self.config)
+            messages.append(f"{rows} x {columns} dies with {gap:g} mm gaps "
+                            f"leave no room in a {emitting_x:.2f} mm die.")
+        elif (emitting_x > footprint_x + FIT_TOLERANCE_MM
+              or emitting_y > footprint_y + FIT_TOLERANCE_MM):
+            messages.append(f"Die is {emitting_x:.2f} x {emitting_y:.2f} mm, "
+                            f"larger than the {footprint_x:.2f} x "
+                            f"{footprint_y:.2f} mm package.")
+        return messages
 
     def _gasket_warnings(self, gasket, emitter, bore):
         """Warns when the gasket does not match the bore or the emitter.
@@ -1619,6 +2130,173 @@ class MainWindow(QMainWindow):
                 messages.append(f"Window {size:.2f} mm != footprint "
                                 f"{axis} {value:.2f} mm.")
         return messages
+
+    def fit_to_screen(self):
+        """Caps the window to the display it opens on, and centres it.
+
+        The layout is designed around a wide desktop, and Qt will open a window
+        larger than the screen without complaint: the excess simply falls off
+        the edge, taking the buttons at the bottom with it. Asking the desktop
+        how much room there actually is costs nothing and makes the app usable
+        on a laptop panel.
+        """
+        screen = QGuiApplication.primaryScreen()
+        if screen is None:
+            return
+
+        available = screen.availableGeometry()
+        self.resize(
+            min(WINDOW_DEFAULT_WIDTH_PX,
+                available.width() - WINDOW_SCREEN_MARGIN_PX),
+            min(WINDOW_DEFAULT_HEIGHT_PX,
+                available.height() - WINDOW_SCREEN_MARGIN_PX))
+        self.move(available.center() - self.rect().center())
+
+    def scale_input_widths(self):
+        """Sizes the spec inputs, and the columns holding them, from the font.
+
+        Three things have to agree or a box ends up unreadable. The input needs
+        a width in digits rather than pixels, so it suits whatever font the
+        display is using. It needs a floor as well as a ceiling, because a
+        maximum alone does not stop a layout squeezing it to nothing. And the
+        column has to be wide enough for the longest caption beside it, since
+        the caption is served first and the input lives on what is left.
+
+        A drop down needs more room than a text box for the same content,
+        because its arrow eats into the width, so it gets an allowance.
+        """
+        digit = self.fontMetrics().horizontalAdvance("0")
+        field_width = max(FIELD_MIN_WIDTH_PX, digit * FIELD_WIDTH_IN_DIGITS)
+
+        # A drop down is measured against the longest caption it can show,
+        # not a digit count: "Monolithic" and "Orange Peel" are far wider
+        # than any number typed beside them, and a guess at the difference
+        # is what left them clipped.
+        combo_width = field_width
+        for widgets in self.field_widgets.values():
+            for widget in widgets.values():
+                if not isinstance(widget, QComboBox):
+                    continue
+                for index in range(widget.count()):
+                    combo_width = max(
+                        combo_width,
+                        widget.fontMetrics().horizontalAdvance(
+                            widget.itemText(index)) + COMBO_ARROW_ALLOWANCE_PX)
+
+        for widgets in (list(self.field_widgets.values())
+                        + list(self.run_only_widgets.values())):
+            for widget in widgets.values():
+                width = (combo_width if isinstance(widget, QComboBox)
+                         else field_width)
+                widget.setMinimumWidth(width)
+                widget.setMaximumWidth(width)
+
+        widest_caption = 0
+        for layout in (self.formLayout_Reflector, self.formLayout_Emitter,
+                       self.formLayout_Gasket):
+            # Wrapping a row was worse than the problem it solved: the field
+            # dropped below its caption and the form grew a ragged extra line
+            # for every long label. Keeping every row on one line and sizing
+            # the column to suit is tidier and easier to read.
+            layout.setRowWrapPolicy(QFormLayout.RowWrapPolicy.DontWrapRows)
+            for row in range(layout.rowCount()):
+                for role in (QFormLayout.ItemRole.LabelRole,
+                             QFormLayout.ItemRole.SpanningRole):
+                    item = layout.itemAt(row, role)
+                    label = item.widget() if item is not None else None
+                    if label is None or not hasattr(label, "text"):
+                        continue
+                    widest_caption = max(
+                        widest_caption,
+                        label.fontMetrics().horizontalAdvance(label.text()))
+
+        column_width = widest_caption + combo_width + COLUMN_PADDING_PX
+        for column in (self.scrollReflector, self.scrollEmitter,
+                       self.scrollGasket):
+            column.setMinimumWidth(column_width)
+
+        # Equal stretch, so the three share the width evenly however wide
+        # the window is. Done here rather than as a layout property in the
+        # .ui, because uic turns a property into a setter call by name and
+        # a box layout has no setStretch that takes one.
+        for index in range(self.horizontalLayout_Columns.count()):
+            self.horizontalLayout_Columns.setStretch(index, 1)
+
+    @staticmethod
+    def scale_figure_text(figure):
+        """Resizes every label on a figure in proportion to the figure itself.
+
+        Matplotlib measures type in points, which do not shrink when the panel
+        does, so a plot squeezed into a small window ends up with its title
+        across its axis labels. Each artist remembers the size it was given and
+        is redrawn at a fraction of it, so the layout holds together at any
+        size. A floor stops the text vanishing altogether on a very small panel.
+
+        Args:
+            figure: The Matplotlib figure to rescale.
+        """
+        scale = max(FIGURE_MIN_FONT_SCALE,
+                    figure.get_size_inches()[1] / FIGURE_REFERENCE_HEIGHT_IN)
+        for artist in figure.findobj(Text):
+            original = getattr(artist, "_unscaled_fontsize", None)
+            if original is None:
+                original = artist.get_fontsize()
+                artist._unscaled_fontsize = original
+            artist.set_fontsize(original * scale)
+
+    def setup_results_tab(self):
+        """Wires the results tab and hides it until there is something in it.
+
+        The tab is not merely empty before a run, it is meaningless, so it is
+        taken out of the bar altogether rather than left as a dead heading.
+        """
+        self.tabMain.setTabVisible(RESULTS_TAB_INDEX, False)
+        for name in PLOT_NAMES:
+            self.lstPlots.addItem(QListWidgetItem(name))
+        self.lstPlots.setCurrentRow(0)
+        self.lstPlots.currentTextChanged.connect(lambda *_: self.show_selected_plot())
+        self.btnSavePlots.clicked.connect(lambda *_: self.save_plots())
+
+    def selected_plot(self):
+        """Returns the plot the user is looking at, defaulting to the wall shot."""
+        item = self.lstPlots.currentItem()
+        return item.text() if item is not None else PLOT_NAMES[0]
+
+    def show_selected_plot(self):
+        """Draws whichever plot is chosen, and shows the camera bar for the shot.
+
+        Only the wall shot is a photograph, so only it has an exposure. Leaving
+        the camera controls on show beside a line graph would suggest they did
+        something there.
+        """
+        if self.wall_shot is None:
+            return
+
+        name = self.selected_plot()
+        self.grpCamera.setVisible(name == PLOT_NAMES[0])
+        self.show_figure(render_plot(self.wall_shot, name, self.config))
+
+    def save_plots(self):
+        """Writes the chosen plots to a directory the user picks."""
+        if self.wall_shot is None:
+            self.log_message("No plots to save yet; run a simulation first.")
+            return
+
+        wanted = PlotExportDialog.choose(self)
+        if not wanted:
+            return
+
+        directory = QFileDialog.getExistingDirectory(
+            self, "Save Plots To", self.config.resolved_output_directory)
+        if not directory:
+            return
+
+        base = os.path.join(directory, self.wall_shot.filename)
+        for name in wanted:
+            figure = render_plot(self.wall_shot, name, self.config, base,
+                                 always_save=True)
+            plt.close(figure)
+        self.log_message(f"Saved {len(wanted)} plot(s) to {directory}")
 
     def setup_camera_controls(self):
         """Wires the camera bar and puts the saved settings into it.
@@ -1860,7 +2538,7 @@ class MainWindow(QMainWindow):
                 widget.editingFinished.connect(self.update_previews)
 
         self.btnSettings.clicked.connect(self.open_settings)
-        self.btnSimulate.clicked.connect(self.run_simulation)
+        self.btnSimulate.clicked.connect(lambda *_: self.run_or_stop())
         self.btnStop.clicked.connect(self.stop_simulation)
 
     # --- HARDWARE CATALOGUE ---
@@ -1886,6 +2564,8 @@ class MainWindow(QMainWindow):
         specs = self.library.get(kind, name)
         for field, widget in self.field_widgets[kind].items():
             value = specs.get(field, "")
+            if field in INTEGER_SPECS and value != "":
+                value = int(round(float(value)))
             if field in LIST_SPECS and value != "":
                 # Compact JSON, so the box holds exactly what a generator emits
                 # and can be copied back out again.
@@ -2100,10 +2780,26 @@ class MainWindow(QMainWindow):
         self.progressBar.setValue(int(percent))
 
     def set_controls_running(self, is_running):
-        """Enables the stop button and disables the rest while a job runs."""
-        self.btnSimulate.setEnabled(not is_running)
+        """Turns the run button into a stop button, and back again.
+
+        One button rather than two: the two are never both useful, and a
+        greyed out Stop beside a live Run tells the operator nothing they
+        cannot see from the progress bar.
+
+        Args:
+            is_running: True while a job is in progress.
+        """
+        self.btnSimulate.setText("Stop Simulation" if is_running
+                                 else "Run FEA Simulation")
         self.btnSettings.setEnabled(not is_running)
-        self.btnStop.setEnabled(is_running)
+        self.btnStop.setVisible(False)
+
+    def run_or_stop(self):
+        """Starts a run, or stops the one already going."""
+        if self.worker is not None and self.worker.isRunning():
+            self.stop_simulation()
+        else:
+            self.run_simulation()
 
     def run_simulation(self):
         """Validates the selection, applies edits and starts the worker."""
@@ -2181,13 +2877,18 @@ class MainWindow(QMainWindow):
         self.wall_shot = shot
         self.btnExportWallShot.setEnabled(shot is not None)
 
+        # Results only exist once something has been traced, so the tab
+        # appears with them and the view moves to it.
+        if shot is not None:
+            self.tabMain.setTabVisible(RESULTS_TAB_INDEX, True)
+            self.tabMain.setCurrentIndex(RESULTS_TAB_INDEX)
+            self.show_selected_plot()
+
         if results:
             self.log_message("\n--- SIMULATION RESULTS ---")
             for label, value in results.items():
                 self.log_message(f"{label}: {value}")
 
-        if figure:
-            self.show_figure(figure)
 
     def show_figure(self, figure):
         """Puts a figure in the output box, replacing whatever was there.
@@ -2201,6 +2902,12 @@ class MainWindow(QMainWindow):
 
         self.figure_canvas = FigureCanvas(figure)
         self.grpPlot.layout().addWidget(self.figure_canvas)
+
+        # Rescale on every resize, not just once: the panel changes size
+        # whenever the window does, and the type has to follow it.
+        self.figure_canvas.mpl_connect(
+            "resize_event", lambda *_: self.scale_figure_text(figure))
+        self.scale_figure_text(figure)
         self.figure_canvas.draw()
 
 

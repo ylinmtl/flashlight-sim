@@ -49,6 +49,11 @@ class SimulationConfig:
             "plot_intensity_x", "plot_intensity_y", "plot_intensity_45",
             "batch_output_directory", "export_csv", "export_plots",
         ],
+        "Spherical Projection": [
+            "use_spherical_projection", "dome_angle_deg",
+            "dome_polar_step_deg", "dome_azimuth_step_deg",
+            "dome_memory_budget_mb",
+        ],
         "Simulation Space & Constraints": [
             "use_gpu", "max_multiple_reflections", "use_reflector_opening",
             "target_distance_m", "canvas_fov_deg", "plot_fov_deg",
@@ -69,8 +74,13 @@ class SimulationConfig:
         "Material Defaults & Thresholds": [
             "default_reflectivity_smooth", "default_reflectivity_op",
             "default_reflectivity_cylinder", "default_gasket_reflectivity",
-            "default_op_blur_strength", "default_op_factor",
+           
             "default_transmissivity_lens", "default_surface_finish",
+            "default_surface_roughness_nm", "default_surface_correlation_um",
+            "default_op_dimple_pitch_mm",
+            "default_op_dimple_depth_um", "default_lens_finish",
+            "default_lens_diffusion_fwhm_deg",
+            "default_lens_refractive_index",
             "spill_visible_threshold_lux", "corona_visible_threshold",
             "hotspot_fwhm_threshold", "default_gasket_thickness_mm",
             "default_gasket_total_height_mm",
@@ -80,6 +90,9 @@ class SimulationConfig:
             "default_reflector_base_thickness_mm", "default_focus_offset_mm",
             "default_opening_diameter_mm", "default_dome_size_mm",
             "default_refractive_index", "default_emitter_shape",
+            "default_die_layout", "default_die_rows",
+            "default_die_columns", "default_die_gap_mm",
+            "default_die_gap_output",
             "default_emitter_output_mode", "default_max_lumens",
             "default_forward_voltage_v", "default_vf_turn_on_v",
             "default_vf_scale", "default_base_efficacy_lm_w",
@@ -210,8 +223,20 @@ class SimulationConfig:
 
     @property
     def wall_radius_m(self) -> float:
-        """Half-width of the simulated wall, from the canvas field of view."""
-        return self.target_distance_m * math.tan(math.radians(self.canvas_fov_deg / 2.0))
+        """Half-width of the simulated wall.
+
+        With the spherical grid in front of it the wall is only a window
+        onto the dome, and everything the head emits has already been caught
+        by the time the projection happens. The wall can therefore be sized
+        to what is worth looking at, which is the plot's own field of view.
+
+        Tracing straight onto the wall has nothing behind it, so there the
+        canvas has to be wide enough to catch the spill as well, or that
+        light is simply lost.
+        """
+        field_of_view = (self.plot_fov_deg if self.use_spherical_projection
+                         else self.canvas_fov_deg)
+        return self.target_distance_m * math.tan(math.radians(field_of_view / 2.0))
 
     @property
     def plot_radius_m(self) -> float:

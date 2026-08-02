@@ -46,6 +46,17 @@ DIE_SHAPES = ("square", "round", "polygon")
 # Reflector surface treatments. The finish selects which of the
 # reflector's two reflectivity figures applies to the parabola.
 SURFACE_FINISHES = ("smooth", "orange_peel")
+
+# How the front lens scatters. "clear" passes light straight through,
+# "frosted" is the glass itself etched, and "film" is a diffuser stuck
+# on the outside. The two scatter alike but behave differently with
+# angle, so they are kept apart.
+LENS_FINISHES = ("clear", "frosted", "film")
+
+# How the emitting surface is laid out. "monolithic" is one
+# continuous die. "array" is a grid of separate dies with phosphor
+# between them, as used by multi die COBs and by the larger CSP parts.
+DIE_LAYOUTS = ("monolithic", "array")
 # Shape of the gasket wall that surrounds the emitter. A round wall
 # leaves a circular aperture; a square one follows the die package.
 GASKET_WALL_SHAPES = ("round", "square")
@@ -59,7 +70,26 @@ OUTPUT_MODES = ("simple", "advanced")
 # change holds a number that has to be halved as it is carried across.
 # Without this the same figure would quietly model a wall twice as thick.
 RENAMED_SPECS = {
-    "reflector": {"thickness_diameter_mm": ("wall_thickness_mm", 0.5)},
+    "reflector": {
+        "thickness_diameter_mm": ("wall_thickness_mm", 0.5),
+        # Both scattering specs used to be a standard deviation, one as a
+        # slope error in milliradians and the other as an angle in degrees.
+        # Both are now the width of the beam they produce, in degrees, so
+        # 0.269843 turns a slope sigma in mrad into a beam FWHM in degrees
+        # (doubled for reflection, times 2.3548 for sigma to FWHM, converted
+        # from milliradians) and 2.3548 does the same for the lens.
+        # Roughness was a slope error in milliradians, then briefly the beam
+        # width it produced. It is now the height of the texture itself,
+        # which is what a surface is actually measured in. 17.7 nm per mrad
+        # of slope follows from the correlation length in optics.py.
+        "surface_roughness_mrad": ("surface_roughness_nm", 17.678),
+        "surface_blur_deg": ("surface_roughness_nm", 65.51),
+        # Orange peel was an abstract multiplier on a post-process blur. It
+        # is now the depth of the dimples, with their spacing beside it, so
+        # a texture measured off a real reflector can be typed straight in.
+        "OP_Factor": ("op_dimple_depth_um", 3.0),
+        "lens_diffusion_deg": ("lens_diffusion_fwhm_deg", 2.354820),
+    },
     "gasket": {
         "gasket_thickness_mm": ("thickness_mm", 1.0),
         "gasket_total_height_mm": ("total_height_mm", 1.0),
@@ -76,9 +106,15 @@ SPEC_DEFAULT_SETTINGS = {
         "reflectivity_op": "default_reflectivity_op",
         "reflectivity_cylinder": "default_reflectivity_cylinder",
         "gasket_reflectivity": "default_gasket_reflectivity",
-        "OP_Factor": "default_op_factor",
         "transmissivity_lens": "default_transmissivity_lens",
         "surface_finish": "default_surface_finish",
+        "surface_roughness_nm": "default_surface_roughness_nm",
+        "surface_correlation_um": "default_surface_correlation_um",
+        "op_dimple_pitch_mm": "default_op_dimple_pitch_mm",
+        "op_dimple_depth_um": "default_op_dimple_depth_um",
+        "lens_finish": "default_lens_finish",
+        "lens_diffusion_fwhm_deg": "default_lens_diffusion_fwhm_deg",
+        "lens_refractive_index": "default_lens_refractive_index",
     },
     "emitter": {
         "output_mode": "default_emitter_output_mode",
@@ -91,6 +127,11 @@ SPEC_DEFAULT_SETTINGS = {
         "dome_size_mm": "default_dome_size_mm",
         "refractive_index": "default_refractive_index",
         "shape": "default_emitter_shape",
+        "die_layout": "default_die_layout",
+        "die_rows": "default_die_rows",
+        "die_columns": "default_die_columns",
+        "die_gap_mm": "default_die_gap_mm",
+        "die_gap_output": "default_die_gap_output",
     },
     "gasket": {
         "inner_diameter_mm": "default_gasket_inner_diameter_mm",
