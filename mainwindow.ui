@@ -6,7 +6,7 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>800</width>
+    <width>1800</width>
     <height>1000</height>
    </rect>
   </property>
@@ -142,7 +142,7 @@
                  <item row="3" column="0">
                   <widget class="QLabel">
                    <property name="text">
-                    <string>Opening Dia (mm)</string>
+                    <string>Opening Diameter (mm)</string>
                    </property>
                   </widget>
                  </item>
@@ -176,7 +176,7 @@
                  <item row="5" column="0">
                   <widget class="QLabel">
                    <property name="text">
-                    <string>Wall Thk (mm)</string>
+                    <string>Wall Thickness (mm)</string>
                    </property>
                   </widget>
                  </item>
@@ -193,7 +193,7 @@
                  <item row="6" column="0">
                   <widget class="QLabel">
                    <property name="text">
-                    <string>Base Thk (mm)</string>
+                    <string>Base Thickness (mm)</string>
                    </property>
                   </widget>
                  </item>
@@ -254,7 +254,7 @@
                  <item row="10" column="0">
                   <widget class="QLabel">
                    <property name="text">
-                    <string>Scale (µm)</string>
+                    <string>Roughness Scale (µm)</string>
                    </property>
                   </widget>
                  </item>
@@ -305,12 +305,12 @@
                  <item row="13" column="0">
                   <widget class="QLabel">
                    <property name="text">
-                    <string>Smooth Refl.</string>
+                    <string>OP Factor</string>
                    </property>
                   </widget>
                  </item>
                  <item row="13" column="1">
-                  <widget class="QLineEdit" name="txtRef_reflectivity_smooth">
+                  <widget class="QLineEdit" name="txtRef_op_factor">
                    <property name="maximumSize">
                     <size>
                      <width>100</width>
@@ -322,12 +322,12 @@
                  <item row="14" column="0">
                   <widget class="QLabel">
                    <property name="text">
-                    <string>Peel Refl.</string>
+                    <string>Smooth Reflectance</string>
                    </property>
                   </widget>
                  </item>
                  <item row="14" column="1">
-                  <widget class="QLineEdit" name="txtRef_reflectivity_op">
+                  <widget class="QLineEdit" name="txtRef_reflectivity_smooth">
                    <property name="maximumSize">
                     <size>
                      <width>100</width>
@@ -339,12 +339,12 @@
                  <item row="15" column="0">
                   <widget class="QLabel">
                    <property name="text">
-                    <string>Bore Refl.</string>
+                    <string>Peel Reflectance</string>
                    </property>
                   </widget>
                  </item>
                  <item row="15" column="1">
-                  <widget class="QLineEdit" name="txtRef_reflectivity_cylinder">
+                  <widget class="QLineEdit" name="txtRef_reflectivity_op">
                    <property name="maximumSize">
                     <size>
                      <width>100</width>
@@ -356,11 +356,28 @@
                  <item row="16" column="0">
                   <widget class="QLabel">
                    <property name="text">
-                    <string>Gasket Refl.</string>
+                    <string>Bore Reflectance</string>
                    </property>
                   </widget>
                  </item>
                  <item row="16" column="1">
+                  <widget class="QLineEdit" name="txtRef_reflectivity_cylinder">
+                   <property name="maximumSize">
+                    <size>
+                     <width>100</width>
+                     <height>16777215</height>
+                    </size>
+                   </property>
+                  </widget>
+                 </item>
+                 <item row="17" column="0">
+                  <widget class="QLabel">
+                   <property name="text">
+                    <string>Gasket Reflectance</string>
+                   </property>
+                  </widget>
+                 </item>
+                 <item row="17" column="1">
                   <widget class="QLineEdit" name="txtRef_gasket_reflectivity">
                    <property name="maximumSize">
                     <size>
@@ -370,20 +387,10 @@
                    </property>
                   </widget>
                  </item>
-                 <item row="17" column="0" colspan="2">
-                  <widget class="QLabel" name="lblGroup_reflector_front">
-                   <property name="text">
-                    <string>Front Lens</string>
-                   </property>
-                   <property name="styleSheet">
-                    <string>font-weight: bold; color: #9FB6CC; padding-top: 6px;</string>
-                   </property>
-                  </widget>
-                 </item>
                  <item row="18" column="0">
                   <widget class="QLabel">
                    <property name="text">
-                    <string>Transmissivity</string>
+                    <string>Lens Transmissivity</string>
                    </property>
                   </widget>
                  </item>
@@ -1131,7 +1138,7 @@
                  <item row="1" column="0">
                   <widget class="QLabel">
                    <property name="text">
-                    <string>Outer Dia (mm)</string>
+                    <string>Outer Diameter (mm)</string>
                    </property>
                   </widget>
                  </item>
@@ -1148,7 +1155,7 @@
                  <item row="2" column="0">
                   <widget class="QLabel">
                    <property name="text">
-                    <string>Inner Dia (mm)</string>
+                    <string>Inner Diameter (mm)</string>
                    </property>
                   </widget>
                  </item>
@@ -1226,7 +1233,7 @@
                  <item row="7" column="0">
                   <widget class="QLabel">
                    <property name="text">
-                    <string>Total Ht (mm)</string>
+                    <string>Total Height (mm)</string>
                    </property>
                   </widget>
                  </item>
@@ -1285,6 +1292,27 @@
           </item>
          </layout>
         </item>
+        <item>
+         <widget class="QPlainTextEdit" name="txtLogs">
+          <property name="readOnly">
+           <bool>true</bool>
+          </property>
+          <property name="maximumSize">
+           <size>
+            <width>16777215</width>
+            <height>100</height>
+           </size>
+          </property>
+          <property name="font">
+           <font>
+            <family>Consolas</family>
+           </font>
+          </property>
+          <property name="placeholderText">
+           <string>Simulation logs...</string>
+          </property>
+         </widget>
+        </item>
        </layout>
       </widget>
       <widget class="QWidget" name="tabResults">
@@ -1295,10 +1323,13 @@
         <item>
          <widget class="QListWidget" name="lstPlots">
           <property name="maximumWidth">
-           <number>170</number>
+           <number>340</number>
           </property>
           <property name="toolTip">
            <string>Plots from the last run. The camera settings apply to the wall shot.</string>
+          </property>
+          <property name="minimumWidth">
+           <number>240</number>
           </property>
          </widget>
         </item>
@@ -1407,6 +1438,22 @@
               </widget>
              </item>
              <item>
+              <spacer name="gap_lblCamFStop">
+               <property name="orientation">
+                <enum>Qt::Horizontal</enum>
+               </property>
+               <property name="sizeType">
+                <enum>QSizePolicy::Fixed</enum>
+               </property>
+               <property name="sizeHint" stdset="0">
+                <size>
+                 <width>24</width>
+                 <height>20</height>
+                </size>
+               </property>
+              </spacer>
+             </item>
+             <item>
               <widget class="QLabel" name="lblCamFStop">
                <property name="text">
                 <string>f/</string>
@@ -1427,6 +1474,22 @@
               </widget>
              </item>
              <item>
+              <spacer name="gap_lblCamShutter">
+               <property name="orientation">
+                <enum>Qt::Horizontal</enum>
+               </property>
+               <property name="sizeType">
+                <enum>QSizePolicy::Fixed</enum>
+               </property>
+               <property name="sizeHint" stdset="0">
+                <size>
+                 <width>24</width>
+                 <height>20</height>
+                </size>
+               </property>
+              </spacer>
+             </item>
+             <item>
               <widget class="QLabel" name="lblCamShutter">
                <property name="text">
                 <string>Shutter 1/</string>
@@ -1443,6 +1506,13 @@
                  <width>60</width>
                  <height>16777215</height>
                 </size>
+               </property>
+              </widget>
+             </item>
+             <item>
+              <widget class="QLabel" name="lblCamShutterUnit">
+               <property name="text">
+                <string>seconds</string>
                </property>
               </widget>
              </item>
@@ -1466,65 +1536,132 @@
                </property>
               </widget>
              </item>
-             <item>
-              <widget class="QPushButton" name="btnExportWallShot">
-               <property name="text">
-                <string>Export Wall Shot</string>
-               </property>
-              </widget>
-             </item>
             </layout>
            </widget>
           </item>
           <item>
-           <layout class="QHBoxLayout" name="horizontalLayout_Save">
-            <item>
-             <spacer name="savePlotSpacer">
-              <property name="orientation">
-               <enum>Qt::Horizontal</enum>
-              </property>
-              <property name="sizeHint" stdset="0">
-               <size>
-                <width>40</width>
-                <height>20</height>
-               </size>
-              </property>
-             </spacer>
-            </item>
-            <item>
-             <widget class="QPushButton" name="btnSavePlots">
-              <property name="text">
-               <string>Save Plots...</string>
-              </property>
-             </widget>
-            </item>
-           </layout>
+           <widget class="QGroupBox" name="grpOutputSettings">
+            <property name="title">
+             <string>Output Settings</string>
+            </property>
+            <property name="maximumSize">
+             <size>
+              <width>16777215</width>
+              <height>120</height>
+             </size>
+            </property>
+            <layout class="QVBoxLayout" name="verticalLayout_OutputSettings">
+             <item>
+              <layout class="QHBoxLayout" name="horizontalLayout_Output_Top">
+               <item>
+                <widget class="QLabel" name="lblPlotScale">
+                 <property name="text">
+                  <string>Plot Scale:</string>
+                 </property>
+                </widget>
+               </item>
+               <item>
+                <widget class="QComboBox" name="cmbPlotScale">
+                 <item>
+                  <property name="text">
+                   <string>Distance</string>
+                  </property>
+                 </item>
+                 <item>
+                  <property name="text">
+                   <string>Angle</string>
+                  </property>
+                 </item>
+                </widget>
+               </item>
+               <item>
+                <widget class="QCheckBox" name="chkShowPrimaryGrid">
+                 <property name="text">
+                  <string>Show Primary Grid</string>
+                 </property>
+                </widget>
+               </item>
+               <item>
+                <widget class="QCheckBox" name="chkShowSecondaryGrid">
+                 <property name="text">
+                  <string>Show Secondary Grid</string>
+                 </property>
+                </widget>
+               </item>
+               <item>
+                <spacer name="horizontalSpacer_Output_Top">
+                 <property name="orientation">
+                  <enum>Qt::Horizontal</enum>
+                 </property>
+                 <property name="sizeHint" stdset="0">
+                  <size>
+                   <width>40</width>
+                   <height>20</height>
+                  </size>
+                 </property>
+                </spacer>
+               </item>
+              </layout>
+             </item>
+             <item>
+              <layout class="QHBoxLayout" name="horizontalLayout_Output_Bottom">
+               <item>
+                <widget class="QCheckBox" name="chkSaveWallShot">
+                 <property name="text">
+                  <string>Save Wall Shot</string>
+                 </property>
+                </widget>
+               </item>
+               <item>
+                <widget class="QCheckBox" name="chkSaveXAxis">
+                 <property name="text">
+                  <string>Save X-Axis</string>
+                 </property>
+                </widget>
+               </item>
+               <item>
+                <widget class="QCheckBox" name="chkSaveYAxis">
+                 <property name="text">
+                  <string>Save Y-Axis</string>
+                 </property>
+                </widget>
+               </item>
+               <item>
+                <widget class="QCheckBox" name="chkSave45Deg">
+                 <property name="text">
+                  <string>Save 45-Deg</string>
+                 </property>
+                </widget>
+               </item>
+               <item>
+                <spacer name="horizontalSpacer_Output_Bottom">
+                 <property name="orientation">
+                  <enum>Qt::Horizontal</enum>
+                 </property>
+                 <property name="sizeHint" stdset="0">
+                  <size>
+                   <width>40</width>
+                   <height>20</height>
+                  </size>
+                 </property>
+                </spacer>
+               </item>
+               <item>
+                <widget class="QPushButton" name="btnSavePlots">
+                 <property name="text">
+                  <string>Save Selected Plots...</string>
+                 </property>
+                </widget>
+               </item>
+              </layout>
+             </item>
+            </layout>
+           </widget>
           </item>
          </layout>
         </item>
        </layout>
       </widget>
-     </widget>
-    </item>
-    <item>
-     <widget class="QPlainTextEdit" name="txtLogs">
-      <property name="readOnly">
-       <bool>true</bool>
-      </property>
-      <property name="maximumSize">
-       <size>
-        <width>16777215</width>
-        <height>100</height>
-       </size>
-      </property>
-      <property name="font">
-       <font>
-        <family>Consolas</family>
-       </font>
-      </property>
-      <property name="placeholderText">
-       <string>Simulation logs...</string>
-      </property>
      </widget>
     </item>
     <item>

@@ -34,7 +34,8 @@ import numpy as np
 from mpl_toolkits.mplot3d.art3d import Poly3DCollection
 
 from core import (DIE_LAYOUTS, DIE_SHAPES, GASKET_WALL_SHAPES,
-                  die_array_extent, die_array_layout, die_cell_size,
+                  die_array_extent, die_array_layout,
+                  die_array_resolution, die_cell_size,
                   die_centres,
                   LENS_FINISHES,
                   OUTPUT_MODES,
@@ -42,7 +43,7 @@ from core import (DIE_LAYOUTS, DIE_SHAPES, GASKET_WALL_SHAPES,
                     HardwareLibrary, SimulationConfig,
                     effective_bore_diameter, emitter_die_outline,
                     emitter_footprint_diagonal, get_sim_geometry,
-                    PLOT_NAMES, render_plot, render_wall_shot,
+                    PLOT_NAMES, render_plot,
                   resource_path, run_simulation_job,
                     spec_or_default)
 
@@ -62,7 +63,7 @@ SPEC_GROUPS = {
                       "thickness_height_mm")),
         ("Reflective Surface", ("surface_finish", "surface_roughness_nm",
                                 "surface_correlation_um", "op_dimple_pitch_mm",
-                                "op_dimple_depth_um", "reflectivity_smooth",
+                                "op_dimple_depth_um", "op_factor", "reflectivity_smooth",
                                 "reflectivity_op", "reflectivity_cylinder",
                                 "gasket_reflectivity")),
         ("Front Lens", ("transmissivity_lens", "lens_finish",
@@ -187,7 +188,7 @@ WINDOW_SCREEN_MARGIN_PX = 48
 # The size the window opens at, before the layout and the screen have
 # their say. Qt will not go below what the widgets need, so a request
 # narrower than the three columns simply gets the columns' width.
-WINDOW_DEFAULT_WIDTH_PX = 800
+WINDOW_DEFAULT_WIDTH_PX = 900
 WINDOW_DEFAULT_HEIGHT_PX = 1000
 
 # Spec inputs are sized in digits rather than pixels. A hard pixel width
@@ -276,6 +277,7 @@ CONDITIONAL_SPECS = {
     "reflectivity_smooth": ("surface_finish", frozenset({"smooth"})),
     "op_dimple_pitch_mm": ("surface_finish", frozenset({"orange_peel"})),
     "op_dimple_depth_um": ("surface_finish", frozenset({"orange_peel"})),
+    "op_factor": ("surface_finish", frozenset({"orange_peel"})),
     "reflectivity_op": ("surface_finish", frozenset({"orange_peel"})),
     "die_rows": ("die_layout", frozenset({"array"})),
     "die_columns": ("die_layout", frozenset({"array"})),
@@ -318,8 +320,33 @@ RUN_ONLY_GROUP_TITLE = "Emitter Centring"
 # Settings offered by the settings dialog, grouped exactly as they are stored,
 # mapping each attribute of SimulationConfig to its human readable label.
 SETTING_LABELS = {
+    "Simulation Space & Constraints": {
+        "use_gpu": "Use GPU Acceleration (CUDA)",
+        "enable_lens_simulation": "Enable Front Lens Simulation",
+        "use_dimple_op_simulation": "Use Dimple Bump-Map for Orange Peel",
+        "max_multiple_reflections": "Max Multiple Reflections",
+        "use_reflector_opening": "Force Reflector Opening Size",
+        "target_distance_m": "Target Distance (meters)",
+        "canvas_fov_deg": "Canvas Field of View (degrees)",
+        "plot_fov_deg": "Plot Field of View (degrees)",
+        "op_blur_strength": "OP Blur Base Strength",
+    },
+    "Resolution & Angular Density": {
+        "sim_grid_res": "Simulation Grid Resolution (pixels)",
+        "sim_emitter_elements": "Emitter Subdivision Elements",
+        "sim_theta_step_deg": "Theta Step Size (degrees)",
+        "sim_phi_step_deg": "Phi Step Size (degrees)",
+        "sim_theta_min_deg": "Theta Minimum (degrees)",
+        "sim_theta_max_deg": "Theta Maximum (degrees)",
+        "sim_phi_min_deg": "Phi Minimum (degrees)",
+        "sim_phi_max_deg": "Phi Maximum (degrees)",
+    },
     "Output & Rendering": {
+        "plot_scale": "Plot Scale (Distance/Angle)",
+        "plot_show_primary_grid": "Show Primary Grid",
+        "plot_show_secondary_grid": "Show Secondary Grid",
         "generate_all_plots": "Generate All Plots (Batch Mode)",
+        "stored_run_count": "Results Kept (runs)",
         "plot_wall_shot": "Plot Wall Shot (2D Image)",
         "plot_intensity_x": "Plot Intensity Profile (X-Axis)",
         "plot_intensity_y": "Plot Intensity Profile (Y-Axis)",
@@ -329,26 +356,12 @@ SETTING_LABELS = {
         "export_plots": "Export Plot Images",
         "batch_output_directory": "Output Directory Path",
     },
-    "IES Export": {
-        "export_ies": "Export IES",
-        "ies_vertical_step_deg": "IES Vertical Step (deg)",
-        "ies_horizontal_step_deg": "IES Horizontal Step (deg)",
-        "ies_max_vertical_angle_deg": "IES Max Vertical Angle (deg)",
-    },
     "Spherical Projection": {
         "use_spherical_projection": "Use Spherical Projection",
-        "dome_angle_deg": "Dome Angle (deg)",
-        "dome_polar_step_deg": "Dome Polar Step (deg)",
-        "dome_azimuth_step_deg": "Dome Azimuth Step (deg)",
+        "dome_angle_deg": "Dome Angle (degrees)",
+        "dome_polar_step_deg": "Dome Polar Step (degrees)",
+        "dome_azimuth_step_deg": "Dome Azimuth Step (degrees)",
         "dome_memory_budget_mb": "Dome Memory Budget (MB)",
-    },
-    "Simulation Space & Constraints": {
-        "use_gpu": "Use GPU Acceleration (CUDA)",
-        "max_multiple_reflections": "Max Multiple Reflections (Bounces)",
-        "use_reflector_opening": "Force Reflector Opening Size",
-        "target_distance_m": "Target Distance (meters)",
-        "canvas_fov_deg": "Canvas Field of View (degrees)",
-        "plot_fov_deg": "Plot Field of View (degrees)",
     },
     "Camera Settings": {
         "use_auto_exposure": "Use Auto Exposure",
@@ -357,15 +370,11 @@ SETTING_LABELS = {
         "cam_f_stop": "Camera f-stop",
         "cam_shutter_speed_s": "Camera Shutter Speed (seconds)",
     },
-    "Resolution & Angular Density": {
-        "sim_grid_res": "Simulation Grid Resolution (px)",
-        "sim_emitter_elements": "Emitter Subdivision Elements",
-        "sim_theta_step_deg": "Theta Step Size (degrees)",
-        "sim_phi_step_deg": "Phi Step Size (degrees)",
-        "sim_theta_min_deg": "Theta Minimum (degrees)",
-        "sim_theta_max_deg": "Theta Maximum (degrees)",
-        "sim_phi_min_deg": "Phi Minimum (degrees)",
-        "sim_phi_max_deg": "Phi Maximum (degrees)",
+    "IES Export": {
+        "export_ies": "Export IES",
+        "ies_vertical_step_deg": "IES Vertical Step (degrees)",
+        "ies_horizontal_step_deg": "IES Horizontal Step (degrees)",
+        "ies_max_vertical_angle_deg": "IES Max Vertical Angle (degrees)",
     },
     "Material Defaults & Thresholds": {
         "default_reflectivity_smooth": "Default Reflectivity (Smooth)",
@@ -378,6 +387,7 @@ SETTING_LABELS = {
         "default_surface_correlation_um": "Default Roughness Scale (µm)",
         "default_op_dimple_pitch_mm": "Default Orange Peel Pitch (mm)",
         "default_op_dimple_depth_um": "Default Orange Peel Depth (µm)",
+        "default_op_factor": "Default OP Factor (Gaussian Blur)",
         "default_lens_finish": "Default Lens Finish",
         "default_lens_diffusion_fwhm_deg": "Default Lens Diffusion (° FWHM)",
         "default_lens_refractive_index": "Default Lens Refractive Index",
@@ -778,54 +788,6 @@ class SquarePreview(QWidget):
         self.canvas.draw_idle()
 
 
-class PlotExportDialog(QDialog):
-    """Asks which of a run's plots to write out.
-
-    A tick per plot rather than a single save of whatever is on screen, because
-    wanting all four at once is the common case and clicking through them one
-    at a time to export each would be tedious.
-    """
-
-    def __init__(self, parent=None):
-        """Builds the dialog with every plot ticked."""
-        super().__init__(parent)
-        self.setWindowTitle("Save Plots")
-
-        layout = QVBoxLayout(self)
-        self.boxes = {}
-        for name in PLOT_NAMES:
-            box = QCheckBox(name, self)
-            box.setChecked(True)
-            layout.addWidget(box)
-            self.boxes[name] = box
-
-        buttons = QHBoxLayout()
-        save = QPushButton("Save", self)
-        save.clicked.connect(lambda *_: self.accept())
-        cancel = QPushButton("Cancel", self)
-        cancel.clicked.connect(lambda *_: self.reject())
-        buttons.addWidget(save)
-        buttons.addWidget(cancel)
-        layout.addLayout(buttons)
-
-    def chosen(self):
-        """Returns the ticked plot names, in the order they are offered."""
-        return [name for name, box in self.boxes.items() if box.isChecked()]
-
-    @staticmethod
-    def choose(parent):
-        """Runs the dialog.
-
-        Args:
-            parent: Window to sit over.
-
-        Returns:
-            The plot names to save, or an empty list if cancelled.
-        """
-        dialog = PlotExportDialog(parent)
-        return dialog.chosen() if dialog.exec() else []
-
-
 class SimulationWorker(QThread):
     """Runs one simulation job off the GUI thread.
 
@@ -1055,6 +1017,7 @@ class MainWindow(QMainWindow):
         self.setup_previews()
         self.setup_camera_controls()
         self.setup_results_tab()
+        self.setup_output_settings()
         self.setup_hardware_widgets()
         self.connect_signals()
 
@@ -2068,6 +2031,14 @@ class MainWindow(QMainWindow):
         except (KeyError, ValueError, TypeError):
             return messages
 
+        # Said before the size checks below, because when this fires the
+        # array is not what is being traced and its die sizes are moot.
+        resolvable, minimum = die_array_resolution(emitter, self.config)
+        if not resolvable:
+            messages.append(f"Die gaps too fine to resolve for emitter subdivision. "
+                            f"Tracing as monotonic die. "
+                            f"{minimum} subdivision needed for array.")
+
         if min(cell_length, cell_width) <= 0.0:
             rows, columns, gap, _ = die_array_layout(emitter, self.config)
             messages.append(f"{rows} x {columns} dies with {gap:g} mm gaps "
@@ -2245,22 +2216,60 @@ class MainWindow(QMainWindow):
             artist.set_fontsize(original * scale)
 
     def setup_results_tab(self):
-        """Wires the results tab and hides it until there is something in it.
-
-        The tab is not merely empty before a run, it is meaningless, so it is
-        taken out of the bar altogether rather than left as a dead heading.
-        """
+        """Wires the results tab and hides it until there is something in it."""
         self.tabMain.setTabVisible(RESULTS_TAB_INDEX, False)
-        for name in PLOT_NAMES:
-            self.lstPlots.addItem(QListWidgetItem(name))
-        self.lstPlots.setCurrentRow(0)
-        self.lstPlots.currentTextChanged.connect(lambda *_: self.show_selected_plot())
-        self.btnSavePlots.clicked.connect(lambda *_: self.save_plots())
+        self.wall_shots = []
+        self.plot_entries = []
+        self.lstPlots.currentRowChanged.connect(lambda *_: self.show_selected_plot())
 
-    def selected_plot(self):
-        """Returns the plot the user is looking at, defaulting to the wall shot."""
-        item = self.lstPlots.currentItem()
-        return item.text() if item is not None else PLOT_NAMES[0]
+    def remember_result(self, shot):
+        """Puts a finished run at the top of the results list.
+
+        Earlier runs stay below it, so a build can be compared against the one
+        before without tracing either again. The oldest fall off the end once
+        the list is full: each run holds a wall grid, and keeping every one of
+        them for a long session would quietly grow without limit.
+
+        Args:
+            shot: The render inputs from a completed run.
+        """
+        self.wall_shots.insert(0, shot)
+        del self.wall_shots[max(1, int(self.config.stored_run_count)):]
+
+        self.lstPlots.blockSignals(True)
+        self.lstPlots.clear()
+        self.plot_entries = []
+        
+        from PyQt6.QtCore import Qt
+        
+        for index, stored in enumerate(self.wall_shots):
+            # Add an unselectable visual separator between runs
+            if index > 0:
+                sep_item = QListWidgetItem("────────────────────")
+                sep_item.setFlags(sep_item.flags() & ~Qt.ItemFlag.ItemIsSelectable & ~Qt.ItemFlag.ItemIsEnabled)
+                sep_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+                self.lstPlots.addItem(sep_item)
+                
+                # Add a blank entry to keep the backend list synced with the UI rows
+                self.plot_entries.append((None, None))
+                
+            for name in PLOT_NAMES:
+                self.plot_entries.append((stored, name))
+                self.lstPlots.addItem(QListWidgetItem(f"{name} - {stored.label}"))
+                
+        self.lstPlots.setCurrentRow(0)
+        self.lstPlots.blockSignals(False)
+
+    def selected_result(self):
+        """Returns the (shot, plot name) the user is looking at.
+
+        Returns:
+            A pair, or (None, None) when there is nothing to show yet.
+        """
+        row = self.lstPlots.currentRow()
+        if 0 <= row < len(self.plot_entries):
+            return self.plot_entries[row]
+        return None, None
 
     def show_selected_plot(self):
         """Draws whichever plot is chosen, and shows the camera bar for the shot.
@@ -2269,44 +2278,60 @@ class MainWindow(QMainWindow):
         the camera controls on show beside a line graph would suggest they did
         something there.
         """
-        if self.wall_shot is None:
+        shot, name = self.selected_result()
+        if shot is None:
             return
 
-        name = self.selected_plot()
         self.grpCamera.setVisible(name == PLOT_NAMES[0])
-        self.show_figure(render_plot(self.wall_shot, name, self.config))
+        self.show_figure(render_plot(shot, name, self.config))
 
     def save_plots(self):
-        """Writes the chosen plots to a directory the user picks."""
-        if self.wall_shot is None:
+        """Writes the chosen plots of the selected run to a specified file base."""
+        shot, _ = self.selected_result()
+        if shot is None:
             self.log_message("No plots to save yet; run a simulation first.")
             return
 
-        wanted = PlotExportDialog.choose(self)
+        wanted = []
+        if self.chkSaveWallShot.isChecked(): wanted.append(PLOT_NAMES[0])
+        if self.chkSaveXAxis.isChecked(): wanted.append(PLOT_NAMES[1])
+        if self.chkSaveYAxis.isChecked(): wanted.append(PLOT_NAMES[2])
+        if self.chkSave45Deg.isChecked(): wanted.append(PLOT_NAMES[3])
+
         if not wanted:
+            self.log_message("No plots selected to save. Check the boxes in Output Settings.")
             return
 
-        directory = QFileDialog.getExistingDirectory(
-            self, "Save Plots To", self.config.resolved_output_directory)
-        if not directory:
+        # Pre-fill the Save As dialog with the auto-generated filename
+        default_path = os.path.join(self.config.resolved_output_directory, shot.filename)
+        
+        file_path, _ = QFileDialog.getSaveFileName(
+            self, 
+            "Save Plots As (Base Name)", 
+            default_path, 
+            "PNG Images (*.png)"
+        )
+        
+        if not file_path:
             return
 
-        base = os.path.join(directory, self.wall_shot.filename)
+        # The render engine will automatically append suffixes to this base path for profiles
         for name in wanted:
-            figure = render_plot(self.wall_shot, name, self.config, base,
-                                 always_save=True)
-            plt.close(figure)
-        self.log_message(f"Saved {len(wanted)} plot(s) to {directory}")
+            plt.close(render_plot(shot, name, self.config, file_path, always_save=True))
+            
+        self.log_message(f"Saved {len(wanted)} plot(s) of {shot.label} based on {file_path}")
 
     def setup_camera_controls(self):
         """Wires the camera bar and puts the saved settings into it.
 
         The camera only decides how a finished result is displayed, so these
-        redraw the stored wall shot rather than starting a new trace.
+        redraw the chosen wall shot rather than starting a new trace.
         """
-        self.grpCamera.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Fixed)
-        self.wall_shot = None
-        self.btnExportWallShot.setEnabled(False)
+        # Force the layout to keep the spacing even when the widget is hidden
+        policy = QSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Fixed)
+        policy.setRetainSizeWhenHidden(True)
+        self.grpCamera.setSizePolicy(policy)
+        
         self._syncing_exposure = False
 
         self.chkAutoExposure.setChecked(bool(self.config.use_auto_exposure))
@@ -2326,7 +2351,6 @@ class MainWindow(QMainWindow):
         for widget in (self.txtCamIso, self.txtCamFStop, self.txtCamShutter):
             widget.editingFinished.connect(self.apply_camera_settings)
         self.btnSaveCameraDefaults.clicked.connect(self.save_camera_defaults)
-        self.btnExportWallShot.clicked.connect(self.export_wall_shot)
 
         self.apply_camera_settings()
 
@@ -2410,7 +2434,8 @@ class MainWindow(QMainWindow):
         self.txtExposureEV.setVisible(auto)
         self.sldExposureEV.setVisible(auto)
         for widget in (self.lblCamIso, self.txtCamIso, self.lblCamFStop,
-                       self.txtCamFStop, self.lblCamShutter, self.txtCamShutter):
+                       self.txtCamFStop, self.lblCamShutter, self.txtCamShutter,
+                       self.lblCamShutterUnit):
             widget.setVisible(not auto)
 
         self.config.use_auto_exposure = auto
@@ -2419,8 +2444,7 @@ class MainWindow(QMainWindow):
         self.config.cam_f_stop = f_stop
         self.config.cam_shutter_speed_s = shutter
 
-        if self.wall_shot is not None:
-            self.show_figure(render_wall_shot(self.wall_shot, self.config))
+        self.show_selected_plot()
 
     def save_camera_defaults(self, *_):
         """Writes the camera bar's values into the settings file."""
@@ -2433,18 +2457,41 @@ class MainWindow(QMainWindow):
                       f"1/{1.0 / self.config.cam_shutter_speed_s:.0f}s")
         self.log_message(f"Camera defaults saved ({detail}).")
 
-    def export_wall_shot(self, *_):
-        """Writes the wall shot to the output directory at the current exposure."""
-        if self.wall_shot is None:
-            self.log_message("No wall shot to export yet; run a simulation first.")
-            return
+    def setup_output_settings(self):
+        """Wires up the output settings panel."""
+        # Initial states
+        scale = getattr(self.config, "plot_scale", "Distance")
+        self.cmbPlotScale.setCurrentText(scale)
+        self.chkShowPrimaryGrid.setChecked(getattr(self.config, "plot_show_primary_grid", True))
+        self.chkShowSecondaryGrid.setChecked(getattr(self.config, "plot_show_secondary_grid", False))
 
-        directory = self.config.resolved_output_directory
-        os.makedirs(directory, exist_ok=True)
-        path = os.path.join(directory, self.wall_shot.filename)
-        render_wall_shot(self.wall_shot, self.config, path,
-                         always_save=True)
-        self.log_message(f"Wall shot exported: {path}")
+        self.chkSaveWallShot.setChecked(self.config.plot_wall_shot)
+        self.chkSaveXAxis.setChecked(self.config.plot_intensity_x)
+        self.chkSaveYAxis.setChecked(self.config.plot_intensity_y)
+        self.chkSave45Deg.setChecked(self.config.plot_intensity_45)
+
+        # Signals
+        self.cmbPlotScale.currentIndexChanged.connect(self.on_plot_scale_changed)
+        self.chkShowPrimaryGrid.toggled.connect(lambda v: self.update_plot_setting("plot_show_primary_grid", v))
+        self.chkShowSecondaryGrid.toggled.connect(lambda v: self.update_plot_setting("plot_show_secondary_grid", v))
+        self.chkSaveWallShot.toggled.connect(lambda v: self.update_plot_setting("plot_wall_shot", v))
+        self.chkSaveXAxis.toggled.connect(lambda v: self.update_plot_setting("plot_intensity_x", v))
+        self.chkSaveYAxis.toggled.connect(lambda v: self.update_plot_setting("plot_intensity_y", v))
+        self.chkSave45Deg.toggled.connect(lambda v: self.update_plot_setting("plot_intensity_45", v))
+
+        self.btnSavePlots.clicked.connect(self.save_plots)
+
+    def on_plot_scale_changed(self):
+        self.config.plot_scale = self.cmbPlotScale.currentText()
+        self.config.save_settings()
+        self.show_selected_plot()
+
+    def update_plot_setting(self, key, value):
+        setattr(self.config, key, value)
+        self.config.save_settings()
+        # Instantly redraw the plot to show/hide the grids
+        if key in ("plot_show_primary_grid", "plot_show_secondary_grid"):
+            self.show_selected_plot()
 
     def setup_hardware_widgets(self):
         """Indexes the combo boxes and spec inputs by hardware kind."""
@@ -2590,12 +2637,34 @@ class MainWindow(QMainWindow):
             kind: One of the keys of SPEC_FIELDS.
         """
         widgets = self.field_widgets[kind]
-        for field, (deciding_field, needed_for) in CONDITIONAL_SPECS.items():
-            if field not in widgets or deciding_field not in widgets:
-                continue
+        for field, widget in widgets.items():
+            visible = True
 
-            current = self.field_value(widgets[deciding_field])
-            self.set_row_visible(widgets[field], current in needed_for)
+            # 1. Base check: Drop down dependencies (e.g., OP vs Smooth)
+            if field in CONDITIONAL_SPECS:
+                deciding_field, needed_for = CONDITIONAL_SPECS[field]
+                if deciding_field in widgets:
+                    current = self.field_value(widgets[deciding_field])
+                    if current not in needed_for:
+                        visible = False
+
+            # 2. Global config overrides for the Reflector column
+            if kind == "reflector":
+                # Front Lens Toggle
+                if field in ("lens_finish", "lens_diffusion_fwhm_deg", "lens_refractive_index"):
+                    if not getattr(self.config, "enable_lens_simulation", True):
+                        visible = False
+                        
+                # Dimple vs Gaussian OP Toggle
+                if field in ("op_dimple_pitch_mm", "op_dimple_depth_um"):
+                    if not getattr(self.config, "use_dimple_op_simulation", False):
+                        visible = False
+                        
+                if field == "op_factor":
+                    if getattr(self.config, "use_dimple_op_simulation", False):
+                        visible = False
+
+            self.set_row_visible(widget, visible)
 
     @staticmethod
     def set_row_visible(widget, visible):
@@ -2768,9 +2837,15 @@ class MainWindow(QMainWindow):
     def open_settings(self):
         """Opens the settings dialog modally."""
         SettingsDialog(self.config, self).exec()
+        
+        # Apply conditionals again in case global settings (like dimple OP or lens sim) changed
+        for kind in SPEC_FIELDS:
+            self.apply_conditional_rows(kind)
+            
+        self.update_previews()
 
     def log_message(self, message):
-        """Appends a line to the log pane and scrolls to it."""
+        """Prints a line to the console instead of the old UI terminal."""
         self.txtLogs.appendPlainText(message)
         scrollbar = self.txtLogs.verticalScrollBar()
         scrollbar.setValue(scrollbar.maximum())
@@ -2833,6 +2908,7 @@ class MainWindow(QMainWindow):
         self.set_controls_running(True)
         self.progressBar.setValue(0)
         self.txtLogs.clear()
+
         self.log_message("--- INITIALIZING SIMULATION ---")
 
         self.worker = SimulationWorker(self.config, run_library, names["reflector"],
@@ -2874,12 +2950,10 @@ class MainWindow(QMainWindow):
         """
         self.set_controls_running(False)
         self.progressBar.setValue(100)
-        self.wall_shot = shot
-        self.btnExportWallShot.setEnabled(shot is not None)
-
         # Results only exist once something has been traced, so the tab
         # appears with them and the view moves to it.
         if shot is not None:
+            self.remember_result(shot)
             self.tabMain.setTabVisible(RESULTS_TAB_INDEX, True)
             self.tabMain.setCurrentIndex(RESULTS_TAB_INDEX)
             self.show_selected_plot()

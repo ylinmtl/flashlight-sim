@@ -28,6 +28,11 @@ FWHM_PER_SIGMA = 2.354820045
 # the dimple depth quoted is peak to valley, so twice the amplitude.
 DIMPLE_SLOPE_PER_ASPECT = 2.2214
 
+# Sample cells that must span the gap between dies before an array can be
+# told apart from one solid die. Fewer than this and the gap slips
+# between samples.
+DIE_ARRAY_CELLS_PER_GAP = 4
+
 DIE_SUBSAMPLES = 8
 
 
@@ -225,7 +230,8 @@ def _surface_scatter_sigma(reflector: dict, finish: str,
         if correlation_m > 0.0:
             slope_squared = (math.sqrt(2.0) * height_m / correlation_m) ** 2
 
-    if finish == "orange_peel":
+    # Only generate 3D ray scatter if the analytic dimple simulation is enabled
+    if finish == "orange_peel" and getattr(config, "use_dimple_op_simulation", False):
         pitch_m = spec_or_default(reflector, "reflector",
                                   "op_dimple_pitch_mm", config) * 1e-3
         depth_m = spec_or_default(reflector, "reflector",
@@ -357,6 +363,8 @@ def get_sim_geometry(reflector: dict, emitter: dict, gasket: dict, finish: str,
             config)) / FWHM_PER_SIGMA,
         "lens_index": spec_or_default(
             reflector, "reflector", "lens_refractive_index", config),
+        "op_factor": float(spec_or_default(
+            reflector, "reflector", "op_factor", config)),
         "emitter_offset_x": emitter_offset.x_mm,
         "emitter_offset_y": emitter_offset.y_mm,
         # Reported, not traced:
@@ -501,6 +509,37 @@ def _cell_coverage(x_lo, x_hi, y_lo, y_hi, inside_test, subsamples: int):
                           len(x_lo), subsamples).mean(axis=(1, 3))
 
 
+def die_array_resolution(emitter: dict, config: "SimulationConfig"):
+    """Whether the sampling grid is fine enough to see an array's gaps.
+
+    The emitter is sampled on a square grid spanning the whole emitting area,
+    so one cell is that area divided by the element count. A gap narrower than
+    a few cells falls between samples: whether it lands on one is down to where
+    the grid happens to sit, and the same emitter would come out differently
+    for a change in resolution that should not have mattered. Rather than trace
+    that lottery, the array is treated as one die and the operator is told.
+
+    A monolithic emitter has no gaps and is always resolvable.
+
+    Args:
+        emitter: Emitter specs.
+        config: Active configuration.
+
+    Returns:
+        (resolvable, minimum_elements), where minimum_elements is what
+        sim_emitter_elements would have to be, or zero when nothing is needed.
+    """
+    layout = spec_or_default(emitter, "emitter", "die_layout", config)
+    gap = float(spec_or_default(emitter, "emitter", "die_gap_mm", config))
+    if layout != "array" or gap <= 0.0:
+        return True, 0
+
+    length = float(emitter["die_length_mm"])
+    span = max(length, float(emitter.get("die_width_mm", length)))
+    minimum = int(math.ceil(DIE_ARRAY_CELLS_PER_GAP * span / gap))
+    return int(config.sim_emitter_elements) >= minimum, minimum
+
+
 def die_array_layout(emitter: dict, config: "SimulationConfig"):
     """Works out the grid of dies an emitter is made of.
 
@@ -516,6 +555,9 @@ def die_array_layout(emitter: dict, config: "SimulationConfig"):
         phosphor between the dies emits, relative to a die itself.
     """
     layout = spec_or_default(emitter, "emitter", "die_layout", config)
+
+    # Always return the true physical layout so the UI preview draws the array 
+    # correctly. The simulation engine will handle the resolution fallback on its own.
     if layout != "array":
         return 1, 1, 0.0, 0.0
 
@@ -719,8 +761,16 @@ def _build_emitter_elements(emitter: dict, elements_per_side: int, shape: str,
         min_x, max_x = -die_length / 2.0, die_length / 2.0
         min_y, max_y = -die_width / 2.0, die_width / 2.0
 
+        # Enforce the array resolution check here. If the grid is too coarse,
+        # is_resolvable fails and the tracer drops down to a monolithic shape.
+        is_resolvable = True
+        if config is not None:
+            is_resolvable, _ = die_array_resolution(emitter, config)
+
         is_array = (config is not None
+                    and is_resolvable
                     and die_array_layout(emitter, config)[:2] != (1, 1))
+
         if shape == "round" and not is_array:
             radius_sq = (die_length / 2.0) ** 2
 
@@ -748,12 +798,17 @@ def _build_emitter_elements(emitter: dict, elements_per_side: int, shape: str,
     # other, so how much of it is die is measured the same way a curved edge
     # is measured, rather than judged by where its centre happens to fall.
     if config is not None and shape != "polygon":
-        on_die = _array_die_test(emitter, shape, config)
-        if on_die is not None:
-            _, _, _, gap_output = die_array_layout(emitter, config)
-            die_share = _cell_coverage(x_lo, x_hi, y_lo, y_hi, on_die,
-                                       subsamples).ravel()
-            weight = weight * (die_share + (1.0 - die_share) * gap_output)
+        is_resolvable, _ = die_array_resolution(emitter, config)
+        
+        # Only simulate the gaps if the sampling grid is fine enough to resolve them
+        if is_resolvable:
+            on_die = _array_die_test(emitter, shape, config)
+            if on_die is not None:
+                _, _, _, gap_output = die_array_layout(emitter, config)
+                die_share = _cell_coverage(x_lo, x_hi, y_lo, y_hi, on_die,
+                                           subsamples).ravel()
+                weight = weight * (die_share + (1.0 - die_share) * gap_output)
+
     emitting = weight > 0.0
     if not emitting.any():
         raise ValueError(

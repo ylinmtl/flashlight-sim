@@ -9,6 +9,7 @@ import time
 from typing import Callable, List, NamedTuple, Optional
 
 import numpy as np
+from scipy.ndimage import gaussian_filter
 
 from .config import (CancelCallback, LogCallback,
                      ProgressCallback, SimulationConfig)
@@ -442,6 +443,18 @@ def simulate_wall_illuminance(geom: dict, emitter: dict, current_amps: float, fi
 
     if log_callback:
         log_callback("Applying spatial blur and generating final lux arrays...")
+
+    # An orange peel finish scatters the reflected light; the blur radius scales
+    # with the grid so the result is resolution independent.
+    blur_sigma = 0.0
+    
+    # Run the classic 2D statistical blur only if the Dimple Simulation is toggled off
+    if finish == "orange_peel" and not getattr(config, "use_dimple_op_simulation", False):
+        blur_sigma = (getattr(config, "op_blur_strength", 1.5) * geom["op_factor"]
+                      * (config.sim_grid_res / 1000.0))
+        
+    if blur_sigma > 0:
+        hotspot_grid = gaussian_filter(hotspot_grid, sigma=blur_sigma)
 
     # The grids still hold flux at this point, so summing them gives what
     # actually landed: the rated output less whatever the reflector, the

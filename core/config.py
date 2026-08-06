@@ -44,7 +44,19 @@ class SimulationConfig:
     """
 
     _CATEGORIES = {
+        "Simulation Space & Constraints": [
+            "use_gpu", "enable_lens_simulation", "use_dimple_op_simulation",
+            "max_multiple_reflections", "use_reflector_opening",
+            "target_distance_m", "canvas_fov_deg", "plot_fov_deg",
+            "op_blur_strength",
+        ],
+        "Resolution & Angular Density": [
+            "sim_grid_res", "sim_emitter_elements", "sim_theta_step_deg",
+            "sim_phi_step_deg", "sim_theta_min_deg", "sim_theta_max_deg",
+            "sim_phi_min_deg", "sim_phi_max_deg",
+        ],
         "Output & Rendering": [
+            "plot_scale", "plot_show_primary_grid", "plot_show_secondary_grid", "stored_run_count",
             "generate_all_plots", "show_human_silhouette", "plot_wall_shot",
             "plot_intensity_x", "plot_intensity_y", "plot_intensity_45",
             "batch_output_directory", "export_csv", "export_plots",
@@ -54,18 +66,9 @@ class SimulationConfig:
             "dome_polar_step_deg", "dome_azimuth_step_deg",
             "dome_memory_budget_mb",
         ],
-        "Simulation Space & Constraints": [
-            "use_gpu", "max_multiple_reflections", "use_reflector_opening",
-            "target_distance_m", "canvas_fov_deg", "plot_fov_deg",
-        ],
         "Camera Settings": [
             "use_auto_exposure", "auto_exposure_compensation_ev",
             "cam_iso", "cam_f_stop", "cam_shutter_speed_s",
-        ],
-        "Resolution & Angular Density": [
-            "sim_grid_res", "sim_emitter_elements", "sim_theta_step_deg",
-            "sim_phi_step_deg", "sim_theta_min_deg", "sim_theta_max_deg",
-            "sim_phi_min_deg", "sim_phi_max_deg",
         ],
         "IES Export": [
             "export_ies", "ies_vertical_step_deg",
@@ -74,11 +77,11 @@ class SimulationConfig:
         "Material Defaults & Thresholds": [
             "default_reflectivity_smooth", "default_reflectivity_op",
             "default_reflectivity_cylinder", "default_gasket_reflectivity",
-           
             "default_transmissivity_lens", "default_surface_finish",
             "default_surface_roughness_nm", "default_surface_correlation_um",
-            "default_op_dimple_pitch_mm",
-            "default_op_dimple_depth_um", "default_lens_finish",
+            "default_op_dimple_pitch_mm", "default_op_dimple_depth_um",
+            "default_op_factor",
+            "default_lens_finish",
             "default_lens_diffusion_fwhm_deg",
             "default_lens_refractive_index",
             "spill_visible_threshold_lux", "corona_visible_threshold",

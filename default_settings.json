@@ -1,42 +1,14 @@
 {
-    "Output & Rendering": {
-        "generate_all_plots": false,
-        "show_human_silhouette": false,
-        "plot_wall_shot": true,
-        "plot_intensity_x": false,
-        "plot_intensity_y": false,
-        "plot_intensity_45": false,
-        "batch_output_directory": "output",
-        "export_csv": false,
-        "export_plots": false
-    },
-    "IES Export": {
-        "export_ies": false,
-        "ies_vertical_step_deg": 1.0,
-        "ies_horizontal_step_deg": 5.0,
-        "ies_max_vertical_angle_deg": 90.0
-    },
     "Simulation Space & Constraints": {
         "use_gpu": true,
+        "enable_lens_simulation": false,
+        "use_dimple_op_simulation": false,
         "max_multiple_reflections": 5,
         "use_reflector_opening": true,
-        "target_distance_m": 5.0,
+        "target_distance_m": 10.0,
         "canvas_fov_deg": 120.0,
-        "plot_fov_deg": 90.0
-    },
-    "Spherical Projection": {
-        "use_spherical_projection": true,
-        "dome_angle_deg": 180.0,
-        "dome_polar_step_deg": 0.05,
-        "dome_azimuth_step_deg": 0.05,
-        "dome_memory_budget_mb": 1024.0
-    },
-    "Camera Settings": {
-        "use_auto_exposure": false,
-        "auto_exposure_compensation_ev": -5.0,
-        "cam_iso": 100,
-        "cam_f_stop": 8.0,
-        "cam_shutter_speed_s": 0.33333333333
+        "plot_fov_deg": 90.0,
+        "op_blur_strength": 8.525
     },
     "Resolution & Angular Density": {
         "sim_grid_res": 512,
@@ -48,16 +20,51 @@
         "sim_phi_min_deg": 0.0,
         "sim_phi_max_deg": 360.0
     },
+    "Output & Rendering": {
+        "plot_scale": "distance",
+        "plot_show_primary_grid": false,
+        "plot_show_secondary_grid": false,
+        "generate_all_plots": false,
+        "show_human_silhouette": false,
+        "plot_wall_shot": false,
+        "plot_intensity_x": false,
+        "plot_intensity_y": false,
+        "plot_intensity_45": false,
+        "batch_output_directory": "output",
+        "export_csv": false,
+        "export_plots": false,
+        "stored_run_count": 10
+    },
+    "Spherical Projection": {
+        "use_spherical_projection": false,
+        "dome_angle_deg": 180.0,
+        "dome_polar_step_deg": 0.05,
+        "dome_azimuth_step_deg": 0.05,
+        "dome_memory_budget_mb": 2048.0
+    },
+    "Camera Settings": {
+        "use_auto_exposure": false,
+        "auto_exposure_compensation_ev": -5.0,
+        "cam_iso": 200,
+        "cam_f_stop": 8.0,
+        "cam_shutter_speed_s": 0.33333333333
+    },
+    "IES Export": {
+        "export_ies": false,
+        "ies_vertical_step_deg": 1.0,
+        "ies_horizontal_step_deg": 5.0,
+        "ies_max_vertical_angle_deg": 90.0
+    },
     "Material Defaults & Thresholds": {
         "default_reflectivity_smooth": 0.85,
         "default_reflectivity_op": 0.8,
         "default_reflectivity_cylinder": 0.0,
         "default_gasket_reflectivity": 0.0,
-        "default_transmissivity_lens": 0.95,
+        "default_transmissivity_lens": 0.98,
         "default_surface_finish": "smooth",
         "spill_visible_threshold_lux": 0.0001,
         "corona_visible_threshold": 0.01,
-        "hotspot_fwhm_threshold": 0.5,
+        "hotspot_fwhm_threshold": 0.9,
         "default_gasket_thickness_mm": 1.0,
         "default_gasket_total_height_mm": 1.0,
         "default_gasket_inner_diameter_mm": 0.0,
@@ -69,7 +76,7 @@
         "default_dome_size_mm": 0.0,
         "default_refractive_index": 1.0,
         "default_emitter_shape": "square",
-        "default_emitter_output_mode": "advanced",
+        "default_emitter_output_mode": "simple",
         "default_max_lumens": 0.0,
         "default_forward_voltage_v": 0.0,
         "default_vf_turn_on_v": 0.0,
@@ -77,11 +84,12 @@
         "default_base_efficacy_lm_w": 0.0,
         "default_droop_factor": 0.0,
         "default_lens_finish": "clear",
-        "default_lens_refractive_index": 0.0,
-        "default_lens_diffusion_fwhm_deg": 0.0,
+        "default_lens_refractive_index": 1.52,
+        "default_lens_diffusion_fwhm_deg": 10.0,
         "default_surface_roughness_nm": 0.0,
-        "default_op_dimple_pitch_mm": 0.5,
-        "default_op_dimple_depth_um": 3.0,
+        "default_op_dimple_pitch_mm": 1.0,
+        "default_op_dimple_depth_um": 140,
+        "default_op_factor": 1.0,
         "default_surface_correlation_um": 25.0,
         "default_die_layout": "monolithic",
         "default_die_rows": 1,

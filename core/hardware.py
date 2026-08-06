@@ -84,6 +84,7 @@ RENAMED_SPECS = {
         # of slope follows from the correlation length in optics.py.
         "surface_roughness_mrad": ("surface_roughness_nm", 17.678),
         "surface_blur_deg": ("surface_roughness_nm", 65.51),
+        "OP_Factor": ("op_factor", 1.0),
         # Orange peel was an abstract multiplier on a post-process blur. It
         # is now the depth of the dimples, with their spacing beside it, so
         # a texture measured off a real reflector can be typed straight in.
@@ -112,6 +113,7 @@ SPEC_DEFAULT_SETTINGS = {
         "surface_correlation_um": "default_surface_correlation_um",
         "op_dimple_pitch_mm": "default_op_dimple_pitch_mm",
         "op_dimple_depth_um": "default_op_dimple_depth_um",
+        "op_factor": "default_op_factor",
         "lens_finish": "default_lens_finish",
         "lens_diffusion_fwhm_deg": "default_lens_diffusion_fwhm_deg",
         "lens_refractive_index": "default_lens_refractive_index",

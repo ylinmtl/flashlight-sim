@@ -24,6 +24,7 @@ from .hardware import (DIE_LAYOUTS, DIE_SHAPES, GASKET_WALL_SHAPES, HARDWARE_KIN
                        RENAMED_SPECS, SPEC_DEFAULT_SETTINGS, SURFACE_FINISHES,
                        HardwareLibrary, spec_or_default)
 from .optics import (DIE_SUBSAMPLES, die_array_extent, die_array_layout,
+                     die_array_resolution,
                      die_cell_size, die_centres, NO_EMITTER_OFFSET, EmitterOffset,
                      calculate_lumens, effective_bore_diameter,
                      emitter_die_outline, emitter_footprint_diagonal,
@@ -64,6 +65,7 @@ __all__ = [
     "calculate_lumens",
     "die_array_extent",
     "die_array_layout",
+    "die_array_resolution",
     "die_cell_size",
     "die_centres",
     "effective_bore_diameter",

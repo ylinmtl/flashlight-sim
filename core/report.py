@@ -7,6 +7,7 @@ public surface.
 import csv
 import math
 import os
+import copy
 from typing import NamedTuple, Optional
 
 import numpy as np
@@ -73,45 +74,57 @@ def _style_dark_axes(ax) -> None:
         spine.set_color("#555555")
 
 
-def render_intensity_profile(slice_lux: np.ndarray, dist_array: np.ndarray,
-                             suffix_name: str, title_str: str,
+def render_intensity_profile(shot: 'WallShot', suffix_name: str,
+                             slice_lux: np.ndarray, dist_array: np.ndarray,
                              save_path: Optional[str],
-                             config: SimulationConfig,
+                             active_config: SimulationConfig,
                              always_save: bool = False):
-    """Renders and optionally saves one intensity profile through the beam.
+    """Renders and optionally saves one intensity profile through the beam."""
+    geom_config = shot.shot_config
+    slice_cd = slice_lux * (geom_config.target_distance_m ** 2)
 
-    Args:
-        slice_lux: Illuminance along the slice, in lux.
-        dist_array: Distance from the beam centre for each sample, in metres.
-        suffix_name: Label for the slice, e.g. "X-Axis"; also the filename suffix.
-        title_str: Title block shared with the wall shot.
-        save_path: Wall shot path the profile filename is derived from, or None.
-        config: Active configuration.
-        always_save: Writes the file even when export_plots is off.
-
-    Returns:
-        The Matplotlib figure, so the caller can display it as well as save
-        it. The batch path ignores this and simply lets it be collected.
-    """
-    slice_cd = slice_lux * (config.target_distance_m ** 2)
-    angles = np.degrees(np.arctan(dist_array / config.target_distance_m))
-
-    figure, ax = plt.subplots(figsize=(10, 5), facecolor="black")
+    # Force identical figsize (10, 10) to the wall shot to guarantee spatial alignment
+    figure, ax = plt.subplots(figsize=(10, 10), facecolor="black")
     _style_dark_axes(ax)
 
-    ax.plot(angles, slice_cd, color="#FFFF00", linewidth=1.5)
-    ax.fill_between(angles, slice_cd, color="#FFFF00", alpha=0.1)
+    # Determine axis scaling based on ACTIVE user settings (UI toggle)
+    scale_mode = getattr(active_config, "plot_scale", "Distance")
 
-    ax.set_xlim(-config.plot_fov_deg / 2.0, config.plot_fov_deg / 2.0)
+    # Limit arrays and labels based on the FROZEN geometry settings
+    if scale_mode == "Angle":
+        x_values = np.degrees(np.arctan(dist_array / geom_config.target_distance_m))
+        ax.set_xlim(-geom_config.plot_fov_deg / 2.0, geom_config.plot_fov_deg / 2.0)
+        ax.set_xlabel("Horizontal Angle (°)", color="#CCCCCC", fontsize=11, labelpad=10)
+    else:
+        x_values = dist_array
+        ax.set_xlim(-geom_config.plot_radius_m, geom_config.plot_radius_m)
+        ax.set_xlabel("Horizontal Distance (m)", color="#CCCCCC", fontsize=11, labelpad=10)
+
+    ax.plot(x_values, slice_cd, color="#FFFF00", linewidth=1.5)
+    ax.fill_between(x_values, slice_cd, color="#FFFF00", alpha=0.1)
+
     ax.set_ylim(0, max(np.max(slice_cd) * 1.05, 1))
-    ax.set_xlabel("Angle (Degrees)", color="#CCCCCC", fontsize=11, labelpad=10)
     ax.set_ylabel("Intensity (Candela)", color="#CCCCCC", fontsize=11, labelpad=10)
-    ax.grid(True, color="#333333", linestyle="--", alpha=0.5)
 
-    plt.title(f"{title_str}\n[Intensity Profile: {suffix_name}]", color="#CCCCCC", pad=15)
-    plt.tight_layout()
+    # Format the Y-axis to use commas.
+    ax.yaxis.set_major_formatter(plt.FuncFormatter(lambda x, loc: "{:,}".format(int(x))))
 
-    if save_path and (always_save or config.export_plots):
+    _apply_grids(ax, active_config)
+
+    plt.title(shot.title, color="#CCCCCC", fontsize=10, pad=12)
+
+    mm_per_pixel = ((2.0 * geom_config.wall_radius_m) / geom_config.sim_grid_res) * 1000.0
+    plt.figtext(0.5, 0.02,
+                f"Canvas FOV: {geom_config.canvas_fov_deg}° | Plot FOV: {geom_config.plot_fov_deg}° | "
+                f"Grid Res: {mm_per_pixel:.1f} mm/px | Intensity Profile: {suffix_name}",
+                color="#CCCCCC", fontsize=9, ha="center", va="bottom",
+                bbox=dict(facecolor="black", alpha=0.7, edgecolor="none", pad=4))
+
+    # Shift the entire plot up: bottom=0.14 adds space below the x-axis, top=0.94 removes empty space above title
+    # Perfect square bounding box (Width = 0.92-0.12 = 0.80, Height = 0.94-0.14 = 0.80)
+    plt.subplots_adjust(left=0.12, right=0.92, bottom=0.14, top=0.92)
+
+    if save_path and (always_save or active_config.export_plots):
         base, extension = os.path.splitext(save_path)
         plt.savefig(f"{base}_{suffix_name}{extension}", facecolor="black",
                     edgecolor="none", dpi=150, bbox_inches="tight")
@@ -176,6 +189,20 @@ def _format_output_modes(emitter: dict, max_amps: float, max_cd: float,
                   f"{int(candela):>8,} | {int(np.sqrt(candela * 4)):>4,}m\n")
     return table
 
+def _apply_grids(ax, config: SimulationConfig) -> None:
+    """Applies primary and secondary grids to the axes based on settings."""
+    show_primary = getattr(config, "plot_show_primary_grid", True)
+    show_secondary = getattr(config, "plot_show_secondary_grid", False)
+    
+    if show_primary or show_secondary:
+        if show_secondary:
+            ax.minorticks_on()
+        if show_primary:
+            ax.grid(True, which='major', color='#444444', linestyle='-', alpha=0.6)
+        if show_secondary:
+            ax.grid(True, which='minor', color='#222222', linestyle=':', alpha=0.4)
+    else:
+        ax.grid(False)
 
 class WallShot(NamedTuple):
     """Everything needed to draw a wall shot, kept apart from the trace.
@@ -193,6 +220,8 @@ class WallShot(NamedTuple):
         filename: What to call the PNG if it is exported again.
         axis_distance: Distance across the wall for the straight slices.
         diagonal_distance: Distance across the wall for the 45 degree slice.
+        label: The reflector and emitter this came from, for a results list
+            holding several runs at once.
     """
 
     wall_lux: np.ndarray
@@ -202,6 +231,8 @@ class WallShot(NamedTuple):
     filename: str
     axis_distance: np.ndarray
     diagonal_distance: np.ndarray
+    label: str
+    shot_config: SimulationConfig
 
 
 # The plots a finished run can produce, in the order they are offered. The
@@ -209,7 +240,7 @@ class WallShot(NamedTuple):
 PLOT_NAMES = ("Wall Shot", "X-Axis", "Y-Axis", "45-Deg")
 
 
-def render_plot(shot: WallShot, name: str, config: SimulationConfig,
+def render_plot(shot: 'WallShot', name: str, config: SimulationConfig,
                 save_path: Optional[str] = None, always_save: bool = False):
     """Draws any one of a finished run's plots.
 
@@ -240,11 +271,11 @@ def render_plot(shot: WallShot, name: str, config: SimulationConfig,
         raise ValueError(f"Unknown plot {name!r}; expected one of {PLOT_NAMES}.")
 
     values, distance = slices[name]
-    return render_intensity_profile(values, distance, name, shot.title,
+    return render_intensity_profile(shot, name, values, distance,
                                     save_path, config, always_save)
 
 
-def render_wall_shot(shot: WallShot, config: SimulationConfig,
+def render_wall_shot(shot: 'WallShot', config: SimulationConfig,
                      save_path: Optional[str] = None,
                      always_save: bool = False):
     """Draws a wall shot at the current camera settings.
@@ -261,63 +292,76 @@ def render_wall_shot(shot: WallShot, config: SimulationConfig,
     Returns:
         The Matplotlib figure.
     """
-    return _render_wall_shot(
+    return _render_wall_shot(shot,
         apply_camera_exposure_and_tonemap(shot.wall_lux, config),
-        shot.title, shot.geometry_text, shot.modes_text, config, save_path,
-        always_save)
+        config, save_path, always_save)
 
 
-def _render_wall_shot(render_data: np.ndarray, title_str: str, geometry_text: str,
-                      modes_text: str, config: SimulationConfig,
+def _render_wall_shot(shot: 'WallShot', render_data: np.ndarray,
+                      active_config: SimulationConfig,
                       save_path: Optional[str], always_save: bool = False):
-    """Renders the simulated photograph of the beam on the wall.
-
-    Args:
-        render_data: Tone mapped image in the range 0-1.
-        title_str: Two-line hardware and results header.
-        geometry_text: Beam measurements for the bottom left overlay.
-        modes_text: Output table for the bottom right overlay.
-        config: Active configuration.
-        save_path: Where to write the PNG, or None to only return the figure.
-
-    Returns:
-        The Matplotlib figure, which the GUI embeds in its canvas.
-    """
+    """Renders the simulated photograph of the beam on the wall."""
+    geom_config = shot.shot_config
     figure, ax = plt.subplots(figsize=(10, 10), facecolor="black")
     _style_dark_axes(ax)
 
-    ax.imshow(render_data,
-              extent=[-config.wall_radius_m, config.wall_radius_m,
-                      -config.wall_radius_m, config.wall_radius_m],
-              cmap="gray", origin="lower", vmin=0, vmax=1)
-    ax.set(xlim=(-config.plot_radius_m, config.plot_radius_m),
-           ylim=(-config.plot_radius_m, config.plot_radius_m))
-    ax.set_xlabel("Horizontal Distance (m)", color="#CCCCCC", fontsize=11, labelpad=10)
-    ax.set_ylabel("Vertical Distance (m)", color="#CCCCCC", fontsize=11, labelpad=10)
+    # Determine axis scaling based on ACTIVE user settings (UI toggle)
+    scale_mode = getattr(active_config, "plot_scale", "Distance")
 
-    if config.show_human_silhouette:
-        # Feet at 65% of the figure's height below the beam axis.
-        draw_human_silhouette(ax, 0.0, -1.75 * 0.65, 1.75)
+    # Limit arrays and labels based on the FROZEN geometry settings
+    if scale_mode == "Angle":
+        extent_angle = math.degrees(math.atan(geom_config.wall_radius_m / geom_config.target_distance_m))
+        plot_limit = geom_config.plot_fov_deg / 2.0
+        extent = [-extent_angle, extent_angle, -extent_angle, extent_angle]
+        ax.set_xlabel("Horizontal Angle (°)", color="#CCCCCC", fontsize=11, labelpad=10)
+        ax.set_ylabel("Vertical Angle (°)", color="#CCCCCC", fontsize=11, labelpad=10)
+    else:
+        plot_limit = geom_config.plot_radius_m
+        extent = [-geom_config.wall_radius_m, geom_config.wall_radius_m,
+                  -geom_config.wall_radius_m, geom_config.wall_radius_m]
+        ax.set_xlabel("Horizontal Distance (m)", color="#CCCCCC", fontsize=11, labelpad=10)
+        ax.set_ylabel("Vertical Distance (m)", color="#CCCCCC", fontsize=11, labelpad=10)
+
+    ax.imshow(render_data,
+              extent=extent,
+              cmap="gray", origin="lower", vmin=0, vmax=1)
+    
+    # Strictly lock axes limits to the defined Plot Field of View
+    ax.set(xlim=(-plot_limit, plot_limit),
+           ylim=(-plot_limit, plot_limit))
+
+    _apply_grids(ax, active_config)
+
+    if active_config.show_human_silhouette:
+        feet_y_m = -1.75 * 0.65
+        if scale_mode == "Angle":
+            feet_y_deg = math.degrees(math.atan(feet_y_m / geom_config.target_distance_m))
+            height_deg = math.degrees(math.atan(1.75 / geom_config.target_distance_m))
+            draw_human_silhouette(ax, 0.0, feet_y_deg, height_deg)
+        else:
+            draw_human_silhouette(ax, 0.0, feet_y_m, 1.75)
 
     overlay = dict(facecolor="black", alpha=0.7, edgecolor="none", pad=6)
-    ax.text(0.02, 0.02, geometry_text.strip(), transform=ax.transAxes,
+    ax.text(0.02, 0.02, shot.geometry_text.strip(), transform=ax.transAxes,
             color="#CCCCCC", fontsize=9, va="bottom", bbox=overlay)
-    ax.text(0.98, 0.02, modes_text.strip(), transform=ax.transAxes,
+    ax.text(0.98, 0.02, shot.modes_text.strip(), transform=ax.transAxes,
             color="#CCCCCC", fontsize=9, family="monospace",
             ha="right", va="bottom", bbox=overlay)
 
-    mm_per_pixel = ((2.0 * config.wall_radius_m) / config.sim_grid_res) * 1000.0
-    plt.figtext(0.5, 0.015,
-                f"Canvas FOV: {config.canvas_fov_deg}° | Plot FOV: {config.plot_fov_deg}° | "
-                f"Grid Res: {mm_per_pixel:.1f} mm/px | [{_format_exposure_caption(config)}]",
+    mm_per_pixel = ((2.0 * geom_config.wall_radius_m) / geom_config.sim_grid_res) * 1000.0
+    plt.figtext(0.5, 0.02,
+                f"Canvas FOV: {geom_config.canvas_fov_deg}° | Plot FOV: {geom_config.plot_fov_deg}° | "
+                f"Grid Res: {mm_per_pixel:.1f} mm/px | {_format_exposure_caption(active_config).replace('[', '').replace(']', '')}",
                 color="#CCCCCC", fontsize=9, ha="center", va="bottom",
                 bbox=dict(facecolor="black", alpha=0.7, edgecolor="none", pad=4))
-    # The header runs to two lines and the hardware names can be long,
-    # so the axes give up a strip at the top rather than let it clip.
-    plt.title(title_str, color="#CCCCCC", fontsize=10, pad=12)
-    plt.tight_layout(rect=[0.01, 0.05, 0.99, 0.95])
+    
+    plt.title(shot.title, color="#CCCCCC", fontsize=10, pad=12)
+    
+    # Shift the entire plot up: bottom=0.14 adds space below the x-axis, top=0.94 removes empty space above title
+    # Perfect square bounding box (Width = 0.92-0.12 = 0.80, Height = 0.94-0.14 = 0.80)
+    plt.subplots_adjust(left=0.12, right=0.92, bottom=0.10, top=0.96)
 
-    if save_path and (always_save or config.export_plots):
+    if save_path and (always_save or active_config.export_plots):
         plt.savefig(save_path, facecolor="black", edgecolor="none",
                     dpi=150, bbox_inches="tight")
 
@@ -432,7 +476,9 @@ def generate_flashlight_plot(emitter_name: str, reflector_name: str, gasket_name
                                          config),
                     _plot_filename(reflector_name, emitter_name,
                                    gasket_name, finish_type),
-                    axis_distance, diagonal_distance)
+                    axis_distance, diagonal_distance,
+                    f"{reflector_name} + {emitter_name}",
+                    copy.deepcopy(config))
 
     if config.plot_wall_shot:
         if log_callback:
@@ -450,8 +496,9 @@ def generate_flashlight_plot(emitter_name: str, reflector_name: str, gasket_name
             (config.plot_intensity_45, np.diagonal(illumination.total_lux),
              diagonal_distance, "45-Deg")):
         if wanted:
-            plt.close(render_intensity_profile(values, distance, label,
-                                               title_str, save_path, config))
+            # Pass the `shot` object first, followed by the label and arrays
+            plt.close(render_intensity_profile(shot, label, values, distance, 
+                                               save_path, config))
 
     return figure, {
         "Reflector": reflector_name,
