@@ -2315,11 +2315,43 @@ class MainWindow(QMainWindow):
         if not file_path:
             return
 
-        # The render engine will automatically append suffixes to this base path for profiles
+        import csv
+        base, extension = os.path.splitext(file_path)
+        export_csv = hasattr(self, 'chkExportPlotsCSV') and self.chkExportPlotsCSV.isChecked()
+
+        # Isolate the exact data arrays used for the intensity plots
+        centre = shot.wall_lux.shape[0] // 2
+        slices = {
+            "X-Axis": (shot.wall_lux[centre, :], shot.axis_distance),
+            "Y-Axis": (shot.wall_lux[:, centre], shot.axis_distance),
+            "45-Deg": (np.diagonal(shot.wall_lux), shot.diagonal_distance)
+        }
+
+        # The render engine will automatically append suffixes to this base path
         for name in wanted:
+            # Save the PNG Image
             plt.close(render_plot(shot, name, self.config, file_path, always_save=True))
             
+            # Save the CSV if checked and it is an intensity plot
+            if export_csv and name in slices:
+                csv_path = f"{base}_{name}.csv"
+                values_lux, distances = slices[name]
+                
+                # Convert Lux to Candela using the frozen geometry
+                values_cd = values_lux * (shot.shot_config.target_distance_m ** 2)
+                
+                # Calculate angles dynamically so the CSV always has both metrics
+                angles_deg = np.degrees(np.arctan(distances / shot.shot_config.target_distance_m))
+                
+                with open(csv_path, mode='w', newline='') as f:
+                    writer = csv.writer(f)
+                    writer.writerow(["Distance_m", "Angle_deg", "Intensity_cd"])
+                    for d, a, cd in zip(distances, angles_deg, values_cd):
+                        writer.writerow([f"{d:.4f}", f"{a:.4f}", f"{cd:.2f}"])
+            
         self.log_message(f"Saved {len(wanted)} plot(s) of {shot.label} based on {file_path}")
+        if export_csv:
+            self.log_message("-> Associated CSV data files exported successfully.")
 
     def setup_camera_controls(self):
         """Wires the camera bar and puts the saved settings into it.
