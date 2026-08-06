@@ -92,6 +92,155 @@ def angular_sampling_warnings(config: SimulationConfig) -> List[str]:
     return warnings
 
 
+# Fraction of the free memory the angular grid is allowed to claim. The rest is
+# needed for the ray arrays, the projection's working copies and whatever else
+# the machine is doing.
+DOME_MEMORY_FRACTION = 0.5
+
+
+def available_memory_mb(use_gpu: bool):
+    """Free memory in megabytes, or None when it cannot be worked out.
+
+    Args:
+        use_gpu: True to ask the CUDA device, False for host memory.
+
+    Returns:
+        Free megabytes, or None if nothing could answer.
+    """
+    if use_gpu:
+        try:
+            free_bytes, _ = cuda.current_context().get_memory_info()
+            return free_bytes / 2 ** 20
+        except Exception:
+            return None
+    try:
+        import psutil
+        return psutil.virtual_memory().available / 2 ** 20
+    except Exception:
+        return None
+
+
+def dome_grid_shape(config: SimulationConfig, use_gpu: bool = False,
+                    log_callback: LogCallback = None):
+    """Returns the angular grid shape, coarsened if it will not fit.
+
+    At the default 0.05 degrees a hemisphere is 1800 by 7200 bins, which is
+    about 200 MB across the two accumulators. That is fine on most machines and
+    far too much on some, and a failed allocation part way through a long trace
+    is a poor way to find out. The step is therefore halved until the grid fits
+    the smaller of the configured budget and what the machine actually has free,
+    and the operator is told it happened.
+
+    Args:
+        config: Active configuration.
+        use_gpu: True when the grid will live in device memory.
+        log_callback: Receives a note if the grid had to be coarsened.
+
+    Returns:
+        (polar_bins, azimuth_bins).
+    """
+    polar_bins = max(1, int(round((config.dome_angle_deg / 2.0)
+                                  / config.dome_polar_step_deg)))
+    azimuth_bins = max(1, int(round(360.0 / config.dome_azimuth_step_deg)))
+
+    def megabytes(polar, azimuth):
+        """Bytes for both float64 accumulators, in megabytes."""
+        return polar * azimuth * 8 * 2 / 2 ** 20
+
+    budget = float(config.dome_memory_budget_mb)
+    free = available_memory_mb(use_gpu)
+    if free is not None:
+        budget = min(budget, free * DOME_MEMORY_FRACTION)
+
+    wanted = megabytes(polar_bins, azimuth_bins)
+    steps = 0
+    while megabytes(polar_bins, azimuth_bins) > budget and min(polar_bins,
+                                                               azimuth_bins) > 1:
+        polar_bins = max(1, polar_bins // 2)
+        azimuth_bins = max(1, azimuth_bins // 2)
+        steps += 1
+
+    if steps and log_callback:
+        polar_step = (config.dome_angle_deg / 2.0) / polar_bins
+        azimuth_step = 360.0 / azimuth_bins
+        log_callback(
+            f"[!] Spherical grid needs {wanted:,.0f} MB, but only "
+            f"{budget:,.0f} MB is available. Coarsened to "
+            f"{polar_bins:,} x {azimuth_bins:,} bins "
+            f"({polar_step:.3f} deg polar, {azimuth_step:.3f} deg azimuth, "
+            f"{megabytes(polar_bins, azimuth_bins):,.0f} MB).")
+
+    return polar_bins, azimuth_bins
+
+
+def project_dome_to_wall(dome_flux: np.ndarray, config: SimulationConfig):
+    """Scatters flux from the angular grid onto the flat wall.
+
+    Each populated bin stands for a narrow cone of directions leaving the head.
+    Where that cone meets the wall is pure geometry, so the bin's flux is laid
+    down there. Scattering rather than sampling is what keeps the total honest:
+    no bin is counted twice and none is missed, and the only light that
+    disappears is what genuinely falls outside the wall.
+
+    The landing is spread bilinearly over the four surrounding pixels, which
+    is what stops the two grids beating against each other into moire rings.
+
+    Args:
+        dome_flux: Flux per angular bin, indexed [polar, azimuth].
+        config: Active configuration.
+
+    Returns:
+        Flux per wall pixel, indexed [row, column].
+    """
+    resolution = config.sim_grid_res
+    wall = np.zeros((resolution, resolution), dtype=np.float64)
+
+    filled = np.nonzero(dome_flux)
+    if not len(filled[0]):
+        return wall
+
+    polar_bins, azimuth_bins = dome_flux.shape
+    polar_step = math.radians(config.dome_angle_deg / 2.0) / polar_bins
+    azimuth_step = 2.0 * math.pi / azimuth_bins
+
+    polar = (filled[0] + 0.5) * polar_step
+    azimuth = (filled[1] + 0.5) * azimuth_step
+    flux = dome_flux[filled]
+
+    # Only the forward hemisphere can reach a wall in front of the head; a dome
+    # wider than that simply has nothing to project from those bins.
+    forward = polar < (math.pi / 2.0 - 1e-9)
+    polar, azimuth, flux = polar[forward], azimuth[forward], flux[forward]
+
+    offset = config.target_distance_m * np.tan(polar)
+    cell = (2.0 * config.wall_radius_m) / resolution
+    column = (offset * np.cos(azimuth) + config.wall_radius_m) / cell - 0.5
+    row = (offset * np.sin(azimuth) + config.wall_radius_m) / cell - 0.5
+
+    # Dropping each bin into the nearest pixel is what causes the moire:
+    # the angular lattice and the linear one beat against each other, so
+    # neighbouring pixels collect different numbers of bins and the pattern
+    # shows up as rings. Splitting each bin across the four pixels it sits
+    # between, in proportion to how close it is to each, removes the beat
+    # without blurring anything: the weights sum to one, so not a lumen is
+    # gained or lost, and a bin landing dead centre still lands whole.
+    low_column = np.floor(column).astype(np.int64)
+    low_row = np.floor(row).astype(np.int64)
+    column_fraction = column - low_column
+    row_fraction = row - low_row
+
+    for row_offset, row_weight in ((0, 1.0 - row_fraction), (1, row_fraction)):
+        for col_offset, col_weight in ((0, 1.0 - column_fraction),
+                                       (1, column_fraction)):
+            target_row = low_row + row_offset
+            target_column = low_column + col_offset
+            landed = ((target_column >= 0) & (target_column < resolution)
+                      & (target_row >= 0) & (target_row < resolution))
+            np.add.at(wall, (target_row[landed], target_column[landed]),
+                      (flux * row_weight * col_weight)[landed])
+    return wall
+
+
 def _hemisphere_weight(config: SimulationConfig) -> float:
     """Total Lambertian ray weight over a full hemisphere, on the trace's grid.
 
@@ -182,7 +331,7 @@ def simulate_wall_illuminance(geom: dict, emitter: dict, current_amps: float, fi
     die_shape = spec_or_default(emitter, "emitter", "shape", config)
     element_x, element_y, element_area = _build_emitter_elements(
         emitter, config.sim_emitter_elements, die_shape,
-        emitter_die_outline(emitter, die_shape))
+        emitter_die_outline(emitter, die_shape), config=config)
     element_count = len(element_x)
 
     # Flux follows emitting area, not element count: a point on the perimeter
@@ -214,7 +363,24 @@ def simulate_wall_illuminance(geom: dict, emitter: dict, current_amps: float, fi
             log_callback(f"[!] GPU toggled ON, but the CUDA toolchain is unusable:\n"
                          f"-> {gpu_error}\nFalling back to CPU.")
 
-    grid_shape = (config.sim_grid_res, config.sim_grid_res)
+    # With the dome enabled the kernels bin by outgoing direction and the
+    # wall is filled in afterwards, so the accumulators are angular rather
+    # than spatial and carry every ray the head emits, however wide.
+    if config.use_spherical_projection:
+        polar_bins, azimuth_bins = dome_grid_shape(config, use_gpu, log_callback)
+        grid_shape = (polar_bins, azimuth_bins)
+        dome = (polar_bins,
+                math.radians(config.dome_angle_deg / 2.0) / polar_bins,
+                2.0 * math.pi / azimuth_bins,
+                azimuth_bins)
+        if log_callback:
+            log_callback(f"Spherical grid: {polar_bins:,} polar x "
+                         f"{azimuth_bins:,} azimuth bins over "
+                         f"{config.dome_angle_deg:g} deg.")
+    else:
+        grid_shape = (config.sim_grid_res, config.sim_grid_res)
+        dome = (0, 0.0, 0.0, 0)
+
     hotspot_grid = np.zeros(grid_shape, dtype=np.float64)
     spill_grid = np.zeros(grid_shape, dtype=np.float64)
 
@@ -232,7 +398,7 @@ def simulate_wall_illuminance(geom: dict, emitter: dict, current_amps: float, fi
                 cuda.to_device(element_weight),
                 cuda.to_device(ray_vx), cuda.to_device(ray_vy), cuda.to_device(ray_vz),
                 cuda.to_device(ray_flux),
-                geom, config, target_z_mm, device_hotspot, device_spill)
+                geom, config, target_z_mm, device_hotspot, device_spill, dome)
 
             execute_tracers(True, ray_trace_kernel_gpu, total_threads, args,
                             log_callback, progress_callback, is_cancelled_callback)
@@ -261,12 +427,19 @@ def simulate_wall_illuminance(geom: dict, emitter: dict, current_amps: float, fi
 
         args = _build_kernel_args(element_x, element_y, element_weight,
                                   ray_vx, ray_vy, ray_vz, ray_flux,
-                                  geom, config, target_z_mm, hotspot_grid, spill_grid)
+                                  geom, config, target_z_mm, hotspot_grid,
+                                  spill_grid, dome)
 
         execute_tracers(False, ray_trace_kernel_cpu, total_threads, args,
                         log_callback, progress_callback, is_cancelled_callback)
         if is_cancelled_callback and is_cancelled_callback():
             return None
+
+    if config.use_spherical_projection:
+        if log_callback:
+            log_callback("Projecting the spherical grid onto the wall...")
+        hotspot_grid = project_dome_to_wall(hotspot_grid, config)
+        spill_grid = project_dome_to_wall(spill_grid, config)
 
     if log_callback:
         log_callback("Applying spatial blur and generating final lux arrays...")
@@ -274,9 +447,12 @@ def simulate_wall_illuminance(geom: dict, emitter: dict, current_amps: float, fi
     # An orange peel finish scatters the reflected light; the blur radius scales
     # with the grid so the result is resolution independent.
     blur_sigma = 0.0
-    if finish == "orange_peel":
-        blur_sigma = (config.default_op_blur_strength * geom["op_multiplier"]
+    
+    # Run the classic 2D statistical blur only if the Dimple Simulation is toggled off
+    if finish == "orange_peel" and not getattr(config, "use_dimple_op_simulation", False):
+        blur_sigma = (getattr(config, "op_blur_strength", 1.5) * geom["op_factor"]
                       * (config.sim_grid_res / 1000.0))
+        
     if blur_sigma > 0:
         hotspot_grid = gaussian_filter(hotspot_grid, sigma=blur_sigma)
 

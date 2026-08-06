@@ -38,9 +38,113 @@ _THREADS_PER_BLOCK = 256
 # ==============================================================================
 
 
+# How much a frosted surface flattens the Fresnel falloff. Zero would leave it
+# behaving like polished glass, one would remove the angle dependence entirely;
+# half reflects that the microfacets spread the incidence angle without erasing
+# it. An applied film sits on an otherwise flat outer face, so it keeps the
+# full Fresnel curve.
+FROSTED_ANGULAR_SOFTENING = 0.5
+
+# How the scattering cone widens off axis, as an exponent on 1/cos(incidence).
+# A film is a volume: path length through it grows as 1/cos, and a random walk
+# spreads as the square root of path length, giving one half. Etched glass has
+# no depth, so its widening comes only from the microfacet slopes projecting
+# differently off axis, which is real but weaker.
+FILM_ANGULAR_SPREAD_EXPONENT = 0.5
+FROSTED_ANGULAR_SPREAD_EXPONENT = 0.25
+
+
 @njit
+def _hash_uniform(seed):
+    """A deterministic pseudo random number in (0, 1) from an integer.
+
+    A hash rather than a stateful generator, for two reasons: the CPU and GPU
+    kernels share no RNG state to keep in step, and a given ray must scatter the
+    same way on every run or the same build would not reproduce.
+
+    Args:
+        seed: Any integer; nearby values give unrelated results.
+
+    Returns:
+        A float in (0, 1).
+    """
+    value = (seed * 1103515245 + 12345) & 0x7FFFFFFF
+    value ^= value >> 13
+    value = (value * 1274126177) & 0x7FFFFFFF
+    return (value + 0.5) / 2147483648.0
 
 
+@njit
+def scatter_direction(dx, dy, dz, spread_rad, seed):
+    """Tilts a direction by a small random angle drawn from a Gaussian.
+
+    A rough mirror and a diffusing lens do the same thing to a ray: nudge it off
+    course by an angle from a narrow distribution. The tilt is applied across
+    the ray and the result renormalised, so only the direction changes.
+
+    Args:
+        dx, dy, dz: The direction, assumed unit length.
+        spread_rad: Standard deviation of the tilt, in radians.
+        seed: Chooses which tilt this ray gets.
+
+    Returns:
+        The tilted unit direction.
+    """
+    if spread_rad <= 0.0:
+        return dx, dy, dz
+
+    magnitude = spread_rad * math.sqrt(-2.0 * math.log(_hash_uniform(seed)))
+    around = 2.0 * math.pi * _hash_uniform(seed + 7919)
+
+    # Any vector not parallel to the ray gives a basis across it.
+    if abs(dz) < 0.9:
+        ax, ay, az = 0.0, 0.0, 1.0
+    else:
+        ax, ay, az = 1.0, 0.0, 0.0
+    ux, uy, uz = dy * az - dz * ay, dz * ax - dx * az, dx * ay - dy * ax
+    length = math.sqrt(ux * ux + uy * uy + uz * uz)
+    ux, uy, uz = ux / length, uy / length, uz / length
+    vx, vy, vz = dy * uz - dz * uy, dz * ux - dx * uz, dx * uy - dy * ux
+
+    tilt_u = magnitude * math.cos(around)
+    tilt_v = magnitude * math.sin(around)
+    nx = dx + tilt_u * ux + tilt_v * vx
+    ny = dy + tilt_u * uy + tilt_v * vy
+    nz = dz + tilt_u * uz + tilt_v * vz
+    length = math.sqrt(nx * nx + ny * ny + nz * nz)
+    return nx / length, ny / length, nz / length
+
+
+@njit
+def fresnel_transmission(cos_incidence, index):
+    """Fraction of unpolarised light passing both faces of a flat window.
+
+    Straight from the Fresnel equations, averaged over the two polarisations
+    because an LED emits no preferred one, and squared because the light meets
+    an air to glass face going in and a glass to air face coming out. Total
+    internal reflection cannot happen entering from air, so the only thing to
+    guard is the arithmetic at grazing incidence.
+
+    Args:
+        cos_incidence: Cosine of the angle to the lens normal.
+        index: Refractive index of the lens.
+
+    Returns:
+        Transmitted fraction, between 0 and 1.
+    """
+    cos_in = min(1.0, max(1e-6, abs(cos_incidence)))
+    sin_out = math.sqrt(max(0.0, 1.0 - cos_in * cos_in)) / index
+    if sin_out >= 1.0:
+        return 0.0
+    cos_out = math.sqrt(max(0.0, 1.0 - sin_out * sin_out))
+
+    perpendicular = ((cos_in - index * cos_out) / (cos_in + index * cos_out)) ** 2
+    parallel = ((index * cos_in - cos_out) / (index * cos_in + cos_out)) ** 2
+    single_face = 1.0 - 0.5 * (perpendicular + parallel)
+    return single_face * single_face
+
+
+@njit
 def solve_quadratic(a, b, c):
     """Solves a*t^2 + b*t + c = 0 for ray/surface intersections.
 
@@ -63,8 +167,6 @@ def solve_quadratic(a, b, c):
 
 
 @njit
-
-
 def apply_dome_refraction(ex, ey, ez, vx, vy, vz, dome_radius, refractive_index):
     """Refracts a ray as it leaves the emitter's silicone dome.
 
@@ -142,8 +244,6 @@ def apply_dome_refraction(ex, ey, ez, vx, vy, vz, dome_radius, refractive_index)
 
 
 @njit
-
-
 def process_single_ray(ex, ey, ez_base, vx, vy, vz, flux,
                        focal_length, z_bottom, z_min_cut, z_hole_top, z_max_cut,
                        radius_max, r_hole, target_z_mm, grid_res, wall_radius_m,
@@ -151,7 +251,11 @@ def process_single_ray(ex, ey, ez_base, vx, vy, vz, flux,
                        dome_radius, refractive_index, max_multiple_reflections,
                        z_gasket_top, r_gasket, gasket_x_half, gasket_y_half,
                        is_cylindrical_gasket,
-                       emitter_offset_x, emitter_offset_y, transmissivity_lens):
+                       emitter_offset_x, emitter_offset_y, transmissivity_lens,
+                       use_spherical, dome_polar_step_rad, dome_azimuth_step_rad,
+                       dome_polar_bins, dome_azimuth_bins,
+                       scatter_sigma_rad, lens_finish_code, lens_diffusion_rad,
+                       lens_index, enable_lens_sim, use_dimple_op, ray_seed):
     """Traces one ray from the die until it lands on the wall or is absorbed.
 
     Each pass through the loop finds the nearest surface along the ray, then
@@ -182,6 +286,22 @@ def process_single_ray(ex, ey, ez_base, vx, vy, vz, flux,
         emitter_offset_x, emitter_offset_y: Centring error of the emitter
             package in millimetres, as Cartesian components.
         transmissivity_lens: Fraction of flux surviving the lens.
+        use_spherical: 1 to bin by outgoing direction on the dome, 0 to bin
+            straight onto the wall.
+        dome_polar_step_rad, dome_azimuth_step_rad: Angular bin sizes.
+        dome_polar_bins, dome_azimuth_bins: Angular bin counts.
+        scatter_sigma_rad: How much the bowl softens the beam, as a
+            standard deviation in radians. A vapour deposited coating is
+            smooth in itself, so this is really the finish of the
+            substrate underneath it.
+        lens_finish_code: 0 clear, 1 frosted, 2 applied film.
+        lens_diffusion_rad: Scattering angle of a frosted or filmed lens.
+        lens_index: Refractive index of the lens, or zero to skip the
+            angle dependent Fresnel losses entirely. No thickness is
+            needed: the index governs reflection at the two faces, which
+            is what varies with angle, while absorption through the bulk
+            is already covered by transmissivity_lens.
+        ray_seed: Makes this ray scatter the same way every run.
 
     Returns:
         (flux, row, col, bounces) for a ray that reaches the wall, otherwise
@@ -189,15 +309,9 @@ def process_single_ray(ex, ey, ez_base, vx, vy, vz, flux,
     """
     blocked = False
     if dome_radius > 0.0:
-        # A domed emitter fires into silicone, so the ray is refracted at the
-        # dome surface before it sees any of the reflector.
         blocked, ex, ey, ez_base, vx, vy, vz = apply_dome_refraction(
             ex, ey, ez_base, vx, vy, vz, dome_radius, refractive_index)
 
-    # Running ray state: position, direction and remaining flux. The centring
-    # error moves the whole emitter package, dome included, so the shift is
-    # applied after refraction, which is solved in emitter-local coordinates.
-    # Translating a ray moves where it starts and leaves its direction alone.
     px, py, pz = ex + emitter_offset_x, ey + emitter_offset_y, ez_base
     dx, dy, dz = vx, vy, vz
     remaining_flux = flux
@@ -208,7 +322,7 @@ def process_single_ray(ex, ey, ez_base, vx, vy, vz, flux,
     while not blocked:
         hit_type, t_hit = _HIT_NONE, _NO_ROOT
 
-        # --- Centre bore wall (a cylinder of radius r_hole) ---
+        # --- Centre bore wall ---
         t_first, t_second = solve_quadratic(
             dx ** 2 + dy ** 2,
             2.0 * (px * dx + py * dy),
@@ -219,15 +333,12 @@ def process_single_ray(ex, ey, ez_base, vx, vy, vz, flux,
 
         # --- Downward facing planes ---
         if dz < 0.0:
-            # Flat annulus around the bore, only present when the bore does not
-            # reach the parabola before the base thickness does.
             if z_hole_top == z_min_cut and pz > z_min_cut:
                 t_plane = (z_min_cut - pz) / dz
                 if (1e-4 < t_plane < t_hit
                         and (px + t_plane * dx) ** 2 + (py + t_plane * dy) ** 2 > r_hole ** 2):
                     t_hit, hit_type = t_plane, _HIT_ABSORBED
 
-            # Top face of the gasket, i.e. everything outside its aperture.
             if z_gasket_top > z_bottom and pz > z_gasket_top:
                 t_plane = (z_gasket_top - pz) / dz
                 if 1e-4 < t_plane < t_hit:
@@ -239,20 +350,19 @@ def process_single_ray(ex, ey, ez_base, vx, vy, vz, flux,
                                      or abs(hit_y) >= gasket_y_half))):
                         t_hit, hit_type = t_plane, _HIT_GASKET
 
-            # The reflector floor absorbs anything that gets this far.
             if pz > z_bottom:
                 t_plane = (z_bottom - pz) / dz
                 if 1e-4 < t_plane < t_hit:
                     t_hit, hit_type = t_plane, _HIT_ABSORBED
 
-        # --- Upward through the floor from inside the bore ---
+        # --- Upward through the floor ---
         elif dz > 0.0 and pz < z_bottom:
             t_plane = (z_bottom - pz) / dz
             if (1e-4 < t_plane < t_hit
                     and (px + t_plane * dx) ** 2 + (py + t_plane * dy) ** 2 > r_hole ** 2):
                 t_hit, hit_type = t_plane, _HIT_ABSORBED
 
-        # --- Parabolic reflector (x^2 + y^2 = 4*f*z) ---
+        # --- Parabolic reflector ---
         t_first, t_second = solve_quadratic(
             dx ** 2 + dy ** 2,
             2.0 * (px * dx + py * dy) - 4.0 * focal_length * dz,
@@ -261,7 +371,7 @@ def process_single_ray(ex, ey, ez_base, vx, vy, vz, flux,
             if 1e-4 < t_para < t_hit and z_hole_top <= (pz + t_para * dz) <= z_max_cut:
                 t_hit, hit_type = t_para, _HIT_PARABOLA
 
-        # --- Inner wall of the gasket aperture ---
+        # --- Inner wall of gasket ---
         if z_gasket_top > z_bottom:
             if is_cylindrical_gasket == 1:
                 _, t_far = solve_quadratic(
@@ -271,7 +381,6 @@ def process_single_ray(ex, ey, ez_base, vx, vy, vz, flux,
                 if 1e-4 < t_far < t_hit and (pz + t_far * dz) <= z_gasket_top:
                     t_hit, hit_type = t_far, _HIT_GASKET
             else:
-                # Rectangular aperture: test the two facing side walls.
                 if abs(dx) > 1e-8:
                     t_x = (gasket_x_half * (1.0 if dx > 0.0 else -1.0) - px) / dx
                     if (1e-4 < t_x < t_hit and (pz + t_x * dz) <= z_gasket_top
@@ -292,15 +401,49 @@ def process_single_ray(ex, ey, ez_base, vx, vy, vz, flux,
             hit_x, hit_y, hit_z = px + t_hit * dx, py + t_hit * dy, pz + t_hit * dz
 
             if hit_type == _HIT_PARABOLA:
-                # Surface normal of x^2 + y^2 - 4*f*z = 0, pointing inwards.
                 nx, ny, nz = -hit_x, -hit_y, 2.0 * focal_length
+                
+                # --- NEW DIMPLE BUMP-MAP SIMULATION ---
+                if use_dimple_op and scatter_sigma_rad > 0.0:
+                    r_hit = math.sqrt(hit_x ** 2 + hit_y ** 2)
+                    r_start = math.sqrt(max(0.0, 4.0 * focal_length * z_hole_top))
+                    span = radius_max - r_start
+                    
+                    if span > 1e-6:
+                        P = max(0.0, min(1.0, (r_hit - r_start) / span))
+                        azimuth = math.atan2(hit_y, hit_x)
+                        
+                        # Tangent around circumference
+                        tx, ty, tz = -hit_y, hit_x, 0.0
+                        t_len = math.sqrt(tx ** 2 + ty ** 2)
+                        if t_len > 1e-6:
+                            tx, ty = tx / t_len, ty / t_len
+                            
+                            # Bitangent up the parabola wall
+                            bx, by, bz = ny * tz - nz * ty, nz * tx - nx * tz, nx * ty - ny * tx
+                            b_len = math.sqrt(bx ** 2 + by ** 2 + bz ** 2)
+                            
+                            if b_len > 1e-6:
+                                bx, by, bz = bx / b_len, by / b_len, bz / b_len
+                                
+                                # Analytic gradient of the UI preview's sinusoid map
+                                A = scatter_sigma_rad * 1.4142
+                                tilt_u = A * math.cos(40.0 * azimuth) * math.sin(8.0 * math.pi * P)
+                                tilt_v = A * math.sin(40.0 * azimuth) * math.cos(8.0 * math.pi * P)
+                                
+                                # Perturb the normal directly
+                                nx += tilt_u * tx + tilt_v * bx
+                                ny += tilt_u * ty + tilt_v * by
+                                nz += tilt_u * tz + tilt_v * bz
+                # --------------------------------------
+                
                 reflectivity = reflectivity_parabola
             elif hit_type == _HIT_CYLINDER:
                 nx, ny, nz = -hit_x, -hit_y, 0.0
                 reflectivity = reflectivity_cylinder
             else:
                 if abs(hit_z - z_gasket_top) < 1e-4 and dz < 0.0:
-                    nx, ny, nz = 0.0, 0.0, 1.0  # Landed on the gasket's top face.
+                    nx, ny, nz = 0.0, 0.0, 1.0
                 elif is_cylindrical_gasket == 1:
                     nx, ny, nz = -hit_x, -hit_y, 0.0
                 elif abs(abs(hit_x) - gasket_x_half) < 1e-4:
@@ -312,11 +455,15 @@ def process_single_ray(ex, ey, ez_base, vx, vy, vz, flux,
             magnitude = math.sqrt(nx ** 2 + ny ** 2 + nz ** 2)
             nx, ny, nz = nx / magnitude, ny / magnitude, nz / magnitude
 
-            # Mirror the direction about the surface normal.
             projection = dx * nx + dy * ny + dz * nz
             dx = dx - 2.0 * projection * nx
             dy = dy - 2.0 * projection * ny
             dz = dz - 2.0 * projection * nz
+
+            # Only run the Gaussian blur if the analytic dimple map is toggled off
+            if hit_type == _HIT_PARABOLA and scatter_sigma_rad > 0.0 and not use_dimple_op:
+                dx, dy, dz = scatter_direction(dx, dy, dz, scatter_sigma_rad,
+                                               ray_seed * 4096 + bounces)
             px, py, pz = hit_x, hit_y, hit_z
             remaining_flux *= reflectivity
 
@@ -324,21 +471,49 @@ def process_single_ray(ex, ey, ez_base, vx, vy, vz, flux,
             return 0.0, -1, -1, -1
 
         else:
-            # Nothing left to hit: the ray either clears the mouth or is
-            # clipped by the reflector wall on its way out.
             if dz > 0.0:
                 t_mouth = (z_max_cut - pz) / dz
                 exit_x = px + t_mouth * dx
                 exit_y = py + t_mouth * dy
 
                 if math.sqrt(exit_x ** 2 + exit_y ** 2) <= radius_max + 1e-4:
-                    # Every ray leaving the head crosses the lens, whether it
-                    # bounced off the reflector or is spill straight from the
-                    # die, so both are attenuated at this single point. The
-                    # loss is a plain scalar for now; making it depend on the
-                    # path length through the glass means using the direction
-                    # (dx, dy, dz), which is in hand right here.
+                    
+                    # Flat transmissivity is always applied, but the heavy Fresnel math is bypassable
                     remaining_flux *= transmissivity_lens
+
+                    if enable_lens_sim:
+                        exit_length = math.sqrt(dx * dx + dy * dy + dz * dz)
+                        cos_incidence = dz / exit_length
+
+                        if lens_index > 1.0:
+                            angular = (fresnel_transmission(cos_incidence, lens_index)
+                                       / fresnel_transmission(1.0, lens_index))
+
+                            if lens_finish_code == 1:
+                                angular = 1.0 + FROSTED_ANGULAR_SOFTENING * (angular - 1.0)
+                            remaining_flux *= angular
+
+                        if lens_diffusion_rad > 0.0 and lens_finish_code != 0:
+                            exponent = (FILM_ANGULAR_SPREAD_EXPONENT
+                                        if lens_finish_code == 2
+                                        else FROSTED_ANGULAR_SPREAD_EXPONENT)
+                            spread = lens_diffusion_rad * (
+                                1.0 / max(cos_incidence, 0.05)) ** exponent
+                            dx, dy, dz = scatter_direction(dx, dy, dz, spread,
+                                                           ray_seed * 4096 + 2048)
+
+                    if use_spherical:
+                        length = math.sqrt(dx * dx + dy * dy + dz * dz)
+                        polar = math.acos(min(1.0, max(-1.0, dz / length)))
+                        azimuth = math.atan2(dy, dx)
+                        if azimuth < 0.0:
+                            azimuth += 2.0 * math.pi
+
+                        row = int(polar / dome_polar_step_rad)
+                        col = int(azimuth / dome_azimuth_step_rad)
+                        if 0 <= row < dome_polar_bins and 0 <= col < dome_azimuth_bins:
+                            return remaining_flux, row, col, bounces
+                        return 0.0, -1, -1, -1
 
                     t_wall = (target_z_mm - pz) / dz
                     col = int((((px + t_wall * dx) / 1000.0) + wall_radius_m) / bin_size)
@@ -352,8 +527,6 @@ def process_single_ray(ex, ey, ez_base, vx, vy, vz, flux,
 
 
 @cuda.jit
-
-
 def ray_trace_kernel_gpu(start_idx, end_idx, element_x, element_y,
                          element_weight, ray_vx, ray_vy, ray_vz, ray_flux,
                          focal_length, ez_base, z_bottom, z_min_cut, z_hole_top,
@@ -363,6 +536,11 @@ def ray_trace_kernel_gpu(start_idx, end_idx, element_x, element_y,
                          max_multiple_reflections, z_gasket_top, r_gasket,
                          gasket_x_half, gasket_y_half, is_cylindrical_gasket,
                          emitter_offset_x, emitter_offset_y, transmissivity_lens,
+                         use_spherical, dome_polar_step_rad,
+                         dome_azimuth_step_rad, dome_polar_bins,
+                         dome_azimuth_bins, scatter_sigma_rad, lens_finish_code,
+                         lens_diffusion_rad, lens_index, 
+                         enable_lens_sim, use_dimple_op,
                          hotspot_grid, spill_grid):
     """Traces one (die element, ray direction) pair per CUDA thread.
 
@@ -400,15 +578,17 @@ def ray_trace_kernel_gpu(start_idx, end_idx, element_x, element_y,
         reflectivity_parabola, reflectivity_cylinder, reflectivity_gasket,
         dome_radius, refractive_index, max_multiple_reflections,
         z_gasket_top, r_gasket, gasket_x_half, gasket_y_half, is_cylindrical_gasket,
-        emitter_offset_x, emitter_offset_y, transmissivity_lens)
+        emitter_offset_x, emitter_offset_y, transmissivity_lens,
+        use_spherical, dome_polar_step_rad, dome_azimuth_step_rad,
+        dome_polar_bins, dome_azimuth_bins,
+        scatter_sigma_rad, lens_finish_code, lens_diffusion_rad,
+        lens_index, enable_lens_sim, use_dimple_op, index)
 
     if row != -1 and col != -1:
         cuda.atomic.add(hotspot_grid if bounces > 0 else spill_grid, (row, col), final_flux)
 
 
 @njit
-
-
 def ray_trace_kernel_cpu(start_idx, end_idx, element_x, element_y,
                          element_weight, ray_vx, ray_vy, ray_vz, ray_flux,
                          focal_length, ez_base, z_bottom, z_min_cut, z_hole_top,
@@ -418,6 +598,11 @@ def ray_trace_kernel_cpu(start_idx, end_idx, element_x, element_y,
                          max_multiple_reflections, z_gasket_top, r_gasket,
                          gasket_x_half, gasket_y_half, is_cylindrical_gasket,
                          emitter_offset_x, emitter_offset_y, transmissivity_lens,
+                         use_spherical, dome_polar_step_rad,
+                         dome_azimuth_step_rad, dome_polar_bins,
+                         dome_azimuth_bins, scatter_sigma_rad, lens_finish_code,
+                         lens_diffusion_rad, lens_index,
+                         enable_lens_sim, use_dimple_op,
                          hotspot_grid, spill_grid):
     """CPU twin of ray_trace_kernel_gpu; walks the index range in a loop.
 
@@ -432,13 +617,17 @@ def ray_trace_kernel_cpu(start_idx, end_idx, element_x, element_y,
         final_flux, row, col, bounces = process_single_ray(
             element_x[element_idx], element_y[element_idx], ez_base,
             ray_vx[ray_idx], ray_vy[ray_idx], ray_vz[ray_idx],
-        ray_flux[ray_idx] * element_weight[element_idx],
+            ray_flux[ray_idx] * element_weight[element_idx],
             focal_length, z_bottom, z_min_cut, z_hole_top, z_max_cut,
             radius_max, r_hole, target_z_mm, grid_res, wall_radius_m,
             reflectivity_parabola, reflectivity_cylinder, reflectivity_gasket,
             dome_radius, refractive_index, max_multiple_reflections,
             z_gasket_top, r_gasket, gasket_x_half, gasket_y_half, is_cylindrical_gasket,
-            emitter_offset_x, emitter_offset_y, transmissivity_lens)
+            emitter_offset_x, emitter_offset_y, transmissivity_lens,
+            use_spherical, dome_polar_step_rad, dome_azimuth_step_rad,
+            dome_polar_bins, dome_azimuth_bins,
+            scatter_sigma_rad, lens_finish_code, lens_diffusion_rad,
+            lens_index, enable_lens_sim, use_dimple_op, index)
 
         if row != -1 and col != -1:
             if bounces > 0:
@@ -450,7 +639,8 @@ def ray_trace_kernel_cpu(start_idx, end_idx, element_x, element_y,
 def _build_kernel_args(element_x, element_y, element_weight,
                       ray_vx, ray_vy, ray_vz, ray_flux,
                        geom: dict, config: SimulationConfig, target_z_mm: float,
-                       hotspot_grid, spill_grid) -> tuple:
+                       hotspot_grid, spill_grid,
+                       dome=(0, 0.0, 0.0, 0)) -> tuple:
     """Packs every kernel argument into one tuple, in the kernels' parameter order.
 
     Both kernels are launched as ``kernel(start, end, *args)``, so this is the
@@ -485,6 +675,11 @@ def _build_kernel_args(element_x, element_y, element_weight,
         int(geom["is_cylindrical_gasket"]),
         float(geom["emitter_offset_x"]), float(geom["emitter_offset_y"]),
         float(geom["transmissivity_lens"]),
+        int(dome[0] > 0), float(dome[1]), float(dome[2]), int(dome[0]), int(dome[3]),
+        float(geom["scatter_sigma_rad"]), int(geom["lens_finish_code"]),
+        float(geom["lens_diffusion_rad"]), float(geom["lens_index"]),
+        int(getattr(config, "enable_lens_simulation", True)),
+        int(getattr(config, "use_dimple_op_simulation", False)),
         hotspot_grid, spill_grid,
     )
 

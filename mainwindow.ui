@@ -14,519 +14,1733 @@
    <string>Flashlight Beam FEA Simulator</string>
   </property>
   <widget class="QWidget" name="centralwidget">
-   <layout class="QHBoxLayout" name="horizontalLayout_Main">
-    
+   <layout class="QVBoxLayout" name="verticalLayout_Main">
     <item>
-     <widget class="QWidget" name="widgetControls" native="true">
-      <property name="sizePolicy">
-       <sizepolicy hsizetype="Preferred" vsizetype="Preferred">
-        <horstretch>1</horstretch>
-        <verstretch>0</verstretch>
-       </sizepolicy>
+     <widget class="QTabWidget" name="tabMain">
+      <property name="currentIndex">
+       <number>0</number>
       </property>
-      <layout class="QHBoxLayout" name="horizontalLayout_Columns">
-       
-       <item>
-        <widget class="QGroupBox" name="grpReflector">
-         <property name="minimumSize">
-          <size><width>300</width><height>0</height></size>
-         </property>
-         <property name="title"><string>Reflector Library</string></property>
-         <layout class="QVBoxLayout" name="verticalLayout_Reflector">
+      <widget class="QWidget" name="tabSetup">
+       <attribute name="title">
+        <string>Setup</string>
+       </attribute>
+       <layout class="QVBoxLayout" name="verticalLayout_Setup">
+        <item>
+         <layout class="QHBoxLayout" name="horizontalLayout_Columns">
           <item>
-           <widget class="QWidget" name="widgetReflectorPreview" native="true">
-            <property name="sizePolicy">
-             <sizepolicy hsizetype="Ignored" vsizetype="Fixed">
-              <horstretch>0</horstretch>
-              <verstretch>0</verstretch>
-             </sizepolicy>
-            </property>
-            <property name="minimumSize">
-             <size><width>0</width><height>0</height></size>
-            </property>
-            <property name="toolTip"><string>Reflector cross section, revolved. Drag to rotate.</string></property>
-            <layout class="QVBoxLayout" name="layoutReflectorPreview">
-             <property name="leftMargin"><number>0</number></property>
-             <property name="topMargin"><number>0</number></property>
-             <property name="rightMargin"><number>0</number></property>
-             <property name="bottomMargin"><number>0</number></property>
-            </layout>
-           </widget>
-          </item>
-          <item>
-           <widget class="QLabel" name="lblReflectorWarning">
-            <property name="wordWrap"><bool>true</bool></property>
-            <property name="styleSheet"><string>color: #E8A33D;</string></property>
-            <property name="text"><string/></property>
-           </widget>
-          </item>
-          <item>
-           <widget class="QComboBox" name="cmbReflector"/>
-          </item>
-          <item>
-           <widget class="QScrollArea" name="scrollReflector">
-            <property name="widgetResizable"><bool>true</bool></property>
-            <widget class="QWidget" name="scrollWidget_Reflector">
-             <layout class="QFormLayout" name="formLayout_Reflector">
-              <item row="0" column="0"><widget class="QLabel"><property name="text"><string>Diameter (mm)</string></property></widget></item>
-              <item row="0" column="1"><widget class="QLineEdit" name="txtRef_diameter_mm"><property name="maximumSize"><size><width>100</width><height>16777215</height></size></property></widget></item>
-              <item row="1" column="0"><widget class="QLabel"><property name="text"><string>Height (mm)</string></property></widget></item>
-              <item row="1" column="1"><widget class="QLineEdit" name="txtRef_height_mm"><property name="maximumSize"><size><width>100</width><height>16777215</height></size></property></widget></item>
-              <item row="2" column="0"><widget class="QLabel"><property name="text"><string>Opening Dia (mm)</string></property></widget></item>
-              <item row="2" column="1"><widget class="QLineEdit" name="txtRef_opening_diameter_mm"><property name="maximumSize"><size><width>100</width><height>16777215</height></size></property></widget></item>
-              <item row="3" column="0"><widget class="QLabel"><property name="text"><string>Focus Offset (mm)</string></property></widget></item>
-              <item row="3" column="1"><widget class="QLineEdit" name="txtRef_focus_offset_mm"><property name="maximumSize"><size><width>100</width><height>16777215</height></size></property></widget></item>
-              <item row="4" column="0"><widget class="QLabel"><property name="text"><string>Wall Thickness (mm)</string></property></widget></item>
-              <item row="4" column="1"><widget class="QLineEdit" name="txtRef_wall_thickness_mm"><property name="toolTip"><string>Thickness of one reflector wall. Taken off the outer diameter twice, once per side, to give the reflective surface.</string></property><property name="maximumSize"><size><width>100</width><height>16777215</height></size></property></widget></item>
-              <item row="5" column="0"><widget class="QLabel"><property name="text"><string>Base Thickness (mm)</string></property></widget></item>
-              <item row="5" column="1"><widget class="QLineEdit" name="txtRef_thickness_height_mm"><property name="maximumSize"><size><width>100</width><height>16777215</height></size></property></widget></item>
-              <item row="6" column="0"><widget class="QLabel"><property name="text"><string>Surface Finish</string></property></widget></item>
-              <item row="6" column="1"><widget class="QComboBox" name="txtRef_surface_finish"><property name="toolTip"><string>Which reflectivity applies: the smooth figure or the orange peel one. Stored with the reflector like any other spec.</string></property><property name="maximumSize"><size><width>100</width><height>16777215</height></size></property></widget></item>
-              <item row="7" column="0"><widget class="QLabel"><property name="text"><string>Smooth Reflectivity</string></property></widget></item>
-              <item row="7" column="1"><widget class="QLineEdit" name="txtRef_reflectivity_smooth"><property name="maximumSize"><size><width>100</width><height>16777215</height></size></property></widget></item>
-              <item row="8" column="0"><widget class="QLabel"><property name="text"><string>OP Reflectivity</string></property></widget></item>
-              <item row="8" column="1"><widget class="QLineEdit" name="txtRef_reflectivity_op"><property name="maximumSize"><size><width>100</width><height>16777215</height></size></property></widget></item>
-              <item row="9" column="0"><widget class="QLabel"><property name="text"><string>Hole Reflectivity</string></property></widget></item>
-              <item row="9" column="1"><widget class="QLineEdit" name="txtRef_reflectivity_cylinder"><property name="maximumSize"><size><width>100</width><height>16777215</height></size></property></widget></item>
-              <item row="10" column="0"><widget class="QLabel"><property name="text"><string>Gasket Reflectivity</string></property></widget></item>
-              <item row="10" column="1"><widget class="QLineEdit" name="txtRef_gasket_reflectivity"><property name="maximumSize"><size><width>100</width><height>16777215</height></size></property></widget></item>
-              <item row="11" column="0"><widget class="QLabel"><property name="text"><string>OP Factor Blur</string></property></widget></item>
-              <item row="11" column="1"><widget class="QLineEdit" name="txtRef_OP_Factor"><property name="maximumSize"><size><width>100</width><height>16777215</height></size></property></widget></item>
-              <item row="12" column="0"><widget class="QLabel"><property name="text"><string>Lens Transmissivity</string></property></widget></item>
-              <item row="12" column="1"><widget class="QLineEdit" name="txtRef_transmissivity_lens"><property name="toolTip"><string>Fraction of flux surviving the lens, 0 to 1. Applied to spill and reflected rays alike.</string></property><property name="maximumSize"><size><width>100</width><height>16777215</height></size></property></widget></item>
-
-              <!-- Emitter centring describes the build being simulated, not the
-                   reflector. Saving a reflector discards it, and reloading the
-                   form resets it to zero. -->
-              <item row="13" column="0" colspan="2">
-               <widget class="QLabel" name="lblEmitterCentring">
-                <property name="text"><string>Emitter Centring (this run only)</string></property>
-                <property name="font"><font><bold>true</bold></font></property>
-                <property name="toolTip"><string>Never saved with the reflector. Resets to zero when the reflector selection changes or is reset.</string></property>
-               </widget>
-              </item>
-              <item row="14" column="0"><widget class="QLabel"><property name="text"><string>Offset Distance (mm)</string></property></widget></item>
-              <item row="14" column="1"><widget class="QLineEdit" name="txtRef_emitter_offset_distance_mm"><property name="text"><string>0.0</string></property><property name="toolTip"><string>How far the emitter sits off the reflector axis, in millimetres. 0 is centred.</string></property><property name="maximumSize"><size><width>100</width><height>16777215</height></size></property></widget></item>
-              <item row="15" column="0"><widget class="QLabel"><property name="text"><string>Offset Angle (°)</string></property></widget></item>
-              <item row="15" column="1"><widget class="QLineEdit" name="txtRef_emitter_offset_angle_deg"><property name="text"><string>0.0</string></property><property name="toolTip"><string>Direction of the offset: 0° is straight up, increasing clockwise, so 90° is to the right.</string></property><property name="maximumSize"><size><width>100</width><height>16777215</height></size></property></widget></item>
-             </layout>
-            </widget>
-           </widget>
-          </item>
-          <item>
-           <layout class="QHBoxLayout" name="horizontalLayout_ReflectorButtonsTop">
-            <item>
-             <widget class="QPushButton" name="btnNewReflector">
-              <property name="text"><string>New</string></property>
-             </widget>
-            </item>
-            <item>
-             <widget class="QPushButton" name="btnResetReflector">
-              <property name="text"><string>Reset</string></property>
-             </widget>
-            </item>
-           </layout>
-          </item>
-          <item>
-           <layout class="QHBoxLayout" name="horizontalLayout_ReflectorButtonsBottom">
-            <item>
-             <widget class="QPushButton" name="btnSaveReflector">
-              <property name="text"><string>Save</string></property>
-             </widget>
-            </item>
-            <item>
-             <widget class="QPushButton" name="btnDeleteReflector">
-              <property name="text"><string>Delete</string></property>
-             </widget>
-            </item>
-           </layout>
-          </item>
-         </layout>
-        </widget>
-       </item>
-
-       <item>
-        <widget class="QGroupBox" name="grpEmitter">
-         <property name="minimumSize">
-          <size><width>300</width><height>0</height></size>
-         </property>
-         <property name="title"><string>Emitter Library</string></property>
-         <layout class="QVBoxLayout" name="verticalLayout_Emitter">
-          <item>
-           <widget class="QWidget" name="widgetEmitterPreview" native="true">
-            <property name="sizePolicy">
-             <sizepolicy hsizetype="Ignored" vsizetype="Fixed">
-              <horstretch>0</horstretch>
-              <verstretch>0</verstretch>
-             </sizepolicy>
-            </property>
-            <property name="minimumSize">
-             <size><width>0</width><height>0</height></size>
-            </property>
-            <property name="toolTip"><string>Package footprint seen from above, with the light emitting surface on top.</string></property>
-            <layout class="QVBoxLayout" name="layoutEmitterPreview">
-             <property name="leftMargin"><number>0</number></property>
-             <property name="topMargin"><number>0</number></property>
-             <property name="rightMargin"><number>0</number></property>
-             <property name="bottomMargin"><number>0</number></property>
-            </layout>
-           </widget>
-          </item>
-          <item>
-           <widget class="QLabel" name="lblEmitterWarning">
-            <property name="wordWrap"><bool>true</bool></property>
-            <property name="styleSheet"><string>color: #E8A33D;</string></property>
-            <property name="text"><string/></property>
-           </widget>
-          </item>
-          <item>
-           <widget class="QComboBox" name="cmbEmitter"/>
-          </item>
-          <item>
-           <widget class="QScrollArea" name="scrollEmitter">
-            <property name="widgetResizable"><bool>true</bool></property>
-            <widget class="QWidget" name="scrollWidget_Emitter">
-             <layout class="QFormLayout" name="formLayout_Emitter">
-              <item row="0" column="0"><widget class="QLabel"><property name="text"><string>Max Current (A)</string></property></widget></item>
-              <item row="0" column="1"><widget class="QLineEdit" name="txtEmi_max_current_amps"><property name="maximumSize"><size><width>100</width><height>16777215</height></size></property></widget></item>
-              <item row="1" column="0"><widget class="QLabel"><property name="text"><string>Output Mode</string></property></widget></item>
-              <item row="1" column="1"><widget class="QComboBox" name="txtEmi_output_mode"><property name="maximumSize"><size><width>100</width><height>16777215</height></size></property></widget></item>
-              <item row="2" column="0"><widget class="QLabel"><property name="text"><string>Max Lumens (lm)</string></property></widget></item>
-              <item row="2" column="1"><widget class="QLineEdit" name="txtEmi_max_lumens"><property name="maximumSize"><size><width>100</width><height>16777215</height></size></property></widget></item>
-              <item row="3" column="0"><widget class="QLabel"><property name="text"><string>Voltage (V)</string></property></widget></item>
-              <item row="3" column="1"><widget class="QLineEdit" name="txtEmi_forward_voltage_v"><property name="maximumSize"><size><width>100</width><height>16777215</height></size></property></widget></item>
-              <item row="4" column="0"><widget class="QLabel"><property name="text"><string>VF Turn On (V)</string></property></widget></item>
-              <item row="4" column="1"><widget class="QLineEdit" name="txtEmi_vf_turn_on_v"><property name="maximumSize"><size><width>100</width><height>16777215</height></size></property></widget></item>
-              <item row="5" column="0"><widget class="QLabel"><property name="text"><string>VF Scale</string></property></widget></item>
-              <item row="5" column="1"><widget class="QLineEdit" name="txtEmi_vf_scale"><property name="maximumSize"><size><width>100</width><height>16777215</height></size></property></widget></item>
-              <item row="6" column="0"><widget class="QLabel"><property name="text"><string>Base Efficiency (lm/W)</string></property></widget></item>
-              <item row="6" column="1"><widget class="QLineEdit" name="txtEmi_base_efficacy_lm_w"><property name="maximumSize"><size><width>100</width><height>16777215</height></size></property></widget></item>
-              <item row="7" column="0"><widget class="QLabel"><property name="text"><string>Droop Factor</string></property></widget></item>
-              <item row="7" column="1"><widget class="QLineEdit" name="txtEmi_droop_factor"><property name="maximumSize"><size><width>100</width><height>16777215</height></size></property></widget></item>
-              <item row="8" column="0"><widget class="QLabel"><property name="text"><string>Footprint X (mm)</string></property></widget></item>
-              <item row="8" column="1"><widget class="QLineEdit" name="txtEmi_footprint_x_mm"><property name="maximumSize"><size><width>100</width><height>16777215</height></size></property></widget></item>
-              <item row="9" column="0"><widget class="QLabel"><property name="text"><string>Footprint Y (mm)</string></property></widget></item>
-              <item row="9" column="1"><widget class="QLineEdit" name="txtEmi_footprint_y_mm"><property name="maximumSize"><size><width>100</width><height>16777215</height></size></property></widget></item>
-              <item row="10" column="0"><widget class="QLabel"><property name="text"><string>Height (mm)</string></property></widget></item>
-              <item row="10" column="1"><widget class="QLineEdit" name="txtEmi_height_mm"><property name="maximumSize"><size><width>100</width><height>16777215</height></size></property></widget></item>
-              <item row="11" column="0"><widget class="QLabel"><property name="text"><string>Dome Size (mm)</string></property></widget></item>
-              <item row="11" column="1"><widget class="QLineEdit" name="txtEmi_dome_size_mm"><property name="maximumSize"><size><width>100</width><height>16777215</height></size></property></widget></item>
-              <item row="12" column="0"><widget class="QLabel"><property name="text"><string>Refractive Index</string></property></widget></item>
-              <item row="12" column="1"><widget class="QLineEdit" name="txtEmi_refractive_index"><property name="maximumSize"><size><width>100</width><height>16777215</height></size></property></widget></item>
-              <item row="13" column="0"><widget class="QLabel"><property name="text"><string>Die Length (mm)</string></property></widget></item>
-              <item row="13" column="1"><widget class="QLineEdit" name="txtEmi_die_length_mm"><property name="maximumSize"><size><width>100</width><height>16777215</height></size></property></widget></item>
-              <item row="14" column="0"><widget class="QLabel"><property name="text"><string>Die Width (mm)</string></property></widget></item>
-              <item row="14" column="1"><widget class="QLineEdit" name="txtEmi_die_width_mm"><property name="maximumSize"><size><width>100</width><height>16777215</height></size></property></widget></item>
-              <item row="15" column="0"><widget class="QLabel"><property name="text"><string>Shape</string></property></widget></item>
-              <item row="15" column="1"><widget class="QComboBox" name="txtEmi_shape"><property name="toolTip"><string>Outline of the light emitting surface. Use polygon for anything that is not a plain rectangle or circle, and fill in the Die Outline below.</string></property><property name="maximumSize"><size><width>100</width><height>16777215</height></size></property></widget></item>
-              <item row="16" column="0"><widget class="QLabel"><property name="text"><string>Die Outline (mm)</string></property></widget></item>
-              <item row="16" column="1"><widget class="QLineEdit" name="txtEmi_die_outline"><property name="toolTip"><string>Only used when Shape is polygon. A JSON list of [x,y] corners in mm, measured from the die centre, in order around the outline. Paste the output of emitter_shapes.py here. Leave blank for square or round dies.</string></property><property name="placeholderText"><string>[[-1,-1],[1,-1],[1,1],[-1,1]]</string></property><property name="maximumSize"><size><width>100</width><height>16777215</height></size></property></widget></item>
-             </layout>
-            </widget>
-           </widget>
-          </item>
-          <item>
-           <layout class="QHBoxLayout" name="horizontalLayout_EmitterButtonsTop">
-            <item>
-             <widget class="QPushButton" name="btnNewEmitter">
-              <property name="text"><string>New</string></property>
-             </widget>
-            </item>
-            <item>
-             <widget class="QPushButton" name="btnResetEmitter">
-              <property name="text"><string>Reset</string></property>
-             </widget>
-            </item>
-           </layout>
-          </item>
-          <item>
-           <layout class="QHBoxLayout" name="horizontalLayout_EmitterButtonsBottom">
-            <item>
-             <widget class="QPushButton" name="btnSaveEmitter">
-              <property name="text"><string>Save</string></property>
-             </widget>
-            </item>
-            <item>
-             <widget class="QPushButton" name="btnDeleteEmitter">
-              <property name="text"><string>Delete</string></property>
-             </widget>
-            </item>
-           </layout>
-          </item>
-         </layout>
-        </widget>
-       </item>
-
-       <item>
-        <widget class="QGroupBox" name="grpGasket">
-         <property name="minimumSize">
-          <size><width>300</width><height>0</height></size>
-         </property>
-         <property name="title"><string>Gasket Library</string></property>
-         <layout class="QVBoxLayout" name="verticalLayout_Gasket">
-          <item>
-           <widget class="QWidget" name="widgetGasketPreview" native="true">
-            <property name="sizePolicy">
-             <sizepolicy hsizetype="Ignored" vsizetype="Fixed">
-              <horstretch>0</horstretch>
-              <verstretch>0</verstretch>
-             </sizepolicy>
-            </property>
-            <property name="minimumSize">
-             <size><width>0</width><height>0</height></size>
-            </property>
-            <property name="toolTip"><string>Gasket seen from above: the base disc with its emitter cutout, and the wall disc stacked on top.</string></property>
-            <layout class="QVBoxLayout" name="layoutGasketPreview">
-             <property name="leftMargin"><number>0</number></property>
-             <property name="topMargin"><number>0</number></property>
-             <property name="rightMargin"><number>0</number></property>
-             <property name="bottomMargin"><number>0</number></property>
-            </layout>
-           </widget>
-          </item>
-          <item>
-           <widget class="QLabel" name="lblGasketWarning">
-            <property name="wordWrap"><bool>true</bool></property>
-            <property name="styleSheet"><string>color: #E8A33D;</string></property>
-            <property name="text"><string/></property>
-           </widget>
-          </item>
-          <item>
-           <widget class="QComboBox" name="cmbGasket"/>
-          </item>
-          <item>
-           <widget class="QScrollArea" name="scrollGasket">
-            <property name="widgetResizable"><bool>true</bool></property>
-            <widget class="QWidget" name="scrollWidget_Gasket">
-             <layout class="QFormLayout" name="formLayout_Gasket">
-              <item row="0" column="0"><widget class="QLabel"><property name="text"><string>Outer Diameter (mm)</string></property></widget></item>
-              <item row="0" column="1"><widget class="QLineEdit" name="txtGask_outer_diameter_mm"><property name="maximumSize"><size><width>100</width><height>16777215</height></size></property></widget></item>
-              <item row="1" column="0"><widget class="QLabel"><property name="text"><string>Inner Diameter (mm)</string></property></widget></item>
-              <item row="1" column="1"><widget class="QLineEdit" name="txtGask_inner_diameter_mm"><property name="maximumSize"><size><width>100</width><height>16777215</height></size></property></widget></item>
-              <item row="2" column="0"><widget class="QLabel"><property name="text"><string>Emitter Size (mm)</string></property></widget></item>
-              <item row="2" column="1"><widget class="QLineEdit" name="txtGask_emitter_size_mm"><property name="maximumSize"><size><width>100</width><height>16777215</height></size></property></widget></item>
-              <item row="3" column="0"><widget class="QLabel"><property name="text"><string>Wall Shape</string></property></widget></item>
-              <item row="3" column="1"><widget class="QComboBox" name="txtGask_wall_shape"><property name="maximumSize"><size><width>100</width><height>16777215</height></size></property></widget></item>
-              <item row="4" column="0"><widget class="QLabel"><property name="text"><string>Thickness (mm)</string></property></widget></item>
-              <item row="4" column="1"><widget class="QLineEdit" name="txtGask_thickness_mm"><property name="maximumSize"><size><width>100</width><height>16777215</height></size></property></widget></item>
-              <item row="5" column="0"><widget class="QLabel"><property name="text"><string>Total Height (mm)</string></property></widget></item>
-              <item row="5" column="1"><widget class="QLineEdit" name="txtGask_total_height_mm"><property name="maximumSize"><size><width>100</width><height>16777215</height></size></property></widget></item>
-             </layout>
-            </widget>
-           </widget>
-          </item>
-          <item>
-           <layout class="QHBoxLayout" name="horizontalLayout_GasketButtonsTop">
-            <item>
-             <widget class="QPushButton" name="btnNewGasket">
-              <property name="text"><string>New</string></property>
-             </widget>
-            </item>
-            <item>
-             <widget class="QPushButton" name="btnResetGasket">
-              <property name="text"><string>Reset</string></property>
-             </widget>
-            </item>
-           </layout>
-          </item>
-          <item>
-           <layout class="QHBoxLayout" name="horizontalLayout_GasketButtonsBottom">
-            <item>
-             <widget class="QPushButton" name="btnSaveGasket">
-              <property name="text"><string>Save</string></property>
-             </widget>
-            </item>
-            <item>
-             <widget class="QPushButton" name="btnDeleteGasket">
-              <property name="text"><string>Delete</string></property>
-             </widget>
-            </item>
-           </layout>
-          </item>
-         </layout>
-        </widget>
-       </item>
-      </layout>
-     </widget>
-    </item>
-
-    <item>
-     <widget class="QWidget" name="widgetResults" native="true">
-      <property name="sizePolicy">
-       <sizepolicy hsizetype="Preferred" vsizetype="Preferred">
-        <horstretch>2</horstretch>
-        <verstretch>0</verstretch>
-       </sizepolicy>
-      </property>
-      <layout class="QVBoxLayout" name="verticalLayout_Results">
-       <item>
-        <widget class="QGroupBox" name="grpPlot">
-         <property name="title"><string>Simulation Output</string></property>
-         <layout class="QVBoxLayout" name="verticalLayout_PlotArea">
-          <item>
-           <widget class="QLabel" name="lblPlotPlaceholder">
-            <property name="text"><string>The Matplotlib render will appear here.</string></property>
-            <property name="alignment"><set>Qt::AlignCenter</set></property>
-            <property name="sizePolicy">
-             <sizepolicy hsizetype="Expanding" vsizetype="Expanding">
-              <horstretch>0</horstretch>
-              <verstretch>0</verstretch>
-             </sizepolicy>
-            </property>
-            <property name="frameShape"><enum>QFrame::Box</enum></property>
+           <widget class="QGroupBox" name="grpReflector">
             <property name="minimumSize">
              <size>
-              <width>600</width>
-              <height>500</height>
+              <width>200</width>
+              <height>0</height>
              </size>
             </property>
+            <property name="title">
+             <string>Reflector Library</string>
+            </property>
+            <layout class="QVBoxLayout" name="verticalLayout_Reflector">
+             <item>
+              <widget class="QWidget" name="widgetReflectorPreview" native="true">
+               <property name="sizePolicy">
+                <sizepolicy hsizetype="Ignored" vsizetype="Fixed">
+                 <horstretch>0</horstretch>
+                 <verstretch>0</verstretch>
+                </sizepolicy>
+               </property>
+               <property name="minimumSize">
+                <size>
+                 <width>0</width>
+                 <height>0</height>
+                </size>
+               </property>
+               <property name="toolTip">
+                <string>Reflector cross section, revolved. Drag to rotate.</string>
+               </property>
+               <layout class="QVBoxLayout" name="layoutReflectorPreview">
+                <property name="leftMargin">
+                 <number>0</number>
+                </property>
+                <property name="topMargin">
+                 <number>0</number>
+                </property>
+                <property name="rightMargin">
+                 <number>0</number>
+                </property>
+                <property name="bottomMargin">
+                 <number>0</number>
+                </property>
+               </layout>
+              </widget>
+             </item>
+             <item>
+              <widget class="QLabel" name="lblReflectorWarning">
+               <property name="wordWrap">
+                <bool>true</bool>
+               </property>
+               <property name="styleSheet">
+                <string>color: #E8A33D;</string>
+               </property>
+               <property name="text">
+                <string />
+               </property>
+              </widget>
+             </item>
+             <item>
+              <widget class="QComboBox" name="cmbReflector" />
+             </item>
+             <item>
+              <widget class="QScrollArea" name="scrollReflector">
+               <property name="widgetResizable">
+                <bool>true</bool>
+               </property>
+               <widget class="QWidget" name="scrollWidget_Reflector">
+                <layout class="QFormLayout" name="formLayout_Reflector">
+                 <item row="0" column="0" colspan="2">
+                  <widget class="QLabel" name="lblGroup_reflector_geometry">
+                   <property name="text">
+                    <string>Geometry</string>
+                   </property>
+                   <property name="styleSheet">
+                    <string>font-weight: bold; color: #9FB6CC; padding-top: 6px;</string>
+                   </property>
+                  </widget>
+                 </item>
+                 <item row="1" column="0">
+                  <widget class="QLabel">
+                   <property name="text">
+                    <string>Diameter (mm)</string>
+                   </property>
+                  </widget>
+                 </item>
+                 <item row="1" column="1">
+                  <widget class="QLineEdit" name="txtRef_diameter_mm">
+                   <property name="maximumSize">
+                    <size>
+                     <width>100</width>
+                     <height>16777215</height>
+                    </size>
+                   </property>
+                  </widget>
+                 </item>
+                 <item row="2" column="0">
+                  <widget class="QLabel">
+                   <property name="text">
+                    <string>Height (mm)</string>
+                   </property>
+                  </widget>
+                 </item>
+                 <item row="2" column="1">
+                  <widget class="QLineEdit" name="txtRef_height_mm">
+                   <property name="maximumSize">
+                    <size>
+                     <width>100</width>
+                     <height>16777215</height>
+                    </size>
+                   </property>
+                  </widget>
+                 </item>
+                 <item row="3" column="0">
+                  <widget class="QLabel">
+                   <property name="text">
+                    <string>Opening Diameter (mm)</string>
+                   </property>
+                  </widget>
+                 </item>
+                 <item row="3" column="1">
+                  <widget class="QLineEdit" name="txtRef_opening_diameter_mm">
+                   <property name="maximumSize">
+                    <size>
+                     <width>100</width>
+                     <height>16777215</height>
+                    </size>
+                   </property>
+                  </widget>
+                 </item>
+                 <item row="4" column="0">
+                  <widget class="QLabel">
+                   <property name="text">
+                    <string>Focus Offset (mm)</string>
+                   </property>
+                  </widget>
+                 </item>
+                 <item row="4" column="1">
+                  <widget class="QLineEdit" name="txtRef_focus_offset_mm">
+                   <property name="maximumSize">
+                    <size>
+                     <width>100</width>
+                     <height>16777215</height>
+                    </size>
+                   </property>
+                  </widget>
+                 </item>
+                 <item row="5" column="0">
+                  <widget class="QLabel">
+                   <property name="text">
+                    <string>Wall Thickness (mm)</string>
+                   </property>
+                  </widget>
+                 </item>
+                 <item row="5" column="1">
+                  <widget class="QLineEdit" name="txtRef_wall_thickness_mm">
+                   <property name="maximumSize">
+                    <size>
+                     <width>100</width>
+                     <height>16777215</height>
+                    </size>
+                   </property>
+                  </widget>
+                 </item>
+                 <item row="6" column="0">
+                  <widget class="QLabel">
+                   <property name="text">
+                    <string>Base Thickness (mm)</string>
+                   </property>
+                  </widget>
+                 </item>
+                 <item row="6" column="1">
+                  <widget class="QLineEdit" name="txtRef_thickness_height_mm">
+                   <property name="maximumSize">
+                    <size>
+                     <width>100</width>
+                     <height>16777215</height>
+                    </size>
+                   </property>
+                  </widget>
+                 </item>
+                 <item row="7" column="0" colspan="2">
+                  <widget class="QLabel" name="lblGroup_reflector_reflective">
+                   <property name="text">
+                    <string>Reflective Surface</string>
+                   </property>
+                   <property name="styleSheet">
+                    <string>font-weight: bold; color: #9FB6CC; padding-top: 6px;</string>
+                   </property>
+                  </widget>
+                 </item>
+                 <item row="8" column="0">
+                  <widget class="QLabel">
+                   <property name="text">
+                    <string>Finish</string>
+                   </property>
+                  </widget>
+                 </item>
+                 <item row="8" column="1">
+                  <widget class="QComboBox" name="txtRef_surface_finish">
+                   <property name="maximumSize">
+                    <size>
+                     <width>100</width>
+                     <height>16777215</height>
+                    </size>
+                   </property>
+                  </widget>
+                 </item>
+                 <item row="9" column="0">
+                  <widget class="QLabel">
+                   <property name="text">
+                    <string>Roughness (nm)</string>
+                   </property>
+                  </widget>
+                 </item>
+                 <item row="9" column="1">
+                  <widget class="QLineEdit" name="txtRef_surface_roughness_nm">
+                   <property name="maximumSize">
+                    <size>
+                     <width>100</width>
+                     <height>16777215</height>
+                    </size>
+                   </property>
+                  </widget>
+                 </item>
+                 <item row="10" column="0">
+                  <widget class="QLabel">
+                   <property name="text">
+                    <string>Roughness Scale (µm)</string>
+                   </property>
+                  </widget>
+                 </item>
+                 <item row="10" column="1">
+                  <widget class="QLineEdit" name="txtRef_surface_correlation_um">
+                   <property name="maximumSize">
+                    <size>
+                     <width>100</width>
+                     <height>16777215</height>
+                    </size>
+                   </property>
+                  </widget>
+                 </item>
+                 <item row="11" column="0">
+                  <widget class="QLabel">
+                   <property name="text">
+                    <string>Dimple Pitch (mm)</string>
+                   </property>
+                  </widget>
+                 </item>
+                 <item row="11" column="1">
+                  <widget class="QLineEdit" name="txtRef_op_dimple_pitch_mm">
+                   <property name="maximumSize">
+                    <size>
+                     <width>100</width>
+                     <height>16777215</height>
+                    </size>
+                   </property>
+                  </widget>
+                 </item>
+                 <item row="12" column="0">
+                  <widget class="QLabel">
+                   <property name="text">
+                    <string>Dimple Depth (µm)</string>
+                   </property>
+                  </widget>
+                 </item>
+                 <item row="12" column="1">
+                  <widget class="QLineEdit" name="txtRef_op_dimple_depth_um">
+                   <property name="maximumSize">
+                    <size>
+                     <width>100</width>
+                     <height>16777215</height>
+                    </size>
+                   </property>
+                  </widget>
+                 </item>
+                 <item row="13" column="0">
+                  <widget class="QLabel">
+                   <property name="text">
+                    <string>OP Factor</string>
+                   </property>
+                  </widget>
+                 </item>
+                 <item row="13" column="1">
+                  <widget class="QLineEdit" name="txtRef_op_factor">
+                   <property name="maximumSize">
+                    <size>
+                     <width>100</width>
+                     <height>16777215</height>
+                    </size>
+                   </property>
+                  </widget>
+                 </item>
+                 <item row="14" column="0">
+                  <widget class="QLabel">
+                   <property name="text">
+                    <string>Smooth Reflectance</string>
+                   </property>
+                  </widget>
+                 </item>
+                 <item row="14" column="1">
+                  <widget class="QLineEdit" name="txtRef_reflectivity_smooth">
+                   <property name="maximumSize">
+                    <size>
+                     <width>100</width>
+                     <height>16777215</height>
+                    </size>
+                   </property>
+                  </widget>
+                 </item>
+                 <item row="15" column="0">
+                  <widget class="QLabel">
+                   <property name="text">
+                    <string>Peel Reflectance</string>
+                   </property>
+                  </widget>
+                 </item>
+                 <item row="15" column="1">
+                  <widget class="QLineEdit" name="txtRef_reflectivity_op">
+                   <property name="maximumSize">
+                    <size>
+                     <width>100</width>
+                     <height>16777215</height>
+                    </size>
+                   </property>
+                  </widget>
+                 </item>
+                 <item row="16" column="0">
+                  <widget class="QLabel">
+                   <property name="text">
+                    <string>Bore Reflectance</string>
+                   </property>
+                  </widget>
+                 </item>
+                 <item row="16" column="1">
+                  <widget class="QLineEdit" name="txtRef_reflectivity_cylinder">
+                   <property name="maximumSize">
+                    <size>
+                     <width>100</width>
+                     <height>16777215</height>
+                    </size>
+                   </property>
+                  </widget>
+                 </item>
+                 <item row="17" column="0">
+                  <widget class="QLabel">
+                   <property name="text">
+                    <string>Gasket Reflectance</string>
+                   </property>
+                  </widget>
+                 </item>
+                 <item row="17" column="1">
+                  <widget class="QLineEdit" name="txtRef_gasket_reflectivity">
+                   <property name="maximumSize">
+                    <size>
+                     <width>100</width>
+                     <height>16777215</height>
+                    </size>
+                   </property>
+                  </widget>
+                 </item>
+                 <item row="18" column="0">
+                  <widget class="QLabel">
+                   <property name="text">
+                    <string>Lens Transmissivity</string>
+                   </property>
+                  </widget>
+                 </item>
+                 <item row="18" column="1">
+                  <widget class="QLineEdit" name="txtRef_transmissivity_lens">
+                   <property name="maximumSize">
+                    <size>
+                     <width>100</width>
+                     <height>16777215</height>
+                    </size>
+                   </property>
+                  </widget>
+                 </item>
+                 <item row="19" column="0">
+                  <widget class="QLabel">
+                   <property name="text">
+                    <string>Finish</string>
+                   </property>
+                  </widget>
+                 </item>
+                 <item row="19" column="1">
+                  <widget class="QComboBox" name="txtRef_lens_finish">
+                   <property name="maximumSize">
+                    <size>
+                     <width>100</width>
+                     <height>16777215</height>
+                    </size>
+                   </property>
+                  </widget>
+                 </item>
+                 <item row="20" column="0">
+                  <widget class="QLabel">
+                   <property name="text">
+                    <string>Diffusion (°)</string>
+                   </property>
+                  </widget>
+                 </item>
+                 <item row="20" column="1">
+                  <widget class="QLineEdit" name="txtRef_lens_diffusion_fwhm_deg">
+                   <property name="maximumSize">
+                    <size>
+                     <width>100</width>
+                     <height>16777215</height>
+                    </size>
+                   </property>
+                  </widget>
+                 </item>
+                 <item row="21" column="0">
+                  <widget class="QLabel">
+                   <property name="text">
+                    <string>Refractive Index</string>
+                   </property>
+                  </widget>
+                 </item>
+                 <item row="21" column="1">
+                  <widget class="QLineEdit" name="txtRef_lens_refractive_index">
+                   <property name="maximumSize">
+                    <size>
+                     <width>100</width>
+                     <height>16777215</height>
+                    </size>
+                   </property>
+                  </widget>
+                 </item>
+                 <item row="22" column="0" colspan="2">
+                  <widget class="QLabel" name="lblGroup_reflector_centring">
+                   <property name="text">
+                    <string>Emitter Centring</string>
+                   </property>
+                   <property name="styleSheet">
+                    <string>font-weight: bold; color: #9FB6CC; padding-top: 6px;</string>
+                   </property>
+                  </widget>
+                 </item>
+                 <item row="23" column="0">
+                  <widget class="QLabel">
+                   <property name="text">
+                    <string>Distance (mm)</string>
+                   </property>
+                  </widget>
+                 </item>
+                 <item row="23" column="1">
+                  <widget class="QLineEdit" name="txtRef_emitter_offset_distance_mm">
+                   <property name="maximumSize">
+                    <size>
+                     <width>100</width>
+                     <height>16777215</height>
+                    </size>
+                   </property>
+                  </widget>
+                 </item>
+                 <item row="24" column="0">
+                  <widget class="QLabel">
+                   <property name="text">
+                    <string>Angle (° CW)</string>
+                   </property>
+                  </widget>
+                 </item>
+                 <item row="24" column="1">
+                  <widget class="QLineEdit" name="txtRef_emitter_offset_angle_deg">
+                   <property name="maximumSize">
+                    <size>
+                     <width>100</width>
+                     <height>16777215</height>
+                    </size>
+                   </property>
+                  </widget>
+                 </item>
+                </layout>
+               </widget>
+              </widget>
+             </item>
+             <item>
+              <layout class="QHBoxLayout" name="horizontalLayout_ReflectorButtonsTop">
+               <item>
+                <widget class="QPushButton" name="btnNewReflector">
+                 <property name="text">
+                  <string>New</string>
+                 </property>
+                </widget>
+               </item>
+               <item>
+                <widget class="QPushButton" name="btnResetReflector">
+                 <property name="text">
+                  <string>Reset</string>
+                 </property>
+                </widget>
+               </item>
+              </layout>
+             </item>
+             <item>
+              <layout class="QHBoxLayout" name="horizontalLayout_ReflectorButtonsBottom">
+               <item>
+                <widget class="QPushButton" name="btnSaveReflector">
+                 <property name="text">
+                  <string>Save</string>
+                 </property>
+                </widget>
+               </item>
+               <item>
+                <widget class="QPushButton" name="btnDeleteReflector">
+                 <property name="text">
+                  <string>Delete</string>
+                 </property>
+                </widget>
+               </item>
+              </layout>
+             </item>
+            </layout>
+           </widget>
+          </item>
+          <item>
+           <widget class="QGroupBox" name="grpEmitter">
+            <property name="minimumSize">
+             <size>
+              <width>200</width>
+              <height>0</height>
+             </size>
+            </property>
+            <property name="title">
+             <string>Emitter Library</string>
+            </property>
+            <layout class="QVBoxLayout" name="verticalLayout_Emitter">
+             <item>
+              <widget class="QWidget" name="widgetEmitterPreview" native="true">
+               <property name="sizePolicy">
+                <sizepolicy hsizetype="Ignored" vsizetype="Fixed">
+                 <horstretch>0</horstretch>
+                 <verstretch>0</verstretch>
+                </sizepolicy>
+               </property>
+               <property name="minimumSize">
+                <size>
+                 <width>0</width>
+                 <height>0</height>
+                </size>
+               </property>
+               <property name="toolTip">
+                <string>Package footprint seen from above, with the light emitting surface on top.</string>
+               </property>
+               <layout class="QVBoxLayout" name="layoutEmitterPreview">
+                <property name="leftMargin">
+                 <number>0</number>
+                </property>
+                <property name="topMargin">
+                 <number>0</number>
+                </property>
+                <property name="rightMargin">
+                 <number>0</number>
+                </property>
+                <property name="bottomMargin">
+                 <number>0</number>
+                </property>
+               </layout>
+              </widget>
+             </item>
+             <item>
+              <widget class="QLabel" name="lblEmitterWarning">
+               <property name="wordWrap">
+                <bool>true</bool>
+               </property>
+               <property name="styleSheet">
+                <string>color: #E8A33D;</string>
+               </property>
+               <property name="text">
+                <string />
+               </property>
+              </widget>
+             </item>
+             <item>
+              <widget class="QComboBox" name="cmbEmitter" />
+             </item>
+             <item>
+              <widget class="QScrollArea" name="scrollEmitter">
+               <property name="widgetResizable">
+                <bool>true</bool>
+               </property>
+               <widget class="QWidget" name="scrollWidget_Emitter">
+                <layout class="QFormLayout" name="formLayout_Emitter">
+                 <item row="0" column="0" colspan="2">
+                  <widget class="QLabel" name="lblGroup_emitter_output">
+                   <property name="text">
+                    <string>Output</string>
+                   </property>
+                   <property name="styleSheet">
+                    <string>font-weight: bold; color: #9FB6CC; padding-top: 6px;</string>
+                   </property>
+                  </widget>
+                 </item>
+                 <item row="1" column="0">
+                  <widget class="QLabel">
+                   <property name="text">
+                    <string>Output Mode</string>
+                   </property>
+                  </widget>
+                 </item>
+                 <item row="1" column="1">
+                  <widget class="QComboBox" name="txtEmi_output_mode">
+                   <property name="maximumSize">
+                    <size>
+                     <width>100</width>
+                     <height>16777215</height>
+                    </size>
+                   </property>
+                  </widget>
+                 </item>
+                 <item row="2" column="0">
+                  <widget class="QLabel">
+                   <property name="text">
+                    <string>Max Current (A)</string>
+                   </property>
+                  </widget>
+                 </item>
+                 <item row="2" column="1">
+                  <widget class="QLineEdit" name="txtEmi_max_current_amps">
+                   <property name="maximumSize">
+                    <size>
+                     <width>100</width>
+                     <height>16777215</height>
+                    </size>
+                   </property>
+                  </widget>
+                 </item>
+                 <item row="3" column="0">
+                  <widget class="QLabel">
+                   <property name="text">
+                    <string>Max Lumens (lm)</string>
+                   </property>
+                  </widget>
+                 </item>
+                 <item row="3" column="1">
+                  <widget class="QLineEdit" name="txtEmi_max_lumens">
+                   <property name="maximumSize">
+                    <size>
+                     <width>100</width>
+                     <height>16777215</height>
+                    </size>
+                   </property>
+                  </widget>
+                 </item>
+                 <item row="4" column="0">
+                  <widget class="QLabel">
+                   <property name="text">
+                    <string>Voltage (V)</string>
+                   </property>
+                  </widget>
+                 </item>
+                 <item row="4" column="1">
+                  <widget class="QLineEdit" name="txtEmi_forward_voltage_v">
+                   <property name="maximumSize">
+                    <size>
+                     <width>100</width>
+                     <height>16777215</height>
+                    </size>
+                   </property>
+                  </widget>
+                 </item>
+                 <item row="5" column="0">
+                  <widget class="QLabel">
+                   <property name="text">
+                    <string>VF Turn On (V)</string>
+                   </property>
+                  </widget>
+                 </item>
+                 <item row="5" column="1">
+                  <widget class="QLineEdit" name="txtEmi_vf_turn_on_v">
+                   <property name="maximumSize">
+                    <size>
+                     <width>100</width>
+                     <height>16777215</height>
+                    </size>
+                   </property>
+                  </widget>
+                 </item>
+                 <item row="6" column="0">
+                  <widget class="QLabel">
+                   <property name="text">
+                    <string>VF Scale</string>
+                   </property>
+                  </widget>
+                 </item>
+                 <item row="6" column="1">
+                  <widget class="QLineEdit" name="txtEmi_vf_scale">
+                   <property name="maximumSize">
+                    <size>
+                     <width>100</width>
+                     <height>16777215</height>
+                    </size>
+                   </property>
+                  </widget>
+                 </item>
+                 <item row="7" column="0">
+                  <widget class="QLabel">
+                   <property name="text">
+                    <string>Efficiency (lm/W)</string>
+                   </property>
+                  </widget>
+                 </item>
+                 <item row="7" column="1">
+                  <widget class="QLineEdit" name="txtEmi_base_efficacy_lm_w">
+                   <property name="maximumSize">
+                    <size>
+                     <width>100</width>
+                     <height>16777215</height>
+                    </size>
+                   </property>
+                  </widget>
+                 </item>
+                 <item row="8" column="0">
+                  <widget class="QLabel">
+                   <property name="text">
+                    <string>Droop Factor</string>
+                   </property>
+                  </widget>
+                 </item>
+                 <item row="8" column="1">
+                  <widget class="QLineEdit" name="txtEmi_droop_factor">
+                   <property name="maximumSize">
+                    <size>
+                     <width>100</width>
+                     <height>16777215</height>
+                    </size>
+                   </property>
+                  </widget>
+                 </item>
+                 <item row="9" column="0" colspan="2">
+                  <widget class="QLabel" name="lblGroup_emitter_package">
+                   <property name="text">
+                    <string>Package</string>
+                   </property>
+                   <property name="styleSheet">
+                    <string>font-weight: bold; color: #9FB6CC; padding-top: 6px;</string>
+                   </property>
+                  </widget>
+                 </item>
+                 <item row="10" column="0">
+                  <widget class="QLabel">
+                   <property name="text">
+                    <string>Footprint X (mm)</string>
+                   </property>
+                  </widget>
+                 </item>
+                 <item row="10" column="1">
+                  <widget class="QLineEdit" name="txtEmi_footprint_x_mm">
+                   <property name="maximumSize">
+                    <size>
+                     <width>100</width>
+                     <height>16777215</height>
+                    </size>
+                   </property>
+                  </widget>
+                 </item>
+                 <item row="11" column="0">
+                  <widget class="QLabel">
+                   <property name="text">
+                    <string>Footprint Y (mm)</string>
+                   </property>
+                  </widget>
+                 </item>
+                 <item row="11" column="1">
+                  <widget class="QLineEdit" name="txtEmi_footprint_y_mm">
+                   <property name="maximumSize">
+                    <size>
+                     <width>100</width>
+                     <height>16777215</height>
+                    </size>
+                   </property>
+                  </widget>
+                 </item>
+                 <item row="12" column="0">
+                  <widget class="QLabel">
+                   <property name="text">
+                    <string>Height (mm)</string>
+                   </property>
+                  </widget>
+                 </item>
+                 <item row="12" column="1">
+                  <widget class="QLineEdit" name="txtEmi_height_mm">
+                   <property name="maximumSize">
+                    <size>
+                     <width>100</width>
+                     <height>16777215</height>
+                    </size>
+                   </property>
+                  </widget>
+                 </item>
+                 <item row="13" column="0">
+                  <widget class="QLabel">
+                   <property name="text">
+                    <string>Dome Size (mm)</string>
+                   </property>
+                  </widget>
+                 </item>
+                 <item row="13" column="1">
+                  <widget class="QLineEdit" name="txtEmi_dome_size_mm">
+                   <property name="maximumSize">
+                    <size>
+                     <width>100</width>
+                     <height>16777215</height>
+                    </size>
+                   </property>
+                  </widget>
+                 </item>
+                 <item row="14" column="0">
+                  <widget class="QLabel">
+                   <property name="text">
+                    <string>Refractive Index</string>
+                   </property>
+                  </widget>
+                 </item>
+                 <item row="14" column="1">
+                  <widget class="QLineEdit" name="txtEmi_refractive_index">
+                   <property name="maximumSize">
+                    <size>
+                     <width>100</width>
+                     <height>16777215</height>
+                    </size>
+                   </property>
+                  </widget>
+                 </item>
+                 <item row="15" column="0" colspan="2">
+                  <widget class="QLabel" name="lblGroup_emitter_die">
+                   <property name="text">
+                    <string>Die</string>
+                   </property>
+                   <property name="styleSheet">
+                    <string>font-weight: bold; color: #9FB6CC; padding-top: 6px;</string>
+                   </property>
+                  </widget>
+                 </item>
+                 <item row="16" column="0">
+                  <widget class="QLabel">
+                   <property name="text">
+                    <string>Shape</string>
+                   </property>
+                  </widget>
+                 </item>
+                 <item row="16" column="1">
+                  <widget class="QComboBox" name="txtEmi_shape">
+                   <property name="maximumSize">
+                    <size>
+                     <width>100</width>
+                     <height>16777215</height>
+                    </size>
+                   </property>
+                  </widget>
+                 </item>
+                 <item row="17" column="0">
+                  <widget class="QLabel">
+                   <property name="text">
+                    <string>Length (mm)</string>
+                   </property>
+                  </widget>
+                 </item>
+                 <item row="17" column="1">
+                  <widget class="QLineEdit" name="txtEmi_die_length_mm">
+                   <property name="maximumSize">
+                    <size>
+                     <width>100</width>
+                     <height>16777215</height>
+                    </size>
+                   </property>
+                  </widget>
+                 </item>
+                 <item row="18" column="0">
+                  <widget class="QLabel">
+                   <property name="text">
+                    <string>Width (mm)</string>
+                   </property>
+                  </widget>
+                 </item>
+                 <item row="18" column="1">
+                  <widget class="QLineEdit" name="txtEmi_die_width_mm">
+                   <property name="maximumSize">
+                    <size>
+                     <width>100</width>
+                     <height>16777215</height>
+                    </size>
+                   </property>
+                  </widget>
+                 </item>
+                 <item row="19" column="0">
+                  <widget class="QLabel">
+                   <property name="text">
+                    <string>Outline (mm)</string>
+                   </property>
+                  </widget>
+                 </item>
+                 <item row="19" column="1">
+                  <widget class="QLineEdit" name="txtEmi_die_outline">
+                   <property name="maximumSize">
+                    <size>
+                     <width>100</width>
+                     <height>16777215</height>
+                    </size>
+                   </property>
+                  </widget>
+                 </item>
+                 <item row="20" column="0">
+                  <widget class="QLabel">
+                   <property name="text">
+                    <string>Layout</string>
+                   </property>
+                  </widget>
+                 </item>
+                 <item row="20" column="1">
+                  <widget class="QComboBox" name="txtEmi_die_layout">
+                   <property name="maximumSize">
+                    <size>
+                     <width>100</width>
+                     <height>16777215</height>
+                    </size>
+                   </property>
+                  </widget>
+                 </item>
+                 <item row="21" column="0">
+                  <widget class="QLabel">
+                   <property name="text">
+                    <string>Rows</string>
+                   </property>
+                  </widget>
+                 </item>
+                 <item row="21" column="1">
+                  <widget class="QLineEdit" name="txtEmi_die_rows">
+                   <property name="maximumSize">
+                    <size>
+                     <width>100</width>
+                     <height>16777215</height>
+                    </size>
+                   </property>
+                  </widget>
+                 </item>
+                 <item row="22" column="0">
+                  <widget class="QLabel">
+                   <property name="text">
+                    <string>Columns</string>
+                   </property>
+                  </widget>
+                 </item>
+                 <item row="22" column="1">
+                  <widget class="QLineEdit" name="txtEmi_die_columns">
+                   <property name="maximumSize">
+                    <size>
+                     <width>100</width>
+                     <height>16777215</height>
+                    </size>
+                   </property>
+                  </widget>
+                 </item>
+                 <item row="23" column="0">
+                  <widget class="QLabel">
+                   <property name="text">
+                    <string>Gap (mm)</string>
+                   </property>
+                  </widget>
+                 </item>
+                 <item row="23" column="1">
+                  <widget class="QLineEdit" name="txtEmi_die_gap_mm">
+                   <property name="maximumSize">
+                    <size>
+                     <width>100</width>
+                     <height>16777215</height>
+                    </size>
+                   </property>
+                  </widget>
+                 </item>
+                 <item row="24" column="0">
+                  <widget class="QLabel">
+                   <property name="text">
+                    <string>Gap Output</string>
+                   </property>
+                  </widget>
+                 </item>
+                 <item row="24" column="1">
+                  <widget class="QLineEdit" name="txtEmi_die_gap_output">
+                   <property name="maximumSize">
+                    <size>
+                     <width>100</width>
+                     <height>16777215</height>
+                    </size>
+                   </property>
+                  </widget>
+                 </item>
+                </layout>
+               </widget>
+              </widget>
+             </item>
+             <item>
+              <layout class="QHBoxLayout" name="horizontalLayout_EmitterButtonsTop">
+               <item>
+                <widget class="QPushButton" name="btnNewEmitter">
+                 <property name="text">
+                  <string>New</string>
+                 </property>
+                </widget>
+               </item>
+               <item>
+                <widget class="QPushButton" name="btnResetEmitter">
+                 <property name="text">
+                  <string>Reset</string>
+                 </property>
+                </widget>
+               </item>
+              </layout>
+             </item>
+             <item>
+              <layout class="QHBoxLayout" name="horizontalLayout_EmitterButtonsBottom">
+               <item>
+                <widget class="QPushButton" name="btnSaveEmitter">
+                 <property name="text">
+                  <string>Save</string>
+                 </property>
+                </widget>
+               </item>
+               <item>
+                <widget class="QPushButton" name="btnDeleteEmitter">
+                 <property name="text">
+                  <string>Delete</string>
+                 </property>
+                </widget>
+               </item>
+              </layout>
+             </item>
+            </layout>
+           </widget>
+          </item>
+          <item>
+           <widget class="QGroupBox" name="grpGasket">
+            <property name="minimumSize">
+             <size>
+              <width>200</width>
+              <height>0</height>
+             </size>
+            </property>
+            <property name="title">
+             <string>Gasket Library</string>
+            </property>
+            <layout class="QVBoxLayout" name="verticalLayout_Gasket">
+             <item>
+              <widget class="QWidget" name="widgetGasketPreview" native="true">
+               <property name="sizePolicy">
+                <sizepolicy hsizetype="Ignored" vsizetype="Fixed">
+                 <horstretch>0</horstretch>
+                 <verstretch>0</verstretch>
+                </sizepolicy>
+               </property>
+               <property name="minimumSize">
+                <size>
+                 <width>0</width>
+                 <height>0</height>
+                </size>
+               </property>
+               <property name="toolTip">
+                <string>Gasket seen from above: the base disc with its emitter cutout, and the wall disc stacked on top.</string>
+               </property>
+               <layout class="QVBoxLayout" name="layoutGasketPreview">
+                <property name="leftMargin">
+                 <number>0</number>
+                </property>
+                <property name="topMargin">
+                 <number>0</number>
+                </property>
+                <property name="rightMargin">
+                 <number>0</number>
+                </property>
+                <property name="bottomMargin">
+                 <number>0</number>
+                </property>
+               </layout>
+              </widget>
+             </item>
+             <item>
+              <widget class="QLabel" name="lblGasketWarning">
+               <property name="wordWrap">
+                <bool>true</bool>
+               </property>
+               <property name="styleSheet">
+                <string>color: #E8A33D;</string>
+               </property>
+               <property name="text">
+                <string />
+               </property>
+              </widget>
+             </item>
+             <item>
+              <widget class="QComboBox" name="cmbGasket" />
+             </item>
+             <item>
+              <widget class="QScrollArea" name="scrollGasket">
+               <property name="widgetResizable">
+                <bool>true</bool>
+               </property>
+               <widget class="QWidget" name="scrollWidget_Gasket">
+                <layout class="QFormLayout" name="formLayout_Gasket">
+                 <item row="0" column="0" colspan="2">
+                  <widget class="QLabel" name="lblGroup_gasket_dimensions">
+                   <property name="text">
+                    <string>Dimensions</string>
+                   </property>
+                   <property name="styleSheet">
+                    <string>font-weight: bold; color: #9FB6CC; padding-top: 6px;</string>
+                   </property>
+                  </widget>
+                 </item>
+                 <item row="1" column="0">
+                  <widget class="QLabel">
+                   <property name="text">
+                    <string>Outer Diameter (mm)</string>
+                   </property>
+                  </widget>
+                 </item>
+                 <item row="1" column="1">
+                  <widget class="QLineEdit" name="txtGask_outer_diameter_mm">
+                   <property name="maximumSize">
+                    <size>
+                     <width>100</width>
+                     <height>16777215</height>
+                    </size>
+                   </property>
+                  </widget>
+                 </item>
+                 <item row="2" column="0">
+                  <widget class="QLabel">
+                   <property name="text">
+                    <string>Inner Diameter (mm)</string>
+                   </property>
+                  </widget>
+                 </item>
+                 <item row="2" column="1">
+                  <widget class="QLineEdit" name="txtGask_inner_diameter_mm">
+                   <property name="maximumSize">
+                    <size>
+                     <width>100</width>
+                     <height>16777215</height>
+                    </size>
+                   </property>
+                  </widget>
+                 </item>
+                 <item row="3" column="0">
+                  <widget class="QLabel">
+                   <property name="text">
+                    <string>Emitter Size (mm)</string>
+                   </property>
+                  </widget>
+                 </item>
+                 <item row="3" column="1">
+                  <widget class="QLineEdit" name="txtGask_emitter_size_mm">
+                   <property name="maximumSize">
+                    <size>
+                     <width>100</width>
+                     <height>16777215</height>
+                    </size>
+                   </property>
+                  </widget>
+                 </item>
+                 <item row="4" column="0">
+                  <widget class="QLabel">
+                   <property name="text">
+                    <string>Wall Shape</string>
+                   </property>
+                  </widget>
+                 </item>
+                 <item row="4" column="1">
+                  <widget class="QComboBox" name="txtGask_wall_shape">
+                   <property name="maximumSize">
+                    <size>
+                     <width>100</width>
+                     <height>16777215</height>
+                    </size>
+                   </property>
+                  </widget>
+                 </item>
+                 <item row="5" column="0" colspan="2">
+                  <widget class="QLabel" name="lblGroup_gasket_height">
+                   <property name="text">
+                    <string>Height</string>
+                   </property>
+                   <property name="styleSheet">
+                    <string>font-weight: bold; color: #9FB6CC; padding-top: 6px;</string>
+                   </property>
+                  </widget>
+                 </item>
+                 <item row="6" column="0">
+                  <widget class="QLabel">
+                   <property name="text">
+                    <string>Thickness (mm)</string>
+                   </property>
+                  </widget>
+                 </item>
+                 <item row="6" column="1">
+                  <widget class="QLineEdit" name="txtGask_thickness_mm">
+                   <property name="maximumSize">
+                    <size>
+                     <width>100</width>
+                     <height>16777215</height>
+                    </size>
+                   </property>
+                  </widget>
+                 </item>
+                 <item row="7" column="0">
+                  <widget class="QLabel">
+                   <property name="text">
+                    <string>Total Height (mm)</string>
+                   </property>
+                  </widget>
+                 </item>
+                 <item row="7" column="1">
+                  <widget class="QLineEdit" name="txtGask_total_height_mm">
+                   <property name="maximumSize">
+                    <size>
+                     <width>100</width>
+                     <height>16777215</height>
+                    </size>
+                   </property>
+                  </widget>
+                 </item>
+                </layout>
+               </widget>
+              </widget>
+             </item>
+             <item>
+              <layout class="QHBoxLayout" name="horizontalLayout_GasketButtonsTop">
+               <item>
+                <widget class="QPushButton" name="btnNewGasket">
+                 <property name="text">
+                  <string>New</string>
+                 </property>
+                </widget>
+               </item>
+               <item>
+                <widget class="QPushButton" name="btnResetGasket">
+                 <property name="text">
+                  <string>Reset</string>
+                 </property>
+                </widget>
+               </item>
+              </layout>
+             </item>
+             <item>
+              <layout class="QHBoxLayout" name="horizontalLayout_GasketButtonsBottom">
+               <item>
+                <widget class="QPushButton" name="btnSaveGasket">
+                 <property name="text">
+                  <string>Save</string>
+                 </property>
+                </widget>
+               </item>
+               <item>
+                <widget class="QPushButton" name="btnDeleteGasket">
+                 <property name="text">
+                  <string>Delete</string>
+                 </property>
+                </widget>
+               </item>
+              </layout>
+             </item>
+            </layout>
            </widget>
           </item>
          </layout>
-        </widget>
-       </item>
-       
-       <item>
-        <widget class="QGroupBox" name="grpCamera">
-         <property name="title"><string>Camera</string></property>
-         <property name="toolTip"><string>Exposure only changes how the result is displayed, so these take effect immediately without re-running the simulation.</string></property>
-         <layout class="QHBoxLayout" name="horizontalLayout_Camera">
+        </item>
+        <item>
+         <widget class="QPlainTextEdit" name="txtLogs">
+          <property name="readOnly">
+           <bool>true</bool>
+          </property>
+          <property name="maximumSize">
+           <size>
+            <width>16777215</width>
+            <height>100</height>
+           </size>
+          </property>
+          <property name="font">
+           <font>
+            <family>Consolas</family>
+           </font>
+          </property>
+          <property name="placeholderText">
+           <string>Simulation logs...</string>
+          </property>
+         </widget>
+        </item>
+       </layout>
+      </widget>
+      <widget class="QWidget" name="tabResults">
+       <attribute name="title">
+        <string>Results</string>
+       </attribute>
+       <layout class="QHBoxLayout" name="horizontalLayout_ResultsBody">
+        <item>
+         <widget class="QListWidget" name="lstPlots">
+          <property name="maximumWidth">
+           <number>340</number>
+          </property>
+          <property name="toolTip">
+           <string>Plots from the last run. The camera settings apply to the wall shot.</string>
+          </property>
+          <property name="minimumWidth">
+           <number>240</number>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <layout class="QVBoxLayout" name="verticalLayout_PlotArea">
           <item>
-           <widget class="QCheckBox" name="chkAutoExposure">
-            <property name="text"><string>Auto Exposure</string></property>
+           <widget class="QGroupBox" name="grpPlot">
+            <property name="title">
+             <string>Simulation Output</string>
+            </property>
+            <layout class="QVBoxLayout" name="verticalLayout_PlotArea">
+             <item>
+              <widget class="QLabel" name="lblPlotPlaceholder">
+               <property name="text">
+                <string>The Matplotlib render will appear here.</string>
+               </property>
+               <property name="alignment">
+                <set>Qt::AlignCenter</set>
+               </property>
+               <property name="sizePolicy">
+                <sizepolicy hsizetype="Expanding" vsizetype="Expanding">
+                 <horstretch>0</horstretch>
+                 <verstretch>0</verstretch>
+                </sizepolicy>
+               </property>
+               <property name="frameShape">
+                <enum>QFrame::Box</enum>
+               </property>
+               <property name="minimumSize">
+                <size>
+                 <width>240</width>
+                 <height>200</height>
+                </size>
+               </property>
+              </widget>
+             </item>
+            </layout>
            </widget>
           </item>
           <item>
-           <widget class="QLineEdit" name="txtExposureEV">
-            <property name="toolTip"><string>Exposure compensation in stops. The slider covers -10 to +10; typing here can go further.</string></property>
-            <property name="maximumSize"><size><width>60</width><height>16777215</height></size></property>
+           <widget class="QGroupBox" name="grpCamera">
+            <property name="title">
+             <string>Camera</string>
+            </property>
+            <property name="toolTip">
+             <string>Exposure only changes how the result is displayed, so these take effect immediately without re-running the simulation.</string>
+            </property>
+            <layout class="QHBoxLayout" name="horizontalLayout_Camera">
+             <item>
+              <widget class="QCheckBox" name="chkAutoExposure">
+               <property name="text">
+                <string>Auto Exposure</string>
+               </property>
+              </widget>
+             </item>
+             <item>
+              <widget class="QLineEdit" name="txtExposureEV">
+               <property name="toolTip">
+                <string>Exposure compensation in stops. The slider covers -10 to +10; typing here can go further.</string>
+               </property>
+               <property name="maximumSize">
+                <size>
+                 <width>60</width>
+                 <height>16777215</height>
+                </size>
+               </property>
+              </widget>
+             </item>
+             <item>
+              <widget class="QSlider" name="sldExposureEV">
+               <property name="orientation">
+                <enum>Qt::Horizontal</enum>
+               </property>
+               <property name="minimum">
+                <number>-100</number>
+               </property>
+               <property name="maximum">
+                <number>100</number>
+               </property>
+               <property name="value">
+                <number>0</number>
+               </property>
+               <property name="toolTip">
+                <string>Exposure compensation, -10 to +10 stops in tenths.</string>
+               </property>
+              </widget>
+             </item>
+             <item>
+              <widget class="QLabel" name="lblCamIso">
+               <property name="text">
+                <string>ISO</string>
+               </property>
+              </widget>
+             </item>
+             <item>
+              <widget class="QLineEdit" name="txtCamIso">
+               <property name="toolTip">
+                <string>Sensor sensitivity.</string>
+               </property>
+               <property name="maximumSize">
+                <size>
+                 <width>60</width>
+                 <height>16777215</height>
+                </size>
+               </property>
+              </widget>
+             </item>
+             <item>
+              <spacer name="gap_lblCamFStop">
+               <property name="orientation">
+                <enum>Qt::Horizontal</enum>
+               </property>
+               <property name="sizeType">
+                <enum>QSizePolicy::Fixed</enum>
+               </property>
+               <property name="sizeHint" stdset="0">
+                <size>
+                 <width>24</width>
+                 <height>20</height>
+                </size>
+               </property>
+              </spacer>
+             </item>
+             <item>
+              <widget class="QLabel" name="lblCamFStop">
+               <property name="text">
+                <string>f/</string>
+               </property>
+              </widget>
+             </item>
+             <item>
+              <widget class="QLineEdit" name="txtCamFStop">
+               <property name="toolTip">
+                <string>Aperture.</string>
+               </property>
+               <property name="maximumSize">
+                <size>
+                 <width>50</width>
+                 <height>16777215</height>
+                </size>
+               </property>
+              </widget>
+             </item>
+             <item>
+              <spacer name="gap_lblCamShutter">
+               <property name="orientation">
+                <enum>Qt::Horizontal</enum>
+               </property>
+               <property name="sizeType">
+                <enum>QSizePolicy::Fixed</enum>
+               </property>
+               <property name="sizeHint" stdset="0">
+                <size>
+                 <width>24</width>
+                 <height>20</height>
+                </size>
+               </property>
+              </spacer>
+             </item>
+             <item>
+              <widget class="QLabel" name="lblCamShutter">
+               <property name="text">
+                <string>Shutter 1/</string>
+               </property>
+              </widget>
+             </item>
+             <item>
+              <widget class="QLineEdit" name="txtCamShutter">
+               <property name="toolTip">
+                <string>Shutter speed denominator: 60 means 1/60 s.</string>
+               </property>
+               <property name="maximumSize">
+                <size>
+                 <width>60</width>
+                 <height>16777215</height>
+                </size>
+               </property>
+              </widget>
+             </item>
+             <item>
+              <widget class="QLabel" name="lblCamShutterUnit">
+               <property name="text">
+                <string>seconds</string>
+               </property>
+              </widget>
+             </item>
+             <item>
+              <spacer name="cameraSpacer">
+               <property name="orientation">
+                <enum>Qt::Horizontal</enum>
+               </property>
+               <property name="sizeHint" stdset="0">
+                <size>
+                 <width>20</width>
+                 <height>10</height>
+                </size>
+               </property>
+              </spacer>
+             </item>
+             <item>
+              <widget class="QPushButton" name="btnSaveCameraDefaults">
+               <property name="text">
+                <string>Save Default Camera Settings</string>
+               </property>
+              </widget>
+             </item>
+            </layout>
            </widget>
           </item>
           <item>
-           <widget class="QSlider" name="sldExposureEV">
-            <property name="orientation"><enum>Qt::Horizontal</enum></property>
-            <property name="minimum"><number>-100</number></property>
-            <property name="maximum"><number>100</number></property>
-            <property name="value"><number>0</number></property>
-            <property name="toolTip"><string>Exposure compensation, -10 to +10 stops in tenths.</string></property>
-           </widget>
-          </item>
-          <item>
-           <widget class="QLabel" name="lblCamIso">
-            <property name="text"><string>ISO</string></property>
-           </widget>
-          </item>
-          <item>
-           <widget class="QLineEdit" name="txtCamIso">
-            <property name="toolTip"><string>Sensor sensitivity.</string></property>
-            <property name="maximumSize"><size><width>60</width><height>16777215</height></size></property>
-           </widget>
-          </item>
-          <item>
-           <widget class="QLabel" name="lblCamFStop">
-            <property name="text"><string>f/</string></property>
-           </widget>
-          </item>
-          <item>
-           <widget class="QLineEdit" name="txtCamFStop">
-            <property name="toolTip"><string>Aperture.</string></property>
-            <property name="maximumSize"><size><width>50</width><height>16777215</height></size></property>
-           </widget>
-          </item>
-          <item>
-           <widget class="QLabel" name="lblCamShutter">
-            <property name="text"><string>Shutter 1/</string></property>
-           </widget>
-          </item>
-          <item>
-           <widget class="QLineEdit" name="txtCamShutter">
-            <property name="toolTip"><string>Shutter speed denominator: 60 means 1/60 s.</string></property>
-            <property name="maximumSize"><size><width>60</width><height>16777215</height></size></property>
-           </widget>
-          </item>
-          <item>
-           <spacer name="cameraSpacer">
-            <property name="orientation"><enum>Qt::Horizontal</enum></property>
-            <property name="sizeHint" stdset="0"><size><width>20</width><height>10</height></size></property>
-           </spacer>
-          </item>
-          <item>
-           <widget class="QPushButton" name="btnSaveCameraDefaults">
-            <property name="text"><string>Save Default Camera Settings</string></property>
-           </widget>
-          </item>
-          <item>
-           <widget class="QPushButton" name="btnExportWallShot">
-            <property name="text"><string>Export Wall Shot</string></property>
+           <widget class="QGroupBox" name="grpOutputSettings">
+            <property name="title">
+             <string>Output Settings</string>
+            </property>
+            <property name="maximumSize">
+             <size>
+              <width>16777215</width>
+              <height>120</height>
+             </size>
+            </property>
+            <layout class="QVBoxLayout" name="verticalLayout_OutputSettings">
+             <item>
+              <layout class="QHBoxLayout" name="horizontalLayout_Output_Top">
+               <item>
+                <widget class="QLabel" name="lblPlotScale">
+                 <property name="text">
+                  <string>Plot Scale:</string>
+                 </property>
+                </widget>
+               </item>
+               <item>
+                <widget class="QComboBox" name="cmbPlotScale">
+                 <item>
+                  <property name="text">
+                   <string>Distance</string>
+                  </property>
+                 </item>
+                 <item>
+                  <property name="text">
+                   <string>Angle</string>
+                  </property>
+                 </item>
+                </widget>
+               </item>
+               <item>
+                <widget class="QCheckBox" name="chkShowPrimaryGrid">
+                 <property name="text">
+                  <string>Show Primary Grid</string>
+                 </property>
+                </widget>
+               </item>
+               <item>
+                <widget class="QCheckBox" name="chkShowSecondaryGrid">
+                 <property name="text">
+                  <string>Show Secondary Grid</string>
+                 </property>
+                </widget>
+               </item>
+               <item>
+                <spacer name="horizontalSpacer_Output_Top">
+                 <property name="orientation">
+                  <enum>Qt::Horizontal</enum>
+                 </property>
+                 <property name="sizeHint" stdset="0">
+                  <size>
+                   <width>40</width>
+                   <height>20</height>
+                  </size>
+                 </property>
+                </spacer>
+               </item>
+              </layout>
+             </item>
+             <item>
+              <layout class="QHBoxLayout" name="horizontalLayout_Output_Bottom">
+               <item>
+                <widget class="QCheckBox" name="chkSaveWallShot">
+                 <property name="text">
+                  <string>Save Wall Shot</string>
+                 </property>
+                </widget>
+               </item>
+               <item>
+                <widget class="QCheckBox" name="chkSaveXAxis">
+                 <property name="text">
+                  <string>Save X-Axis</string>
+                 </property>
+                </widget>
+               </item>
+               <item>
+                <widget class="QCheckBox" name="chkSaveYAxis">
+                 <property name="text">
+                  <string>Save Y-Axis</string>
+                 </property>
+                </widget>
+               </item>
+               <item>
+                <widget class="QCheckBox" name="chkSave45Deg">
+                 <property name="text">
+                  <string>Save 45-Deg</string>
+                 </property>
+                </widget>
+               </item>
+               <item>
+                <spacer name="horizontalSpacer_Output_Bottom">
+                 <property name="orientation">
+                  <enum>Qt::Horizontal</enum>
+                 </property>
+                 <property name="sizeHint" stdset="0">
+                  <size>
+                   <width>40</width>
+                   <height>20</height>
+                  </size>
+                 </property>
+                </spacer>
+               </item>
+               <item>
+                <widget class="QPushButton" name="btnSavePlots">
+                 <property name="text">
+                  <string>Save Selected Plots...</string>
+                 </property>
+                </widget>
+               </item>
+              </layout>
+             </item>
+            </layout>
            </widget>
           </item>
          </layout>
-        </widget>
-       </item>
-       <item>
-        <widget class="QPlainTextEdit" name="txtLogs">
-         <property name="readOnly"><bool>true</bool></property>
-         <property name="maximumSize">
-          <size>
-           <width>16777215</width>
-           <height>100</height>
-          </size>
-         </property>
-         <property name="font">
-          <font><family>Consolas</family></font>
-         </property>
-         <property name="placeholderText">
-          <string>Simulation logs...</string>
-         </property>
-        </widget>
-       </item>
-
-       <item>
-        <widget class="QProgressBar" name="progressBar">
-         <property name="value"><number>0</number></property>
-         <property name="textVisible"><bool>true</bool></property>
-        </widget>
-       </item>
-
-       <item>
-        <layout class="QHBoxLayout" name="horizontalLayout_Buttons">
-         <item>
-          <widget class="QPushButton" name="btnSettings">
-           <property name="minimumSize">
-            <size><width>120</width><height>50</height></size>
-           </property>
-           <property name="font"><font><pointsize>10</pointsize><bold>true</bold></font></property>
-           <property name="text"><string>⚙ Settings</string></property>
-          </widget>
-         </item>
-         <item>
-          <widget class="QPushButton" name="btnStop">
-           <property name="enabled"><bool>false</bool></property>
-           <property name="minimumSize">
-            <size><width>120</width><height>50</height></size>
-           </property>
-           <property name="font"><font><pointsize>10</pointsize><bold>true</bold></font></property>
-           <property name="text"><string>Stop Simulation</string></property>
-          </widget>
-         </item>
-         <item>
-          <widget class="QPushButton" name="btnSimulate">
-           <property name="minimumSize">
-            <size><width>0</width><height>50</height></size>
-           </property>
-           <property name="font"><font><pointsize>12</pointsize><bold>true</bold></font></property>
-           <property name="text"><string>Run FEA Simulation</string></property>
-          </widget>
-         </item>
-        </layout>
-       </item>
-
-      </layout>
+        </item>
+       </layout>
+      </widget>
      </widget>
+    </item>
+    <item>
+     <widget class="QProgressBar" name="progressBar">
+      <property name="value">
+       <number>0</number>
+      </property>
+      <property name="textVisible">
+       <bool>true</bool>
+      </property>
+     </widget>
+    </item>
+    <item>
+     <layout class="QHBoxLayout" name="horizontalLayout_Buttons">
+      <item>
+       <widget class="QPushButton" name="btnSettings">
+        <property name="minimumSize">
+         <size>
+          <width>120</width>
+          <height>50</height>
+         </size>
+        </property>
+        <property name="font">
+         <font>
+          <pointsize>10</pointsize>
+          <bold>true</bold>
+         </font>
+        </property>
+        <property name="text">
+         <string>⚙ Settings</string>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QPushButton" name="btnStop">
+        <property name="enabled">
+         <bool>false</bool>
+        </property>
+        <property name="minimumSize">
+         <size>
+          <width>120</width>
+          <height>50</height>
+         </size>
+        </property>
+        <property name="font">
+         <font>
+          <pointsize>10</pointsize>
+          <bold>true</bold>
+         </font>
+        </property>
+        <property name="text">
+         <string>Stop Simulation</string>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QPushButton" name="btnSimulate">
+        <property name="minimumSize">
+         <size>
+          <width>0</width>
+          <height>50</height>
+         </size>
+        </property>
+        <property name="font">
+         <font>
+          <pointsize>12</pointsize>
+          <bold>true</bold>
+         </font>
+        </property>
+        <property name="text">
+         <string>Run FEA Simulation</string>
+        </property>
+       </widget>
+      </item>
+     </layout>
     </item>
    </layout>
   </widget>
  </widget>
- <resources/>
- <connections/>
+ <resources />
+ <connections />
 </ui>

@@ -19,16 +19,20 @@ internal to their module and are deliberately not listed.
 """
 
 from .config import CancelCallback, LogCallback, ProgressCallback, SimulationConfig
-from .hardware import (DIE_SHAPES, GASKET_WALL_SHAPES, HARDWARE_KINDS, OUTPUT_MODES,
+from .hardware import (DIE_LAYOUTS, DIE_SHAPES, GASKET_WALL_SHAPES, HARDWARE_KINDS,
+                       LENS_FINISHES, OUTPUT_MODES,
                        RENAMED_SPECS, SPEC_DEFAULT_SETTINGS, SURFACE_FINISHES,
                        HardwareLibrary, spec_or_default)
-from .optics import (DIE_SUBSAMPLES, NO_EMITTER_OFFSET, EmitterOffset,
+from .optics import (DIE_SUBSAMPLES, die_array_extent, die_array_layout,
+                     die_array_resolution,
+                     die_cell_size, die_centres, NO_EMITTER_OFFSET, EmitterOffset,
                      calculate_lumens, effective_bore_diameter,
                      emitter_die_outline, emitter_footprint_diagonal,
                      forward_voltage, get_sim_geometry, lambertian_intensity)
 from .paths import resource_path, user_data_path
 from .photometry import beam_candela_grid, export_beam_ies, write_ies_file
-from .report import generate_flashlight_plot, run_simulation_job, render_wall_shot
+from .report import (PLOT_NAMES, generate_flashlight_plot, render_plot,
+                     render_wall_shot, run_simulation_job)
 from .simulation import (BeamMetrics, WallIllumination, angular_sampling_warnings,
                          apply_camera_exposure_and_tonemap, get_beam_metrics,
                          simulate_wall_illuminance)
@@ -37,15 +41,18 @@ from .tracer import probe_cuda_toolchain
 __all__ = [
     "BeamMetrics",
     "CancelCallback",
+    "DIE_LAYOUTS",
     "DIE_SHAPES",
     "DIE_SUBSAMPLES",
     "EmitterOffset",
     "GASKET_WALL_SHAPES",
     "HARDWARE_KINDS",
     "HardwareLibrary",
+    "LENS_FINISHES",
     "LogCallback",
     "NO_EMITTER_OFFSET",
     "OUTPUT_MODES",
+    "PLOT_NAMES",
     "ProgressCallback",
     "RENAMED_SPECS",
     "SPEC_DEFAULT_SETTINGS",
@@ -56,6 +63,11 @@ __all__ = [
     "apply_camera_exposure_and_tonemap",
     "beam_candela_grid",
     "calculate_lumens",
+    "die_array_extent",
+    "die_array_layout",
+    "die_array_resolution",
+    "die_cell_size",
+    "die_centres",
     "effective_bore_diameter",
     "emitter_die_outline",
     "emitter_footprint_diagonal",
@@ -72,5 +84,6 @@ __all__ = [
     "spec_or_default",
     "user_data_path",
     "write_ies_file",
+    "render_plot",
     "render_wall_shot",
 ]
