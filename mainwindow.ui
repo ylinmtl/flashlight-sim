@@ -6,8 +6,8 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>1800</width>
-    <height>1000</height>
+    <width>800</width>
+    <height>900</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -1646,6 +1646,13 @@
                  </property>
                 </spacer>
                </item>
+               <item>
+                  <widget class="QCheckBox" name="chkExportPlotsCSV">
+                   <property name="text">
+                    <string>Export CSV</string>
+                   </property>
+                  </widget>
+                 </item>
                <item>
                 <widget class="QPushButton" name="btnSavePlots">
                  <property name="text">
