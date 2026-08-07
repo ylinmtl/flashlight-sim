@@ -23,6 +23,8 @@ from PyQt6.QtWidgets import (QApplication, QCheckBox, QComboBox, QDialog,
                              QLineEdit,
                              QMainWindow, QMessageBox, QPushButton, QScrollArea,
                              QSizePolicy, QVBoxLayout, QWidget)
+from PyQt6.QtGui import QColor
+from PyQt6.QtWidgets import QListWidgetItem
 
 # Matplotlib's Qt canvas, used to embed the engine's figure in the window.
 from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg as FigureCanvas
@@ -243,7 +245,7 @@ EXPOSURE_SLIDER_RANGE_EV = 10.0
 
 # Where the results tab sits in the bar. It is hidden until a run has
 # produced something for it to hold.
-RESULTS_TAB_INDEX = 1
+RESULTS_TAB_INDEX = 2
 
 # Zoom applied per mouse wheel step in a 3D preview.
 PREVIEW_ZOOM_STEP = 1.15
@@ -1017,6 +1019,7 @@ class MainWindow(QMainWindow):
         self.setup_canvas()
         self.setup_previews()
         self.setup_camera_controls()
+        self.setup_batch_tab()
         self.setup_results_tab()
         self.setup_output_settings()
         self.setup_hardware_widgets()
@@ -1934,12 +1937,12 @@ class MainWindow(QMainWindow):
                 bore = None
 
         self._set_warning(self.lblReflectorWarning,
-                          self._reflector_warnings(reflector, emitter, bore))
+                          self._reflector_warnings(reflector, emitter, gasket, bore))
         self._set_warning(self.lblEmitterWarning,
                           self._emitter_warnings(reflector, emitter))
         self._set_warning(self.lblGasketWarning,
                           self._gasket_warnings(gasket, emitter, bore))
-
+        
     @staticmethod
     def _set_warning(label, messages):
         """Shows the given warnings, or hides the label when there are none.
@@ -1951,12 +1954,13 @@ class MainWindow(QMainWindow):
         label.setText("\n".join(messages))
         label.setVisible(bool(messages))
 
-    def _reflector_warnings(self, reflector, emitter, bore):
+    def _reflector_warnings(self, reflector, emitter, gasket, bore):
         """Warns when the bore is being assumed rather than read from the entry.
 
         Args:
             reflector: Reflector specs, or None.
             emitter: Emitter specs, or None.
+            gasket: Gasket specs, or None.
             bore: The bore the tracer will use, or None if it cannot be worked out.
 
         Returns:
@@ -1979,7 +1983,6 @@ class MainWindow(QMainWindow):
                             f"(footprint diagonal).")
 
         # Whatever the preview paints red, say why in words as well.
-        gasket = self.current_specs("gasket")
         if gasket is not None:
             try:
                 geom = get_sim_geometry(reflector, emitter, gasket, "smooth",
@@ -2215,6 +2218,99 @@ class MainWindow(QMainWindow):
                 original = artist.get_fontsize()
                 artist._unscaled_fontsize = original
             artist.set_fontsize(original * scale)
+
+    def setup_batch_tab(self):
+        """Wires up the UI buttons and components for the Batch Tab."""
+        if not hasattr(self, 'tabBatch'):
+            return
+        self.btnAddBatch.clicked.connect(self.add_to_batch)
+        self.btnBatchUp.clicked.connect(self.move_batch_up)
+        self.btnBatchDown.clicked.connect(self.move_batch_down)
+        self.btnBatchDelete.clicked.connect(self.delete_batch_items)
+        self.current_batch_index = -1
+        self.populate_batch_lists()
+
+    def populate_batch_lists(self):
+        """Fills the batch selection lists from the active hardware library."""
+        if not hasattr(self, 'lstBatchReflectors'):
+            return
+        self.lstBatchReflectors.clear()
+        self.lstBatchEmitters.clear()
+        self.lstBatchGaskets.clear()
+        
+        # Use .names() to retrieve the list of hardware components correctly
+        self.lstBatchReflectors.addItems(sorted(self.library.names("reflector")))
+        self.lstBatchEmitters.addItems(sorted(self.library.names("emitter")))
+        self.lstBatchGaskets.addItems(sorted(self.library.names("gasket")))
+
+    def add_to_batch(self):
+        """Generates all combinations of selected components and validates physical fits."""
+        reflectors = [item.text() for item in self.lstBatchReflectors.selectedItems()]
+        emitters = [item.text() for item in self.lstBatchEmitters.selectedItems()]
+        gaskets = [item.text() for item in self.lstBatchGaskets.selectedItems()]
+
+        if not reflectors or not emitters or not gaskets:
+            self.log_message("Please select at least one item from each column to build combinations.")
+            return
+
+        for r_name in reflectors:
+            for e_name in emitters:
+                for g_name in gaskets:
+                    item_text = f"{r_name} | {e_name} | {g_name}"
+                    list_item = QListWidgetItem(item_text)
+
+                    # Fetch raw dictionaries from the library
+                    ref = self.library.get("reflector", r_name)
+                    emi = self.library.get("emitter", e_name)
+                    gsk = self.library.get("gasket", g_name)
+
+                    try:
+                        bore = effective_bore_diameter(ref, emi, self.config)
+                    except (KeyError, ValueError, TypeError):
+                        bore = None
+
+                    # Run the exact same geometry validations used by the Setup Tab
+                    warnings = []
+                    warnings.extend(self._reflector_warnings(ref, emi, gsk, bore))
+                    warnings.extend(self._emitter_warnings(ref, emi))
+                    warnings.extend(self._gasket_warnings(gsk, emi, bore))
+
+                    mismatch = False
+                    filtered_warnings = []
+                    
+                    for w in warnings:
+                        # Ignore the die subdivision resolution warning
+                        if "Die gaps too fine" not in w:
+                            mismatch = True
+                            filtered_warnings.append(w)
+
+                    if mismatch:
+                        list_item.setBackground(QColor(255, 255, 150)) # Yellow warning
+                        list_item.setForeground(QColor(0, 0, 0))       # Ensure black text
+                        # Add a helpful tooltip so you can hover over the yellow item to see exactly what clashes!
+                        list_item.setToolTip("\n".join(filtered_warnings))
+
+                    self.lstBatchQueue.addItem(list_item)
+                    
+        self.log_message(f"Added {len(reflectors) * len(emitters) * len(gaskets)} combinations to the batch.")
+
+    def move_batch_up(self):
+        row = self.lstBatchQueue.currentRow()
+        if row > 0:
+            item = self.lstBatchQueue.takeItem(row)
+            self.lstBatchQueue.insertItem(row - 1, item)
+            self.lstBatchQueue.setCurrentRow(row - 1)
+
+    def move_batch_down(self):
+        row = self.lstBatchQueue.currentRow()
+        if 0 <= row < self.lstBatchQueue.count() - 1:
+            item = self.lstBatchQueue.takeItem(row)
+            self.lstBatchQueue.insertItem(row + 1, item)
+            self.lstBatchQueue.setCurrentRow(row + 1)
+
+    def delete_batch_items(self):
+        for item in self.lstBatchQueue.selectedItems():
+            self.lstBatchQueue.takeItem(self.lstBatchQueue.row(item))
 
     def setup_results_tab(self):
         """Wires the results tab and hides it until there is something in it."""
@@ -2878,10 +2974,19 @@ class MainWindow(QMainWindow):
         self.update_previews()
 
     def log_message(self, message):
-        """Prints a line to the console instead of the old UI terminal."""
-        self.txtLogs.appendPlainText(message)
-        scrollbar = self.txtLogs.verticalScrollBar()
-        scrollbar.setValue(scrollbar.maximum())
+        """Appends a message to the UI logs."""
+        if hasattr(self, 'txtLogs'):
+            self.txtLogs.appendPlainText(message)
+            scrollbar = self.txtLogs.verticalScrollBar()
+            scrollbar.setValue(scrollbar.maximum())
+            
+        if hasattr(self, 'txtBatchLogs'):
+            self.txtBatchLogs.appendPlainText(message)
+            scrollbar = self.txtBatchLogs.verticalScrollBar()
+            scrollbar.setValue(scrollbar.maximum())
+            
+        from PyQt6.QtWidgets import QApplication
+        QApplication.processEvents()
 
     def update_progress(self, percent):
         """Moves the progress bar."""
@@ -2909,7 +3014,7 @@ class MainWindow(QMainWindow):
         else:
             self.run_simulation()
 
-    def run_simulation(self):
+    def _dispatch_simulation(self):
         """Validates the selection, applies edits and starts the worker."""
         names = {kind: combo.currentText() for kind, combo in self.combo_boxes.items()}
         if not all(names.values()):
@@ -2953,6 +3058,55 @@ class MainWindow(QMainWindow):
         self.worker.finished_signal.connect(self.handle_simulation_finished)
         self.worker.start()
 
+    def run_simulation(self):
+        """Intercepts the 'Run' button. Runs a batch loop if there are unprocessed items, otherwise runs normally."""
+        if hasattr(self, 'lstBatchQueue') and self.lstBatchQueue.count() > 0:
+            # Find the first item that hasn't been completed (not Green and not Red)
+            first_unprocessed = -1
+            for i in range(self.lstBatchQueue.count()):
+                bg_rgb = self.lstBatchQueue.item(i).background().color().getRgb()[:3]
+                if bg_rgb not in [(150, 255, 150), (255, 150, 150)]:
+                    first_unprocessed = i
+                    break
+            
+            if first_unprocessed == -1:
+                self.log_message("All items in the batch queue have already been processed.")
+                return
+
+            if hasattr(self, 'txtLogs'): self.txtLogs.clear()
+            if hasattr(self, 'txtBatchLogs'): self.txtBatchLogs.clear()
+            
+            # Automatically switch the UI to the Batch tab so you can watch it run
+            if hasattr(self, 'tabMain') and hasattr(self, 'tabBatch'):
+                self.tabMain.setCurrentWidget(self.tabBatch)
+            
+            self.current_batch_index = first_unprocessed
+            self._start_next_batch_item()
+        else:
+            self.current_batch_index = -1
+            self._dispatch_simulation()
+            
+    def _start_next_batch_item(self):
+        if self.current_batch_index >= self.lstBatchQueue.count():
+            self.log_message("\n=== BATCH COMPLETE ===")
+            self.btnSimulate.setEnabled(True)
+            self.current_batch_index = -1
+            return
+
+        item = self.lstBatchQueue.item(self.current_batch_index)
+        item.setBackground(QColor(150, 220, 255)) # Cyan (Running status)
+        item.setForeground(QColor(0, 0, 0))
+        self.lstBatchQueue.scrollToItem(item)
+
+        parts = item.text().split(" | ")
+        if len(parts) == 3:
+            self.combo_boxes["reflector"].setCurrentText(parts[0].strip())
+            self.combo_boxes["emitter"].setCurrentText(parts[1].strip())
+            self.combo_boxes["gasket"].setCurrentText(parts[2].strip())
+
+        self.log_message(f"\n--- BATCH JOB {self.current_batch_index + 1} OF {self.lstBatchQueue.count()} ---")
+        self._dispatch_simulation()
+
     def stop_simulation(self):
         """Asks a running job to stop at its next chunk boundary."""
         if self.worker is not None and self.worker.isRunning():
@@ -2972,6 +3126,14 @@ class MainWindow(QMainWindow):
         QMessageBox.critical(self, "Simulation Error",
                              "An error occurred during simulation. Check logs.")
 
+        if getattr(self, 'current_batch_index', -1) >= 0:
+            item = self.lstBatchQueue.item(self.current_batch_index)
+            item.setBackground(QColor(255, 150, 150)) # Red (Error)
+            self.current_batch_index += 1
+            self._start_next_batch_item()
+        else:
+            self.set_controls_running(False)
+
     def handle_simulation_finished(self, figure, results, shot):
         """Restores the controls, logs the results and shows the new plot.
 
@@ -2983,18 +3145,36 @@ class MainWindow(QMainWindow):
         """
         self.set_controls_running(False)
         self.progressBar.setValue(100)
+        
         # Results only exist once something has been traced, so the tab
         # appears with them and the view moves to it.
         if shot is not None:
             self.remember_result(shot)
             self.tabMain.setTabVisible(RESULTS_TAB_INDEX, True)
-            self.tabMain.setCurrentIndex(RESULTS_TAB_INDEX)
+            
+            # Only yank the view to the Results tab if we are NOT running a batch queue
+            if getattr(self, 'current_batch_index', -1) < 0:
+                self.tabMain.setCurrentIndex(RESULTS_TAB_INDEX)
+                
             self.show_selected_plot()
 
         if results:
             self.log_message("\n--- SIMULATION RESULTS ---")
             for label, value in results.items():
                 self.log_message(f"{label}: {value}")
+
+        # Batch Loop Continuer
+        if getattr(self, 'current_batch_index', -1) >= 0:
+            item = self.lstBatchQueue.item(self.current_batch_index)
+            
+            if shot is not None:
+                item.setBackground(QColor(150, 255, 150)) # Green (Success)
+                self.current_batch_index += 1
+                self._start_next_batch_item()
+            else:
+                # Job was cancelled. Halt the batch loop.
+                self.log_message("\n[!] Batch processing halted by user.")
+                self.current_batch_index = -1
 
 
     def show_figure(self, figure):

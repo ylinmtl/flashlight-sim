@@ -1315,6 +1315,93 @@
         </item>
        </layout>
       </widget>
+      <widget class="QWidget" name="tabBatch">
+     <attribute name="title">
+      <string>Batch</string>
+     </attribute>
+     <layout class="QVBoxLayout" name="verticalLayout_Batch">
+      <item>
+       <layout class="QHBoxLayout" name="horizontalLayout_BatchLists">
+        <item>
+         <layout class="QVBoxLayout" name="verticalLayout_BatchReflectors">
+          <item><widget class="QLabel"><property name="text"><string>Reflectors</string></property><property name="alignment"><set>Qt::AlignCenter</set></property></widget></item>
+          <item><widget class="QListWidget" name="lstBatchReflectors"><property name="selectionMode"><enum>QAbstractItemView::ExtendedSelection</enum></property></widget></item>
+         </layout>
+        </item>
+        <item>
+         <layout class="QVBoxLayout" name="verticalLayout_BatchEmitters">
+          <item><widget class="QLabel"><property name="text"><string>Emitters</string></property><property name="alignment"><set>Qt::AlignCenter</set></property></widget></item>
+          <item><widget class="QListWidget" name="lstBatchEmitters"><property name="selectionMode"><enum>QAbstractItemView::ExtendedSelection</enum></property></widget></item>
+         </layout>
+        </item>
+        <item>
+         <layout class="QVBoxLayout" name="verticalLayout_BatchGaskets">
+          <item><widget class="QLabel"><property name="text"><string>Gaskets</string></property><property name="alignment"><set>Qt::AlignCenter</set></property></widget></item>
+          <item><widget class="QListWidget" name="lstBatchGaskets"><property name="selectionMode"><enum>QAbstractItemView::ExtendedSelection</enum></property></widget></item>
+         </layout>
+        </item>
+       </layout>
+      </item>
+      <item>
+       <widget class="QPushButton" name="btnAddBatch">
+        <property name="text">
+         <string>Add Combinations to Batch</string>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QLabel">
+        <property name="text">
+         <string>Batch Queue (Yellow items indicate physical dimension mismatch):</string>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <layout class="QHBoxLayout" name="horizontalLayout_BatchQueue">
+        <item>
+         <widget class="QListWidget" name="lstBatchQueue">
+          <property name="selectionMode">
+           <enum>QAbstractItemView::ExtendedSelection</enum>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <layout class="QVBoxLayout" name="verticalLayout_BatchButtons">
+          <item><widget class="QPushButton" name="btnBatchUp"><property name="text"><string>Move Up</string></property></widget></item>
+          <item><widget class="QPushButton" name="btnBatchDown"><property name="text"><string>Move Down</string></property></widget></item>
+          <item><widget class="QPushButton" name="btnBatchDelete"><property name="text"><string>Delete</string></property></widget></item>
+          <item>
+           <spacer name="verticalSpacer_Batch">
+            <property name="orientation">
+             <enum>Qt::Vertical</enum>
+            </property>
+            <property name="sizeHint" stdset="0">
+             <size>
+              <width>20</width>
+              <height>40</height>
+             </size>
+            </property>
+           </spacer>
+          </item>
+         </layout>
+        </item>
+       </layout>
+      </item>
+      <item>
+       <widget class="QPlainTextEdit" name="txtBatchLogs">
+        <property name="maximumSize">
+         <size>
+          <width>16777215</width>
+          <height>150</height>
+         </size>
+        </property>
+        <property name="readOnly">
+         <bool>true</bool>
+        </property>
+       </widget>
+      </item>
+     </layout>
+    </widget>
       <widget class="QWidget" name="tabResults">
        <attribute name="title">
         <string>Results</string>
