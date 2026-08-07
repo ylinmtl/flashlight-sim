@@ -345,6 +345,7 @@ SETTING_LABELS = {
         "plot_scale": "Plot Scale (Distance/Angle)",
         "plot_show_primary_grid": "Show Primary Grid",
         "plot_show_secondary_grid": "Show Secondary Grid",
+        "plot_simple_output_scaling": "Show % Scaling Table in Simple Mode",
         "generate_all_plots": "Generate All Plots (Batch Mode)",
         "stored_run_count": "Results Kept (runs)",
         "plot_wall_shot": "Plot Wall Shot (2D Image)",

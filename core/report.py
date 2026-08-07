@@ -177,6 +177,12 @@ def _format_output_modes(emitter: dict, max_amps: float, max_cd: float,
     Returns:
         The formatted table.
     """
+    output_mode = emitter.get("output_mode", getattr(config, "default_emitter_output_mode", "simple"))
+    
+    # Check the new toggle before falling back to the simple single-line output
+    if output_mode == "simple" and not getattr(config, "plot_simple_output_scaling", False):
+        return f"Max Output: {int(delivered_flux):,} lm | {int(max_cd):,} cd"
+
     survival = delivered_flux / total_flux if total_flux else 0.0
     table = (" Mode | Amps |  Lumens |  Candela | Throw \n"
              + "-" * 45 + "\n")

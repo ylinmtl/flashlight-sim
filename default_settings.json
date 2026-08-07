@@ -24,6 +24,7 @@
         "plot_scale": "distance",
         "plot_show_primary_grid": false,
         "plot_show_secondary_grid": false,
+        "plot_simple_output_scaling": false,
         "generate_all_plots": false,
         "show_human_silhouette": false,
         "plot_wall_shot": false,

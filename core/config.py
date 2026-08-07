@@ -56,7 +56,8 @@ class SimulationConfig:
             "sim_phi_min_deg", "sim_phi_max_deg",
         ],
         "Output & Rendering": [
-            "plot_scale", "plot_show_primary_grid", "plot_show_secondary_grid", "stored_run_count",
+            "plot_scale", "plot_show_primary_grid", "plot_show_secondary_grid", 
+            "plot_simple_output_scaling", "stored_run_count",
             "generate_all_plots", "show_human_silhouette", "plot_wall_shot",
             "plot_intensity_x", "plot_intensity_y", "plot_intensity_45",
             "batch_output_directory", "export_csv", "export_plots",
