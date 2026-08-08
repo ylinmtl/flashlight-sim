@@ -181,7 +181,7 @@ def _format_output_modes(emitter: dict, max_amps: float, max_cd: float,
     
     # Check the new toggle before falling back to the simple single-line output
     if output_mode == "simple" and not getattr(config, "plot_simple_output_scaling", False):
-        return f"Max Output: {int(delivered_flux):,} lm | {int(max_cd):,} cd"
+        return f"Max Output: {int(delivered_flux):,} lm | {int(max_cd):,} cd | {int(np.sqrt(max_cd * 4)):>4,}m\n"
 
     survival = delivered_flux / total_flux if total_flux else 0.0
     table = (" Mode | Amps |  Lumens |  Candela | Throw \n"

@@ -1013,7 +1013,7 @@
             "reflectivity_cylinder": 0.8,
             "transmissivity_lens": 0.98,
             "wall_thickness_mm": 1.0,
-            "surface_finish": "orange_peel",
+            "surface_finish": "smooth",
             "lens_finish": "clear",
             "lens_refractive_index": 1.52,
             "lens_diffusion_fwhm_deg": 10.0,
