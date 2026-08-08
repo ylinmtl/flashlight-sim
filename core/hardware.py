@@ -5,7 +5,6 @@ public surface.
 """
 
 import copy
-import math
 import os
 import shutil
 from typing import Dict, List
@@ -84,11 +83,12 @@ RENAMED_SPECS = {
         # of slope follows from the correlation length in optics.py.
         "surface_roughness_mrad": ("surface_roughness_nm", 17.678),
         "surface_blur_deg": ("surface_roughness_nm", 65.51),
+        # OP_Factor scaled the post-process blur, which op_factor still
+        # does, so that is where it goes. It was never a depth: the dimple
+        # texture describes the surface itself and starts from its own
+        # default. Listing both here would silently drop one, since the
+        # second entry for a key wins and the first is never seen.
         "OP_Factor": ("op_factor", 1.0),
-        # Orange peel was an abstract multiplier on a post-process blur. It
-        # is now the depth of the dimples, with their spacing beside it, so
-        # a texture measured off a real reflector can be typed straight in.
-        "OP_Factor": ("op_dimple_depth_um", 3.0),
         "lens_diffusion_deg": ("lens_diffusion_fwhm_deg", 2.354820),
     },
     "gasket": {

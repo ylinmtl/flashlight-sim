@@ -88,10 +88,13 @@ def render_intensity_profile(shot: 'WallShot', suffix_name: str,
     _style_dark_axes(ax)
 
     # Determine axis scaling based on ACTIVE user settings (UI toggle)
-    scale_mode = getattr(active_config, "plot_scale", "Distance")
+    # Free text from a combo box or a hand edited settings file, so
+    # it is folded before comparing rather than matched exactly.
+    scale_mode = str(getattr(active_config, "plot_scale",
+                             "Distance")).strip().lower()
 
     # Limit arrays and labels based on the FROZEN geometry settings
-    if scale_mode == "Angle":
+    if scale_mode == "angle":
         x_values = np.degrees(np.arctan(dist_array / geom_config.target_distance_m))
         ax.set_xlim(-geom_config.plot_fov_deg / 2.0, geom_config.plot_fov_deg / 2.0)
         ax.set_xlabel("Horizontal Angle (°)", color="#CCCCCC", fontsize=11, labelpad=10)
@@ -312,10 +315,13 @@ def _render_wall_shot(shot: 'WallShot', render_data: np.ndarray,
     _style_dark_axes(ax)
 
     # Determine axis scaling based on ACTIVE user settings (UI toggle)
-    scale_mode = getattr(active_config, "plot_scale", "Distance")
+    # Free text from a combo box or a hand edited settings file, so
+    # it is folded before comparing rather than matched exactly.
+    scale_mode = str(getattr(active_config, "plot_scale",
+                             "Distance")).strip().lower()
 
     # Limit arrays and labels based on the FROZEN geometry settings
-    if scale_mode == "Angle":
+    if scale_mode == "angle":
         extent_angle = math.degrees(math.atan(geom_config.wall_radius_m / geom_config.target_distance_m))
         plot_limit = geom_config.plot_fov_deg / 2.0
         extent = [-extent_angle, extent_angle, -extent_angle, extent_angle]
@@ -340,7 +346,7 @@ def _render_wall_shot(shot: 'WallShot', render_data: np.ndarray,
 
     if active_config.show_human_silhouette:
         feet_y_m = -1.75 * 0.65
-        if scale_mode == "Angle":
+        if scale_mode == "angle":
             feet_y_deg = math.degrees(math.atan(feet_y_m / geom_config.target_distance_m))
             height_deg = math.degrees(math.atan(1.75 / geom_config.target_distance_m))
             draw_human_silhouette(ax, 0.0, feet_y_deg, height_deg)

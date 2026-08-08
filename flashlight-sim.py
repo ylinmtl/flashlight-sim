@@ -18,7 +18,7 @@ from PyQt6.QtGui import QGuiApplication
 from PyQt6.QtCore import QThread, pyqtSignal
 from PyQt6.QtWidgets import (QApplication, QCheckBox, QComboBox, QDialog,
                              QFileDialog, QListWidgetItem,
-                             QSlider,
+                            
                              QFormLayout, QGroupBox, QHBoxLayout, QInputDialog,
                              QLineEdit,
                              QMainWindow, QMessageBox, QPushButton, QScrollArea,
@@ -436,30 +436,56 @@ def _choice_label(value):
     return value.replace("_", " ").title()
 
 
-def _polygon_normal(face):
-    """Returns a polygon's unit normal, by Newell's method.
+def _polygon_normals(faces):
+    """Returns the unit normal of every face, by Newell's method.
 
-    Newell's method works for any planar polygon, convex or not, and gives
-    the outward normal when the vertices run anticlockwise seen from
-    outside the solid.
+    Newell's method works for any planar polygon, convex or not, and gives the
+    outward normal when the vertices run anticlockwise seen from outside the
+    solid.
+
+    Doing them together rather than one at a time is what makes this cheap. A
+    preview holds a couple of thousand faces and is rebuilt on every edit, and
+    a NumPy call per face spends far longer in call overhead than in
+    arithmetic. Faces are grouped by how many vertices they have, since only
+    faces of the same length can be stacked, and in practice almost everything
+    is a quad.
 
     Args:
-        face: Sequence of (x, y, z) vertices in order around the polygon.
+        faces: Sequence of faces, each a sequence of (x, y, z) vertices in
+            order around the polygon.
 
     Returns:
-        A unit normal as a length 3 array, or zeros for a degenerate face.
+        An (n, 3) array of unit normals, zero for any degenerate face.
     """
-    vertices = np.asarray(face, dtype=float)
-    following = np.roll(vertices, -1, axis=0)
-    normal = np.array([
-        np.sum((vertices[:, 1] - following[:, 1])
-               * (vertices[:, 2] + following[:, 2])),
-        np.sum((vertices[:, 2] - following[:, 2])
-               * (vertices[:, 0] + following[:, 0])),
-        np.sum((vertices[:, 0] - following[:, 0])
-               * (vertices[:, 1] + following[:, 1]))])
-    length = float(np.linalg.norm(normal))
-    return normal / length if length else normal
+    normals = np.zeros((len(faces), 3))
+    if not len(faces):
+        return normals
+
+    by_length = {}
+    for position, face in enumerate(faces):
+        by_length.setdefault(len(face), []).append(position)
+
+    for positions in by_length.values():
+        block = np.asarray([faces[position] for position in positions],
+                           dtype=float)
+        following = np.roll(block, -1, axis=1)
+        difference = block - following
+        total = block + following
+
+        # The three components of Newell's sum, taken over the vertices of
+        # every face in the block at once.
+        group = np.empty((len(positions), 3))
+        group[:, 0] = np.sum(difference[:, :, 1] * total[:, :, 2], axis=1)
+        group[:, 1] = np.sum(difference[:, :, 2] * total[:, :, 0], axis=1)
+        group[:, 2] = np.sum(difference[:, :, 0] * total[:, :, 1], axis=1)
+
+        lengths = np.linalg.norm(group, axis=1)
+        usable = lengths > 0.0
+        group[usable] /= lengths[usable, None]
+        group[~usable] = 0.0
+        normals[positions] = group
+
+    return normals
 
 
 class _SolidFaces(Poly3DCollection):
@@ -485,7 +511,7 @@ class _SolidFaces(Poly3DCollection):
             **kwargs: Passed to Poly3DCollection.
         """
         super().__init__(faces, **kwargs)
-        self._face_normals = np.array([_polygon_normal(f) for f in faces])
+        self._face_normals = _polygon_normals(faces)
         self._solid_facecolours = to_rgba_array(facecolours)
         self._solid_edgecolours = to_rgba_array(edgecolours)
 
@@ -2589,8 +2615,14 @@ class MainWindow(QMainWindow):
     def setup_output_settings(self):
         """Wires up the output settings panel."""
         # Initial states
-        scale = getattr(self.config, "plot_scale", "Distance")
-        self.cmbPlotScale.setCurrentText(scale)
+        # The saved value is free text and the combo entries are
+        # capitalised, so a file holding "distance" would not select
+        # anything and the box would show whatever happened to be first.
+        scale = str(getattr(self.config, "plot_scale", "Distance")).strip()
+        for index in range(self.cmbPlotScale.count()):
+            if self.cmbPlotScale.itemText(index).lower() == scale.lower():
+                self.cmbPlotScale.setCurrentIndex(index)
+                break
         self.chkShowPrimaryGrid.setChecked(getattr(self.config, "plot_show_primary_grid", True))
         self.chkShowSecondaryGrid.setChecked(getattr(self.config, "plot_show_secondary_grid", False))
 
@@ -3186,6 +3218,7 @@ class MainWindow(QMainWindow):
         if self.figure_canvas is not None:
             self.grpPlot.layout().removeWidget(self.figure_canvas)
             self.figure_canvas.deleteLater()
+            plt.close(self.figure_canvas.figure)
 
         self.figure_canvas = FigureCanvas(figure)
         self.grpPlot.layout().addWidget(self.figure_canvas)

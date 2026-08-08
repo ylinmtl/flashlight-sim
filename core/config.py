@@ -6,7 +6,7 @@ public surface.
 
 import math
 import os
-from typing import Callable, Dict, List, Optional
+from typing import Callable, List, Optional
 
 from .paths import _read_json, _write_json, resource_path, user_data_path
 

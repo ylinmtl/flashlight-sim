@@ -5,8 +5,7 @@ public surface.
 """
 
 import math
-import time
-from typing import Callable, List, NamedTuple, Optional
+from typing import List, NamedTuple, Optional
 
 import numpy as np
 from scipy.ndimage import gaussian_filter
@@ -195,9 +194,80 @@ def project_dome_to_wall(dome_flux: np.ndarray, config: SimulationConfig):
     resolution = config.sim_grid_res
     wall = np.zeros((resolution, resolution), dtype=np.float64)
 
-    filled = np.nonzero(dome_flux)
-    if not len(filled[0]):
+    filled_rows, filled_columns = np.nonzero(dome_flux)
+    if not len(filled_rows):
         return wall
+
+    polar_bins, azimuth_bins = dome_flux.shape
+    polar_step = math.radians(config.dome_angle_deg / 2.0) / polar_bins
+    azimuth_step = 2.0 * math.pi / azimuth_bins
+
+    # Only the forward hemisphere can reach a wall in front of the head; a dome
+    # wider than that simply has nothing to project from those bins. Which rows
+    # those are is fixed by the grid, so they are dropped by row index before
+    # any geometry is worked out for them.
+    forward_rows = min(polar_bins,
+                       int(math.ceil((math.pi / 2.0) / polar_step - 0.5)))
+    if forward_rows <= 0:
+        return wall
+    if forward_rows < polar_bins:
+        keep = filled_rows < forward_rows
+        filled_rows, filled_columns = filled_rows[keep], filled_columns[keep]
+        if not len(filled_rows):
+            return wall
+
+    # Where a bin lands depends on its row and its column separately: how far
+    # out through the polar angle, and which way round through the azimuth.
+    # Both are properties of the grid, not of the individual bin, so the trig
+    # is done once per row and once per column and then read off. On a fine
+    # dome that is a few thousand evaluations instead of several million.
+    cell = (2.0 * config.wall_radius_m) / resolution
+    offset_by_row = config.target_distance_m * np.tan(
+        (np.arange(forward_rows) + 0.5) * polar_step)
+    angle_by_column = (np.arange(azimuth_bins) + 0.5) * azimuth_step
+    scaled_cos = np.cos(angle_by_column) / cell
+    scaled_sin = np.sin(angle_by_column) / cell
+    centre = config.wall_radius_m / cell - 0.5
+
+    offset = offset_by_row[filled_rows]
+    column = offset * scaled_cos[filled_columns] + centre
+    row = offset * scaled_sin[filled_columns] + centre
+    flux = dome_flux[filled_rows, filled_columns]
+
+    # Dropping each bin into the nearest pixel is what causes the moire: the
+    # angular lattice and the linear one beat against each other, so
+    # neighbouring pixels collect different numbers of bins and the pattern
+    # shows up as rings. Splitting each bin across the four pixels it sits
+    # between, in proportion to how close it is to each, removes the beat
+    # without blurring anything: the weights sum to one, so not a lumen is
+    # gained or lost, and a bin landing dead centre still lands whole.
+    low_column = np.floor(column).astype(np.int64)
+    low_row = np.floor(row).astype(np.int64)
+    column_fraction = column - low_column
+    row_fraction = row - low_row
+
+    # bincount rather than add.at: the latter is unbuffered and works an
+    # element at a time, which on a fine dome is the slowest thing here.
+    # Each corner is accumulated on its own; gathering all four into one
+    # call was tried and is slower, because the concatenation moves four
+    # times the data to save three passes over a much smaller wall.
+    pixels = resolution * resolution
+    for row_offset, row_weight in ((0, 1.0 - row_fraction), (1, row_fraction)):
+        target_row = low_row + row_offset
+        row_inside = (target_row >= 0) & (target_row < resolution)
+        share = flux * row_weight
+        for col_offset, col_weight in ((0, 1.0 - column_fraction),
+                                       (1, column_fraction)):
+            target_column = low_column + col_offset
+            landed = row_inside & (target_column >= 0)
+            landed &= target_column < resolution
+            if not landed.any():
+                continue
+            wall += np.bincount(
+                target_row[landed] * resolution + target_column[landed],
+                weights=share[landed] * col_weight[landed],
+                minlength=pixels).reshape(resolution, resolution)
+    return wall
 
     polar_bins, azimuth_bins = dome_flux.shape
     polar_step = math.radians(config.dome_angle_deg / 2.0) / polar_bins
