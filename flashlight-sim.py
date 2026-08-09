@@ -67,7 +67,7 @@ SPEC_GROUPS = {
                                 "surface_correlation_um", "op_dimple_pitch_mm",
                                 "op_dimple_depth_um", "op_factor", "reflectivity_smooth",
                                 "reflectivity_op", "reflectivity_cylinder",
-                                "gasket_reflectivity")),
+                                )),
         ("Front Lens", ("transmissivity_lens", "lens_finish",
                         "lens_diffusion_fwhm_deg", "lens_refractive_index")),
     ),
@@ -85,6 +85,7 @@ SPEC_GROUPS = {
         ("Dimensions", ("outer_diameter_mm", "inner_diameter_mm",
                         "emitter_size_mm", "wall_shape")),
         ("Height", ("thickness_mm", "total_height_mm")),
+        ("Surface", ("reflectivity", "specularity")),
     ),
 }
 
@@ -383,6 +384,7 @@ SETTING_LABELS = {
         "default_reflectivity_smooth": "Default Reflectivity (Smooth)",
         "default_reflectivity_op": "Default Reflectivity (Orange Peel)",
         "default_reflectivity_cylinder": "Default Reflectivity (Cylinder)",
+        "default_gasket_specularity": "Default Gasket Specularity (0-1)",
         "default_gasket_reflectivity": "Default Reflectivity (Gasket)",
         "default_transmissivity_lens": "Default Lens Transmissivity",
         "default_surface_finish": "Default Surface Finish",
@@ -920,6 +922,13 @@ class SettingsDialog(QDialog):
         save_button = QPushButton("Save Settings")
         save_button.clicked.connect(self.save_settings)
 
+        # Pressing Enter in a settings box should commit the change, so Save is
+        # the default. Without this Qt promotes the first button it finds, which
+        # is Reset, and finishing an edit offers to throw the lot away instead.
+        save_button.setDefault(True)
+        save_button.setAutoDefault(True)
+        reset_button.setAutoDefault(False)
+
         button_row = QHBoxLayout()
         button_row.addWidget(reset_button)
         button_row.addWidget(save_button)
@@ -1034,6 +1043,7 @@ class MainWindow(QMainWindow):
             # Renames run before the restore, so a spec carried across to a new
             # name is not then mistaken for a missing one and overwritten.
             self.renamed_specs = self.library.rename_legacy_specs()
+            self.dropped_specs = self.library.drop_retired_specs()
             self.restored_specs = self.library.restore_missing_specs(self.config)
         except Exception as error:
             QMessageBox.critical(self, "Initialization Error", str(error))
@@ -1087,6 +1097,13 @@ class MainWindow(QMainWindow):
                 f"Hardware library upgraded: renamed spec(s) on "
                 f"{len(self.renamed_specs)} entrie(s). Wall thickness now means "
                 f"one wall, so stored values were halved.")
+
+        if self.dropped_specs:
+            self.log_message(
+                f"Hardware library upgraded: gasket reflectivity and "
+                f"specularity moved from the reflector to the gasket, so "
+                f"they were cleared from {len(self.dropped_specs)} "
+                f"reflector(s). Set them on each gasket instead.")
 
         if self.restored_specs:
             restored_count = sum(len(specs) for specs in self.restored_specs.values())
@@ -3218,6 +3235,11 @@ class MainWindow(QMainWindow):
         if self.figure_canvas is not None:
             self.grpPlot.layout().removeWidget(self.figure_canvas)
             self.figure_canvas.deleteLater()
+
+            # Dropping the canvas does not dispose of the figure inside it.
+            # Every redraw builds a fresh ten inch canvas, so switching
+            # plots or nudging the exposure a few dozen times leaves that
+            # many behind, and pyplot starts warning about it.
             plt.close(self.figure_canvas.figure)
 
         self.figure_canvas = FigureCanvas(figure)

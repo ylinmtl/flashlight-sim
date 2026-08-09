@@ -96,6 +96,7 @@
         "default_die_rows": 1,
         "default_die_columns": 1,
         "default_die_gap_mm": 0.1,
-        "default_die_gap_output": 0.5
+        "default_die_gap_output": 0.5,
+        "default_gasket_specularity": 0.0
     }
 }

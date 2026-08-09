@@ -78,6 +78,7 @@ class SimulationConfig:
         "Material Defaults & Thresholds": [
             "default_reflectivity_smooth", "default_reflectivity_op",
             "default_reflectivity_cylinder", "default_gasket_reflectivity",
+            "default_gasket_specularity",
             "default_transmissivity_lens", "default_surface_finish",
             "default_surface_roughness_nm", "default_surface_correlation_um",
             "default_op_dimple_pitch_mm", "default_op_dimple_depth_um",
