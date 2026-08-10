@@ -373,12 +373,12 @@
                  <item row="17" column="0">
                   <widget class="QLabel">
                    <property name="text">
-                    <string>Gasket Reflectance</string>
+                    <string>Lens Transmissivity</string>
                    </property>
                   </widget>
                  </item>
                  <item row="17" column="1">
-                  <widget class="QLineEdit" name="txtRef_gasket_reflectivity">
+                  <widget class="QLineEdit" name="txtRef_transmissivity_lens">
                    <property name="maximumSize">
                     <size>
                      <width>100</width>
@@ -390,12 +390,12 @@
                  <item row="18" column="0">
                   <widget class="QLabel">
                    <property name="text">
-                    <string>Lens Transmissivity</string>
+                    <string>Finish</string>
                    </property>
                   </widget>
                  </item>
                  <item row="18" column="1">
-                  <widget class="QLineEdit" name="txtRef_transmissivity_lens">
+                  <widget class="QComboBox" name="txtRef_lens_finish">
                    <property name="maximumSize">
                     <size>
                      <width>100</width>
@@ -407,12 +407,12 @@
                  <item row="19" column="0">
                   <widget class="QLabel">
                    <property name="text">
-                    <string>Finish</string>
+                    <string>Diffusion (°)</string>
                    </property>
                   </widget>
                  </item>
                  <item row="19" column="1">
-                  <widget class="QComboBox" name="txtRef_lens_finish">
+                  <widget class="QLineEdit" name="txtRef_lens_diffusion_fwhm_deg">
                    <property name="maximumSize">
                     <size>
                      <width>100</width>
@@ -424,28 +424,11 @@
                  <item row="20" column="0">
                   <widget class="QLabel">
                    <property name="text">
-                    <string>Diffusion (°)</string>
-                   </property>
-                  </widget>
-                 </item>
-                 <item row="20" column="1">
-                  <widget class="QLineEdit" name="txtRef_lens_diffusion_fwhm_deg">
-                   <property name="maximumSize">
-                    <size>
-                     <width>100</width>
-                     <height>16777215</height>
-                    </size>
-                   </property>
-                  </widget>
-                 </item>
-                 <item row="21" column="0">
-                  <widget class="QLabel">
-                   <property name="text">
                     <string>Refractive Index</string>
                    </property>
                   </widget>
                  </item>
-                 <item row="21" column="1">
+                 <item row="20" column="1">
                   <widget class="QLineEdit" name="txtRef_lens_refractive_index">
                    <property name="maximumSize">
                     <size>
@@ -455,7 +438,7 @@
                    </property>
                   </widget>
                  </item>
-                 <item row="22" column="0" colspan="2">
+                 <item row="21" column="0" colspan="2">
                   <widget class="QLabel" name="lblGroup_reflector_centring">
                    <property name="text">
                     <string>Emitter Centring</string>
@@ -465,14 +448,14 @@
                    </property>
                   </widget>
                  </item>
-                 <item row="23" column="0">
+                 <item row="22" column="0">
                   <widget class="QLabel">
                    <property name="text">
                     <string>Distance (mm)</string>
                    </property>
                   </widget>
                  </item>
-                 <item row="23" column="1">
+                 <item row="22" column="1">
                   <widget class="QLineEdit" name="txtRef_emitter_offset_distance_mm">
                    <property name="maximumSize">
                     <size>
@@ -482,14 +465,14 @@
                    </property>
                   </widget>
                  </item>
-                 <item row="24" column="0">
+                 <item row="23" column="0">
                   <widget class="QLabel">
                    <property name="text">
                     <string>Angle (° CW)</string>
                    </property>
                   </widget>
                  </item>
-                 <item row="24" column="1">
+                 <item row="23" column="1">
                   <widget class="QLineEdit" name="txtRef_emitter_offset_angle_deg">
                    <property name="maximumSize">
                     <size>
@@ -1247,6 +1230,50 @@
                    </property>
                   </widget>
                  </item>
+                 <item row="8" column="0" colspan="2">
+                  <widget class="QLabel" name="lblGroup_gasket_surface">
+                   <property name="text">
+                    <string>Surface</string>
+                   </property>
+                   <property name="styleSheet">
+                    <string>font-weight: bold; color: #9FB6CC; padding-top: 6px;</string>
+                   </property>
+                  </widget>
+                 </item>
+                 <item row="9" column="0">
+                  <widget class="QLabel">
+                   <property name="text">
+                    <string>Reflectivity</string>
+                   </property>
+                  </widget>
+                 </item>
+                 <item row="9" column="1">
+                  <widget class="QLineEdit" name="txtGask_reflectivity">
+                   <property name="maximumSize">
+                    <size>
+                     <width>100</width>
+                     <height>16777215</height>
+                    </size>
+                   </property>
+                  </widget>
+                 </item>
+                 <item row="10" column="0">
+                  <widget class="QLabel">
+                   <property name="text">
+                    <string>Specularity</string>
+                   </property>
+                  </widget>
+                 </item>
+                 <item row="10" column="1">
+                  <widget class="QLineEdit" name="txtGask_specularity">
+                   <property name="maximumSize">
+                    <size>
+                     <width>100</width>
+                     <height>16777215</height>
+                    </size>
+                   </property>
+                  </widget>
+                 </item>
                 </layout>
                </widget>
               </widget>
@@ -1310,6 +1337,156 @@
           </property>
           <property name="placeholderText">
            <string>Simulation logs...</string>
+          </property>
+         </widget>
+        </item>
+       </layout>
+      </widget>
+      <widget class="QWidget" name="tabBatch">
+       <attribute name="title">
+        <string>Batch</string>
+       </attribute>
+       <layout class="QVBoxLayout" name="verticalLayout_Batch">
+        <item>
+         <layout class="QHBoxLayout" name="horizontalLayout_BatchLists">
+          <item>
+           <layout class="QVBoxLayout" name="verticalLayout_BatchReflectors">
+            <item>
+             <widget class="QLabel">
+              <property name="text">
+               <string>Reflectors</string>
+              </property>
+              <property name="alignment">
+               <set>Qt::AlignCenter</set>
+              </property>
+             </widget>
+            </item>
+            <item>
+             <widget class="QListWidget" name="lstBatchReflectors">
+              <property name="selectionMode">
+               <enum>QAbstractItemView::ExtendedSelection</enum>
+              </property>
+             </widget>
+            </item>
+           </layout>
+          </item>
+          <item>
+           <layout class="QVBoxLayout" name="verticalLayout_BatchEmitters">
+            <item>
+             <widget class="QLabel">
+              <property name="text">
+               <string>Emitters</string>
+              </property>
+              <property name="alignment">
+               <set>Qt::AlignCenter</set>
+              </property>
+             </widget>
+            </item>
+            <item>
+             <widget class="QListWidget" name="lstBatchEmitters">
+              <property name="selectionMode">
+               <enum>QAbstractItemView::ExtendedSelection</enum>
+              </property>
+             </widget>
+            </item>
+           </layout>
+          </item>
+          <item>
+           <layout class="QVBoxLayout" name="verticalLayout_BatchGaskets">
+            <item>
+             <widget class="QLabel">
+              <property name="text">
+               <string>Gaskets</string>
+              </property>
+              <property name="alignment">
+               <set>Qt::AlignCenter</set>
+              </property>
+             </widget>
+            </item>
+            <item>
+             <widget class="QListWidget" name="lstBatchGaskets">
+              <property name="selectionMode">
+               <enum>QAbstractItemView::ExtendedSelection</enum>
+              </property>
+             </widget>
+            </item>
+           </layout>
+          </item>
+         </layout>
+        </item>
+        <item>
+         <widget class="QPushButton" name="btnAddBatch">
+          <property name="text">
+           <string>Add Combinations to Batch</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QLabel">
+          <property name="text">
+           <string>Batch Queue (Yellow items indicate physical dimension mismatch):</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <layout class="QHBoxLayout" name="horizontalLayout_BatchQueue">
+          <item>
+           <widget class="QListWidget" name="lstBatchQueue">
+            <property name="selectionMode">
+             <enum>QAbstractItemView::ExtendedSelection</enum>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <layout class="QVBoxLayout" name="verticalLayout_BatchButtons">
+            <item>
+             <widget class="QPushButton" name="btnBatchUp">
+              <property name="text">
+               <string>Move Up</string>
+              </property>
+             </widget>
+            </item>
+            <item>
+             <widget class="QPushButton" name="btnBatchDown">
+              <property name="text">
+               <string>Move Down</string>
+              </property>
+             </widget>
+            </item>
+            <item>
+             <widget class="QPushButton" name="btnBatchDelete">
+              <property name="text">
+               <string>Delete</string>
+              </property>
+             </widget>
+            </item>
+            <item>
+             <spacer name="verticalSpacer_Batch">
+              <property name="orientation">
+               <enum>Qt::Vertical</enum>
+              </property>
+              <property name="sizeHint" stdset="0">
+               <size>
+                <width>20</width>
+                <height>40</height>
+               </size>
+              </property>
+             </spacer>
+            </item>
+           </layout>
+          </item>
+         </layout>
+        </item>
+        <item>
+         <widget class="QPlainTextEdit" name="txtBatchLogs">
+          <property name="maximumSize">
+           <size>
+            <width>16777215</width>
+            <height>150</height>
+           </size>
+          </property>
+          <property name="readOnly">
+           <bool>true</bool>
           </property>
          </widget>
         </item>
@@ -1647,12 +1824,12 @@
                 </spacer>
                </item>
                <item>
-                  <widget class="QCheckBox" name="chkExportPlotsCSV">
-                   <property name="text">
-                    <string>Export CSV</string>
-                   </property>
-                  </widget>
-                 </item>
+                <widget class="QCheckBox" name="chkExportPlotsCSV">
+                 <property name="text">
+                  <string>Export CSV</string>
+                 </property>
+                </widget>
+               </item>
                <item>
                 <widget class="QPushButton" name="btnSavePlots">
                  <property name="text">

@@ -6,7 +6,7 @@ public surface.
 
 import math
 import os
-from typing import Callable, Dict, List, Optional
+from typing import Callable, List, Optional
 
 from .paths import _read_json, _write_json, resource_path, user_data_path
 
@@ -56,7 +56,8 @@ class SimulationConfig:
             "sim_phi_min_deg", "sim_phi_max_deg",
         ],
         "Output & Rendering": [
-            "plot_scale", "plot_show_primary_grid", "plot_show_secondary_grid", "stored_run_count",
+            "plot_scale", "plot_show_primary_grid", "plot_show_secondary_grid", 
+            "plot_simple_output_scaling", "stored_run_count",
             "generate_all_plots", "show_human_silhouette", "plot_wall_shot",
             "plot_intensity_x", "plot_intensity_y", "plot_intensity_45",
             "batch_output_directory", "export_csv", "export_plots",
@@ -77,6 +78,7 @@ class SimulationConfig:
         "Material Defaults & Thresholds": [
             "default_reflectivity_smooth", "default_reflectivity_op",
             "default_reflectivity_cylinder", "default_gasket_reflectivity",
+            "default_gasket_specularity",
             "default_transmissivity_lens", "default_surface_finish",
             "default_surface_roughness_nm", "default_surface_correlation_um",
             "default_op_dimple_pitch_mm", "default_op_dimple_depth_um",

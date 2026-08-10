@@ -351,7 +351,10 @@ def get_sim_geometry(reflector: dict, emitter: dict, gasket: dict, finish: str,
         "refl_cyl": spec_or_default(
             reflector, "reflector", "reflectivity_cylinder", config),
         "refl_gask": spec_or_default(
-            reflector, "reflector", "gasket_reflectivity", config),
+            gasket, "gasket", "reflectivity", config),
+        # Zero is matte, one is a mirror.
+        "gasket_specularity": min(1.0, max(0.0, float(spec_or_default(
+            gasket, "gasket", "specularity", config)))),
         # Fraction of flux surviving the lens.
         "transmissivity_lens": spec_or_default(
             reflector, "reflector", "transmissivity_lens", config),

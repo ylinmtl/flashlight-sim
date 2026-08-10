@@ -290,9 +290,9 @@
             "droop_factor": 0.0188,
             "dome_size_mm": 0.0,
             "refractive_index": 1.0,
-            "output_mode": "advanced",
-            "max_lumens": 0.0,
-            "forward_voltage_v": 0.0,
+            "output_mode": "simple",
+            "max_lumens": 8000.0,
+            "forward_voltage_v": 3.0,
             "die_layout": "array",
             "die_rows": 4.0,
             "die_columns": 4.0,
@@ -313,9 +313,9 @@
             "droop_factor": 0.0335,
             "dome_size_mm": 0.0,
             "refractive_index": 1.0,
-            "output_mode": "advanced",
-            "max_lumens": 0.0,
-            "forward_voltage_v": 0.0,
+            "output_mode": "simple",
+            "max_lumens": 5900.0,
+            "forward_voltage_v": 3.0,
             "die_layout": "monolithic",
             "die_rows": 1.0,
             "die_columns": 1.0,
@@ -538,7 +538,7 @@
             "die_gap_output": 0.5
         },
         "Luminus SFT42R 6500K": {
-            "max_current_amps": 8.0,
+            "max_current_amps": 10.0,
             "vf_turn_on_v": 2.336,
             "vf_scale": 0.479,
             "base_efficacy_lm_w": 164.9,
@@ -551,8 +551,8 @@
             "die_length_mm": 2.32,
             "die_width_mm": 2.32,
             "shape": "round",
-            "output_mode": "advanced",
-            "max_lumens": 0.0,
+            "output_mode": "simple",
+            "max_lumens": 3030.0,
             "forward_voltage_v": 0.0,
             "die_layout": "monolithic",
             "die_rows": 1.0,
@@ -755,34 +755,11 @@
             "die_gap_mm": 0.2,
             "die_gap_output": 0.0
         },
-        "San'an F45R": {
-            "output_mode": "advanced",
-            "max_current_amps": 10.0,
-            "max_lumens": 0.0,
-            "forward_voltage_v": 0.0,
-            "vf_turn_on_v": 2.5326,
-            "vf_scale": 0.3718,
-            "base_efficacy_lm_w": 205.6447,
-            "droop_factor": 0.0841,
-            "footprint_x_mm": 5.0,
-            "footprint_y_mm": 5.0,
-            "height_mm": 0.72,
-            "dome_size_mm": 0.0,
-            "refractive_index": 1.0,
-            "shape": "round",
-            "die_length_mm": 2.41,
-            "die_width_mm": 2.41,
-            "die_layout": "monolithic",
-            "die_rows": 1.0,
-            "die_columns": 1.0,
-            "die_gap_mm": 0.1,
-            "die_gap_output": 0.5
-        },
-        "San'an F150R": {
-            "output_mode": "advanced",
+        "San'an F150R 6500K": {
+            "output_mode": "simple",
             "max_current_amps": 20.0,
-            "max_lumens": 0.0,
-            "forward_voltage_v": 0.0,
+            "max_lumens": 6821.0,
+            "forward_voltage_v": 3.0,
             "vf_turn_on_v": 2.45,
             "vf_scale": 0.31,
             "base_efficacy_lm_w": 198.5,
@@ -800,6 +777,29 @@
             "die_columns": 1.0,
             "die_gap_mm": 0.1,
             "die_gap_output": 0.5
+        },
+        "San'an F45R 6500K": {
+            "output_mode": "simple",
+            "max_current_amps": 10.0,
+            "max_lumens": 3241.0,
+            "forward_voltage_v": 3.0,
+            "vf_turn_on_v": 2.5326,
+            "vf_scale": 0.3718,
+            "base_efficacy_lm_w": 205.6447,
+            "droop_factor": 0.0841,
+            "footprint_x_mm": 5.0,
+            "footprint_y_mm": 5.0,
+            "height_mm": 0.72,
+            "dome_size_mm": 0.0,
+            "refractive_index": 1.0,
+            "shape": "round",
+            "die_length_mm": 2.41,
+            "die_width_mm": 2.41,
+            "die_layout": "monolithic",
+            "die_rows": 1.0,
+            "die_columns": 1.0,
+            "die_gap_mm": 0.1,
+            "die_gap_output": 0.5
         }
     },
     "reflectors": {
@@ -811,7 +811,6 @@
             "focus_offset_mm": 0.0,
             "reflectivity_smooth": 0.85,
             "reflectivity_op": 0.8,
-            "gasket_reflectivity": 0.0,
             "reflectivity_cylinder": 0.8,
             "transmissivity_lens": 0.98,
             "wall_thickness_mm": 1.0,
@@ -833,7 +832,6 @@
             "focus_offset_mm": 0.0,
             "reflectivity_smooth": 0.85,
             "reflectivity_op": 0.8,
-            "gasket_reflectivity": 0.0,
             "reflectivity_cylinder": 0.8,
             "transmissivity_lens": 0.98,
             "wall_thickness_mm": 1.0,
@@ -855,7 +853,6 @@
             "focus_offset_mm": 0.0,
             "reflectivity_smooth": 0.85,
             "reflectivity_op": 0.8,
-            "gasket_reflectivity": 0.0,
             "reflectivity_cylinder": 0.8,
             "transmissivity_lens": 0.98,
             "wall_thickness_mm": 1.0,
@@ -877,7 +874,6 @@
             "focus_offset_mm": 0.0,
             "reflectivity_smooth": 0.85,
             "reflectivity_op": 0.8,
-            "gasket_reflectivity": 0.0,
             "reflectivity_cylinder": 0.8,
             "transmissivity_lens": 0.98,
             "wall_thickness_mm": 1.0,
@@ -899,7 +895,6 @@
             "focus_offset_mm": 0.0,
             "reflectivity_smooth": 0.85,
             "reflectivity_op": 0.8,
-            "gasket_reflectivity": 0.0,
             "reflectivity_cylinder": 0.8,
             "transmissivity_lens": 0.98,
             "wall_thickness_mm": 1.0,
@@ -921,7 +916,6 @@
             "focus_offset_mm": 0.0,
             "reflectivity_smooth": 0.85,
             "reflectivity_op": 0.8,
-            "gasket_reflectivity": 0.0,
             "reflectivity_cylinder": 0.8,
             "transmissivity_lens": 0.98,
             "wall_thickness_mm": 1.0,
@@ -943,7 +937,6 @@
             "focus_offset_mm": 0.0,
             "reflectivity_smooth": 0.85,
             "reflectivity_op": 0.8,
-            "gasket_reflectivity": 0.0,
             "reflectivity_cylinder": 0.8,
             "transmissivity_lens": 0.98,
             "wall_thickness_mm": 1.0,
@@ -965,7 +958,6 @@
             "focus_offset_mm": 0.0,
             "reflectivity_smooth": 0.85,
             "reflectivity_op": 0.8,
-            "gasket_reflectivity": 0.0,
             "reflectivity_cylinder": 0.8,
             "transmissivity_lens": 0.98,
             "wall_thickness_mm": 1.0,
@@ -987,7 +979,6 @@
             "focus_offset_mm": 0.0,
             "reflectivity_smooth": 0.85,
             "reflectivity_op": 0.8,
-            "gasket_reflectivity": 0.0,
             "reflectivity_cylinder": 0.8,
             "transmissivity_lens": 0.98,
             "wall_thickness_mm": 1.0,
@@ -1009,7 +1000,6 @@
             "focus_offset_mm": 0.0,
             "reflectivity_smooth": 0.85,
             "reflectivity_op": 0.8,
-            "gasket_reflectivity": 0.0,
             "reflectivity_cylinder": 0.8,
             "transmissivity_lens": 0.98,
             "wall_thickness_mm": 1.0,
@@ -1032,7 +1022,6 @@
             "reflectivity_smooth": 0.85,
             "reflectivity_op": 0.8,
             "reflectivity_cylinder": 0.8,
-            "gasket_reflectivity": 0.0,
             "transmissivity_lens": 0.98,
             "surface_finish": "orange_peel",
             "wall_thickness_mm": 1.0,
@@ -1053,7 +1042,6 @@
             "focus_offset_mm": 0.0,
             "reflectivity_smooth": 0.85,
             "reflectivity_op": 0.8,
-            "gasket_reflectivity": 0.0,
             "reflectivity_cylinder": 0.8,
             "transmissivity_lens": 0.98,
             "wall_thickness_mm": 1.0,
@@ -1075,7 +1063,6 @@
             "focus_offset_mm": 0.0,
             "reflectivity_smooth": 0.85,
             "reflectivity_op": 0.8,
-            "gasket_reflectivity": 0.0,
             "reflectivity_cylinder": 0.8,
             "transmissivity_lens": 0.98,
             "wall_thickness_mm": 1.0,
@@ -1097,7 +1084,6 @@
             "focus_offset_mm": 0.0,
             "reflectivity_smooth": 0.85,
             "reflectivity_op": 0.8,
-            "gasket_reflectivity": 0.0,
             "reflectivity_cylinder": 0.8,
             "transmissivity_lens": 0.98,
             "wall_thickness_mm": 1.0,
@@ -1120,7 +1106,6 @@
             "reflectivity_smooth": 0.85,
             "reflectivity_op": 0.8,
             "reflectivity_cylinder": 0.8,
-            "gasket_reflectivity": 0.0,
             "transmissivity_lens": 0.98,
             "surface_finish": "orange_peel",
             "wall_thickness_mm": 1.0,
@@ -1142,7 +1127,6 @@
             "reflectivity_smooth": 0.85,
             "reflectivity_op": 0.8,
             "reflectivity_cylinder": 0.8,
-            "gasket_reflectivity": 0.0,
             "transmissivity_lens": 0.98,
             "surface_finish": "smooth",
             "wall_thickness_mm": 1.0,
@@ -1164,7 +1148,6 @@
             "reflectivity_smooth": 0.85,
             "reflectivity_op": 0.8,
             "reflectivity_cylinder": 0.8,
-            "gasket_reflectivity": 0.0,
             "transmissivity_lens": 0.98,
             "surface_finish": "orange_peel",
             "wall_thickness_mm": 1.0,
@@ -1186,7 +1169,6 @@
             "reflectivity_smooth": 0.85,
             "reflectivity_op": 0.8,
             "reflectivity_cylinder": 0.8,
-            "gasket_reflectivity": 0.0,
             "transmissivity_lens": 0.98,
             "surface_finish": "orange_peel",
             "wall_thickness_mm": 1.0,
@@ -1208,7 +1190,6 @@
             "reflectivity_smooth": 0.85,
             "reflectivity_op": 0.8,
             "reflectivity_cylinder": 0.8,
-            "gasket_reflectivity": 0.0,
             "transmissivity_lens": 0.98,
             "surface_finish": "orange_peel",
             "wall_thickness_mm": 1.0,
@@ -1230,7 +1211,6 @@
             "reflectivity_smooth": 0.85,
             "reflectivity_op": 0.8,
             "reflectivity_cylinder": 0.8,
-            "gasket_reflectivity": 0.0,
             "transmissivity_lens": 0.98,
             "surface_finish": "smooth",
             "wall_thickness_mm": 1.0,
@@ -1252,7 +1232,6 @@
             "reflectivity_smooth": 0.85,
             "reflectivity_op": 0.8,
             "reflectivity_cylinder": 0.8,
-            "gasket_reflectivity": 0.0,
             "transmissivity_lens": 0.98,
             "surface_finish": "smooth",
             "wall_thickness_mm": 1.0,
@@ -1274,7 +1253,6 @@
             "reflectivity_smooth": 0.85,
             "reflectivity_op": 0.8,
             "reflectivity_cylinder": 0.8,
-            "gasket_reflectivity": 0.0,
             "transmissivity_lens": 0.98,
             "surface_finish": "orange_peel",
             "wall_thickness_mm": 1.0,
@@ -1296,7 +1274,6 @@
             "reflectivity_smooth": 0.85,
             "reflectivity_op": 0.8,
             "reflectivity_cylinder": 0.8,
-            "gasket_reflectivity": 0.0,
             "transmissivity_lens": 0.98,
             "surface_finish": "orange_peel",
             "wall_thickness_mm": 1.0,
@@ -1318,7 +1295,6 @@
             "reflectivity_smooth": 0.85,
             "reflectivity_op": 0.8,
             "reflectivity_cylinder": 0.8,
-            "gasket_reflectivity": 0.0,
             "transmissivity_lens": 0.98,
             "surface_finish": "orange_peel",
             "wall_thickness_mm": 1.0,
@@ -1340,7 +1316,6 @@
             "reflectivity_smooth": 0.85,
             "reflectivity_op": 0.8,
             "reflectivity_cylinder": 0.8,
-            "gasket_reflectivity": 0.0,
             "transmissivity_lens": 0.98,
             "surface_finish": "orange_peel",
             "wall_thickness_mm": 1.0,
@@ -1362,7 +1337,6 @@
             "reflectivity_smooth": 0.85,
             "reflectivity_op": 0.8,
             "reflectivity_cylinder": 0.8,
-            "gasket_reflectivity": 0.0,
             "transmissivity_lens": 0.98,
             "surface_finish": "smooth",
             "wall_thickness_mm": 1.0,
@@ -1384,7 +1358,6 @@
             "reflectivity_smooth": 0.85,
             "reflectivity_op": 0.8,
             "reflectivity_cylinder": 0.8,
-            "gasket_reflectivity": 0.0,
             "transmissivity_lens": 0.98,
             "surface_finish": "smooth",
             "wall_thickness_mm": 1.0,
@@ -1406,7 +1379,6 @@
             "reflectivity_smooth": 0.85,
             "reflectivity_op": 0.8,
             "reflectivity_cylinder": 0.8,
-            "gasket_reflectivity": 0.0,
             "transmissivity_lens": 0.98,
             "surface_finish": "smooth",
             "wall_thickness_mm": 1.0,
@@ -1428,7 +1400,6 @@
             "reflectivity_smooth": 0.85,
             "reflectivity_op": 0.8,
             "reflectivity_cylinder": 0.8,
-            "gasket_reflectivity": 0.0,
             "transmissivity_lens": 0.98,
             "surface_finish": "smooth",
             "wall_thickness_mm": 1.0,
@@ -1450,7 +1421,6 @@
             "reflectivity_smooth": 0.85,
             "reflectivity_op": 0.8,
             "reflectivity_cylinder": 0.8,
-            "gasket_reflectivity": 0.0,
             "transmissivity_lens": 0.98,
             "surface_finish": "smooth",
             "wall_thickness_mm": 1.0,
@@ -1472,7 +1442,6 @@
             "reflectivity_smooth": 0.85,
             "reflectivity_op": 0.8,
             "reflectivity_cylinder": 0.8,
-            "gasket_reflectivity": 0.0,
             "transmissivity_lens": 0.98,
             "surface_finish": "smooth",
             "wall_thickness_mm": 1.0,
@@ -1494,7 +1463,6 @@
             "reflectivity_smooth": 0.85,
             "reflectivity_op": 0.8,
             "reflectivity_cylinder": 0.8,
-            "gasket_reflectivity": 0.0,
             "transmissivity_lens": 0.98,
             "surface_finish": "smooth",
             "wall_thickness_mm": 1.0,
@@ -1516,7 +1484,6 @@
             "reflectivity_smooth": 0.85,
             "reflectivity_op": 0.8,
             "reflectivity_cylinder": 0.8,
-            "gasket_reflectivity": 0.0,
             "transmissivity_lens": 0.98,
             "surface_finish": "orange_peel",
             "wall_thickness_mm": 1.0,
@@ -1538,7 +1505,6 @@
             "reflectivity_smooth": 0.85,
             "reflectivity_op": 0.8,
             "reflectivity_cylinder": 0.8,
-            "gasket_reflectivity": 0.0,
             "transmissivity_lens": 0.98,
             "surface_finish": "orange_peel",
             "wall_thickness_mm": 1.0,
@@ -1560,7 +1526,6 @@
             "reflectivity_smooth": 0.85,
             "reflectivity_op": 0.8,
             "reflectivity_cylinder": 0.8,
-            "gasket_reflectivity": 0.0,
             "transmissivity_lens": 0.98,
             "surface_finish": "smooth",
             "wall_thickness_mm": 1.0,
@@ -1582,7 +1547,6 @@
             "reflectivity_smooth": 0.85,
             "reflectivity_op": 0.8,
             "reflectivity_cylinder": 0.8,
-            "gasket_reflectivity": 0.0,
             "transmissivity_lens": 0.98,
             "surface_finish": "orange_peel",
             "wall_thickness_mm": 1.0,
@@ -1604,7 +1568,6 @@
             "reflectivity_smooth": 0.85,
             "reflectivity_op": 0.8,
             "reflectivity_cylinder": 0.8,
-            "gasket_reflectivity": 0.0,
             "transmissivity_lens": 0.98,
             "surface_finish": "smooth",
             "wall_thickness_mm": 1.0,
@@ -1633,7 +1596,6 @@
             "reflectivity_smooth": 0.85,
             "reflectivity_op": 0.8,
             "reflectivity_cylinder": 0.8,
-            "gasket_reflectivity": 0.0,
             "transmissivity_lens": 0.98,
             "lens_finish": "clear",
             "lens_diffusion_fwhm_deg": 10.0,
@@ -1655,7 +1617,6 @@
             "reflectivity_smooth": 0.85,
             "reflectivity_op": 0.8,
             "reflectivity_cylinder": 0.8,
-            "gasket_reflectivity": 0.0,
             "transmissivity_lens": 0.98,
             "lens_finish": "clear",
             "lens_diffusion_fwhm_deg": 10.0,
@@ -1677,7 +1638,6 @@
             "reflectivity_smooth": 0.85,
             "reflectivity_op": 0.8,
             "reflectivity_cylinder": 0.8,
-            "gasket_reflectivity": 0.0,
             "transmissivity_lens": 0.98,
             "lens_finish": "clear",
             "lens_diffusion_fwhm_deg": 10.0,
@@ -1699,7 +1659,6 @@
             "reflectivity_smooth": 0.85,
             "reflectivity_op": 0.8,
             "reflectivity_cylinder": 0.8,
-            "gasket_reflectivity": 0.0,
             "transmissivity_lens": 0.98,
             "lens_finish": "clear",
             "lens_diffusion_fwhm_deg": 10.0,
@@ -1721,7 +1680,6 @@
             "reflectivity_smooth": 0.85,
             "reflectivity_op": 0.8,
             "reflectivity_cylinder": 0.8,
-            "gasket_reflectivity": 0.0,
             "transmissivity_lens": 0.98,
             "lens_finish": "clear",
             "lens_diffusion_fwhm_deg": 10.0,
@@ -1743,7 +1701,6 @@
             "reflectivity_smooth": 0.85,
             "reflectivity_op": 0.8,
             "reflectivity_cylinder": 0.8,
-            "gasket_reflectivity": 0.0,
             "transmissivity_lens": 0.98,
             "lens_finish": "clear",
             "lens_diffusion_fwhm_deg": 10.0,
@@ -1765,7 +1722,6 @@
             "reflectivity_smooth": 0.85,
             "reflectivity_op": 0.8,
             "reflectivity_cylinder": 0.8,
-            "gasket_reflectivity": 0.0,
             "transmissivity_lens": 0.98,
             "lens_finish": "clear",
             "lens_diffusion_fwhm_deg": 10.0,
@@ -1787,7 +1743,6 @@
             "reflectivity_smooth": 0.85,
             "reflectivity_op": 0.8,
             "reflectivity_cylinder": 0.8,
-            "gasket_reflectivity": 0.0,
             "transmissivity_lens": 0.98,
             "lens_finish": "clear",
             "lens_diffusion_fwhm_deg": 10.0,
@@ -1809,7 +1764,6 @@
             "reflectivity_smooth": 0.85,
             "reflectivity_op": 0.8,
             "reflectivity_cylinder": 0.8,
-            "gasket_reflectivity": 0.0,
             "transmissivity_lens": 0.98,
             "lens_finish": "clear",
             "lens_diffusion_fwhm_deg": 10.0,
@@ -1831,7 +1785,6 @@
             "reflectivity_smooth": 0.85,
             "reflectivity_op": 0.8,
             "reflectivity_cylinder": 0.8,
-            "gasket_reflectivity": 0.0,
             "transmissivity_lens": 0.98,
             "lens_finish": "clear",
             "lens_diffusion_fwhm_deg": 10.0,
@@ -1853,7 +1806,6 @@
             "reflectivity_smooth": 0.85,
             "reflectivity_op": 0.8,
             "reflectivity_cylinder": 0.8,
-            "gasket_reflectivity": 0.0,
             "transmissivity_lens": 0.98,
             "lens_finish": "clear",
             "lens_diffusion_fwhm_deg": 10.0,
@@ -1875,7 +1827,6 @@
             "reflectivity_smooth": 0.85,
             "reflectivity_op": 0.8,
             "reflectivity_cylinder": 0.8,
-            "gasket_reflectivity": 0.0,
             "transmissivity_lens": 0.98,
             "lens_finish": "clear",
             "lens_diffusion_fwhm_deg": 10.0,
@@ -1889,7 +1840,9 @@
             "emitter_size_mm": 9.0,
             "wall_shape": "round",
             "thickness_mm": 2.0,
-            "total_height_mm": 3.2
+            "total_height_mm": 3.2,
+            "reflectivity": 0.0,
+            "specularity": 0.0
         },
         "11mm 7070": {
             "outer_diameter_mm": 11.0,
@@ -1897,7 +1850,9 @@
             "emitter_size_mm": 7.0,
             "wall_shape": "round",
             "thickness_mm": 1.4,
-            "total_height_mm": 2.25
+            "total_height_mm": 2.25,
+            "reflectivity": 0.0,
+            "specularity": 0.0
         },
         "11mm 5050": {
             "outer_diameter_mm": 11.0,
@@ -1905,7 +1860,9 @@
             "emitter_size_mm": 5.0,
             "wall_shape": "round",
             "thickness_mm": 0.7,
-            "total_height_mm": 1.7
+            "total_height_mm": 1.7,
+            "reflectivity": 0.0,
+            "specularity": 0.0
         },
         "10mm 7070": {
             "outer_diameter_mm": 10.0,
@@ -1913,7 +1870,9 @@
             "emitter_size_mm": 7.0,
             "wall_shape": "round",
             "thickness_mm": 1.0,
-            "total_height_mm": 2.2
+            "total_height_mm": 2.2,
+            "reflectivity": 0.0,
+            "specularity": 0.0
         },
         "9mm 5050": {
             "outer_diameter_mm": 9.0,
@@ -1921,7 +1880,9 @@
             "emitter_size_mm": 5.0,
             "wall_shape": "round",
             "thickness_mm": 1.0,
-            "total_height_mm": 2.25
+            "total_height_mm": 2.25,
+            "reflectivity": 0.0,
+            "specularity": 0.0
         },
         "9mm 4040": {
             "outer_diameter_mm": 9.0,
@@ -1929,7 +1890,9 @@
             "emitter_size_mm": 4.0,
             "wall_shape": "round",
             "thickness_mm": 0.7,
-            "total_height_mm": 1.2
+            "total_height_mm": 1.2,
+            "reflectivity": 0.0,
+            "specularity": 0.0
         },
         "9mm 3535": {
             "outer_diameter_mm": 9.0,
@@ -1937,7 +1900,9 @@
             "emitter_size_mm": 3.5,
             "wall_shape": "round",
             "thickness_mm": 0.7,
-            "total_height_mm": 1.2
+            "total_height_mm": 1.2,
+            "reflectivity": 0.0,
+            "specularity": 0.0
         },
         "9mm 3030": {
             "outer_diameter_mm": 9.0,
@@ -1945,7 +1910,9 @@
             "emitter_size_mm": 3.0,
             "wall_shape": "round",
             "thickness_mm": 0.7,
-            "total_height_mm": 1.2
+            "total_height_mm": 1.2,
+            "reflectivity": 0.0,
+            "specularity": 0.0
         },
         "7mm 5050 Round": {
             "outer_diameter_mm": 7.0,
@@ -1953,7 +1920,9 @@
             "emitter_size_mm": 5.0,
             "wall_shape": "round",
             "thickness_mm": 1.0,
-            "total_height_mm": 1.6
+            "total_height_mm": 1.6,
+            "reflectivity": 0.0,
+            "specularity": 0.0
         },
         "7mm 5050 Butterfly": {
             "outer_diameter_mm": 7.0,
@@ -1961,7 +1930,9 @@
             "emitter_size_mm": 5.0,
             "wall_shape": "square",
             "thickness_mm": 0.73,
-            "total_height_mm": 1.2
+            "total_height_mm": 1.2,
+            "reflectivity": 0.0,
+            "specularity": 0.0
         },
         "7mm 5050 Butterfly (Oversize)": {
             "outer_diameter_mm": 7.0,
@@ -1969,7 +1940,9 @@
             "emitter_size_mm": 5.0,
             "wall_shape": "square",
             "thickness_mm": 1.2,
-            "total_height_mm": 1.2
+            "total_height_mm": 1.2,
+            "reflectivity": 0.0,
+            "specularity": 0.0
         },
         "7mm 4040": {
             "outer_diameter_mm": 7.0,
@@ -1977,7 +1950,9 @@
             "emitter_size_mm": 4.0,
             "wall_shape": "round",
             "thickness_mm": 0.7,
-            "total_height_mm": 1.2
+            "total_height_mm": 1.2,
+            "reflectivity": 0.0,
+            "specularity": 0.0
         },
         "7mm 3535 Square": {
             "outer_diameter_mm": 7.0,
@@ -1985,7 +1960,9 @@
             "emitter_size_mm": 3.5,
             "wall_shape": "round",
             "thickness_mm": 0.7,
-            "total_height_mm": 1.2
+            "total_height_mm": 1.2,
+            "reflectivity": 0.0,
+            "specularity": 0.0
         },
         "7mm 3535 Round": {
             "outer_diameter_mm": 7.0,
@@ -1993,7 +1970,9 @@
             "emitter_size_mm": 3.5,
             "wall_shape": "round",
             "thickness_mm": 0.7,
-            "total_height_mm": 1.2
+            "total_height_mm": 1.2,
+            "reflectivity": 0.0,
+            "specularity": 0.0
         },
         "7mm 3030": {
             "outer_diameter_mm": 7.0,
@@ -2001,7 +1980,9 @@
             "emitter_size_mm": 3.0,
             "wall_shape": "round",
             "thickness_mm": 0.7,
-            "total_height_mm": 1.2
+            "total_height_mm": 1.2,
+            "reflectivity": 0.0,
+            "specularity": 0.0
         },
         "5mm 3535": {
             "outer_diameter_mm": 5.0,
@@ -2009,7 +1990,9 @@
             "emitter_size_mm": 3.5,
             "wall_shape": "square",
             "thickness_mm": 0.7,
-            "total_height_mm": 1.2
+            "total_height_mm": 1.2,
+            "reflectivity": 0.0,
+            "specularity": 0.0
         },
         "5mm 3030": {
             "outer_diameter_mm": 5.0,
@@ -2017,7 +2000,9 @@
             "emitter_size_mm": 3.0,
             "wall_shape": "round",
             "thickness_mm": 0.7,
-            "total_height_mm": 1.2
+            "total_height_mm": 1.2,
+            "reflectivity": 0.0,
+            "specularity": 0.0
         },
         "7mm 3.65*3.65": {
             "outer_diameter_mm": 7.0,
@@ -2025,7 +2010,9 @@
             "emitter_size_mm": 3.65,
             "wall_shape": "round",
             "thickness_mm": 0.7,
-            "total_height_mm": 1.2
+            "total_height_mm": 1.2,
+            "reflectivity": 0.0,
+            "specularity": 0.0
         },
         "None": {
             "outer_diameter_mm": 10.0,
@@ -2033,7 +2020,9 @@
             "emitter_size_mm": 10.0,
             "wall_shape": "round",
             "thickness_mm": 0.0,
-            "total_height_mm": 0.0
+            "total_height_mm": 0.0,
+            "reflectivity": 0.0,
+            "specularity": 0.0
         }
     }
 }

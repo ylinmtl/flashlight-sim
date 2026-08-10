@@ -5,7 +5,6 @@ public surface.
 """
 
 import copy
-import math
 import os
 import shutil
 from typing import Dict, List
@@ -69,6 +68,15 @@ OUTPUT_MODES = ("simple", "advanced")
 # once. wall_thickness_mm is a single wall, so a catalogue written before the
 # change holds a number that has to be halved as it is carried across.
 # Without this the same figure would quietly model a wall twice as thick.
+# Specs a kind no longer owns. Reflectivity and specularity used to sit on the
+# reflector, which meant a gasket behaved differently depending on which
+# reflector it was fitted in. They belong to the part itself, so they moved.
+# The old values cannot come with them, because one reflector's figure has no
+# particular gasket to belong to, and the new specs simply take their defaults.
+RETIRED_SPECS = {
+    "reflector": ("gasket_reflectivity", "gasket_diffusion"),
+}
+
 RENAMED_SPECS = {
     "reflector": {
         "thickness_diameter_mm": ("wall_thickness_mm", 0.5),
@@ -84,11 +92,12 @@ RENAMED_SPECS = {
         # of slope follows from the correlation length in optics.py.
         "surface_roughness_mrad": ("surface_roughness_nm", 17.678),
         "surface_blur_deg": ("surface_roughness_nm", 65.51),
+        # OP_Factor scaled the post-process blur, which op_factor still
+        # does, so that is where it goes. It was never a depth: the dimple
+        # texture describes the surface itself and starts from its own
+        # default. Listing both here would silently drop one, since the
+        # second entry for a key wins and the first is never seen.
         "OP_Factor": ("op_factor", 1.0),
-        # Orange peel was an abstract multiplier on a post-process blur. It
-        # is now the depth of the dimples, with their spacing beside it, so
-        # a texture measured off a real reflector can be typed straight in.
-        "OP_Factor": ("op_dimple_depth_um", 3.0),
         "lens_diffusion_deg": ("lens_diffusion_fwhm_deg", 2.354820),
     },
     "gasket": {
@@ -106,7 +115,6 @@ SPEC_DEFAULT_SETTINGS = {
         "reflectivity_smooth": "default_reflectivity_smooth",
         "reflectivity_op": "default_reflectivity_op",
         "reflectivity_cylinder": "default_reflectivity_cylinder",
-        "gasket_reflectivity": "default_gasket_reflectivity",
         "transmissivity_lens": "default_transmissivity_lens",
         "surface_finish": "default_surface_finish",
         "surface_roughness_nm": "default_surface_roughness_nm",
@@ -138,6 +146,11 @@ SPEC_DEFAULT_SETTINGS = {
     "gasket": {
         "inner_diameter_mm": "default_gasket_inner_diameter_mm",
         "wall_shape": "default_gasket_wall_shape",
+        # How the gasket handles the light that reaches it. These
+        # describe the part itself, so they sit with it rather than
+        # with whichever reflector it happens to be fitted in.
+        "reflectivity": "default_gasket_reflectivity",
+        "specularity": "default_gasket_specularity",
         "thickness_mm": "default_gasket_thickness_mm",
         "total_height_mm": "default_gasket_total_height_mm",
     },
@@ -333,6 +346,30 @@ class HardwareLibrary:
         if added:
             self.save_database()
         return added
+
+    def drop_retired_specs(self) -> dict:
+        """Removes specs a kind no longer owns, and reports what went.
+
+        Left in place they are dead weight in the file and a trap for anyone
+        reading it, since they look like settings that still do something.
+
+        Returns:
+            A dict of entry name to the specs dropped from it. Empty when there
+            was nothing to remove, so a caller can stay quiet about it.
+        """
+        dropped = {}
+        for kind, retired in RETIRED_SPECS.items():
+            for name, specs in self._catalogue(kind).items():
+                gone = [spec for spec in retired if spec in specs]
+                if not gone:
+                    continue
+                for spec in gone:
+                    del specs[spec]
+                dropped[name] = gone
+
+        if dropped:
+            self.save_database()
+        return dropped
 
     def rename_legacy_specs(self) -> Dict[str, List[str]]:
         """Carries specs a later version renamed across to their new names.

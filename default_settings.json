@@ -24,6 +24,7 @@
         "plot_scale": "distance",
         "plot_show_primary_grid": false,
         "plot_show_secondary_grid": false,
+        "plot_simple_output_scaling": false,
         "generate_all_plots": false,
         "show_human_silhouette": false,
         "plot_wall_shot": false,
@@ -95,6 +96,7 @@
         "default_die_rows": 1,
         "default_die_columns": 1,
         "default_die_gap_mm": 0.1,
-        "default_die_gap_output": 0.5
+        "default_die_gap_output": 0.5,
+        "default_gasket_specularity": 0.0
     }
 }

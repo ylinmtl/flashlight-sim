@@ -75,6 +75,44 @@ def _hash_uniform(seed):
 
 
 @njit
+def diffuse_direction(nx, ny, nz, seed):
+    """Draws a direction off a perfectly diffuse surface.
+
+    A Lambertian surface scatters light so that the intensity leaving it falls
+    with the cosine of the angle from its normal, whatever direction the light
+    arrived from. Sampling a disc and lifting it onto the hemisphere gives
+    exactly that distribution, so each ray carries the same flux and no weight
+    has to be tracked alongside it.
+
+    Args:
+        nx, ny, nz: The surface normal, assumed unit length and outward.
+        seed: Chooses which direction this ray takes.
+
+    Returns:
+        A unit direction in the hemisphere about the normal.
+    """
+    radius = math.sqrt(_hash_uniform(seed))
+    around = 2.0 * math.pi * _hash_uniform(seed + 6151)
+    upright = math.sqrt(max(0.0, 1.0 - radius * radius))
+
+    # Any vector not parallel to the normal gives a basis across it.
+    if abs(nz) < 0.9:
+        ax, ay, az = 0.0, 0.0, 1.0
+    else:
+        ax, ay, az = 1.0, 0.0, 0.0
+    ux, uy, uz = ny * az - nz * ay, nz * ax - nx * az, nx * ay - ny * ax
+    length = math.sqrt(ux * ux + uy * uy + uz * uz)
+    ux, uy, uz = ux / length, uy / length, uz / length
+    vx, vy, vz = ny * uz - nz * uy, nz * ux - nx * uz, nx * uy - ny * ux
+
+    across = radius * math.cos(around)
+    along = radius * math.sin(around)
+    return (across * ux + along * vx + upright * nx,
+            across * uy + along * vy + upright * ny,
+            across * uz + along * vz + upright * nz)
+
+
+@njit
 def scatter_direction(dx, dy, dz, spread_rad, seed):
     """Tilts a direction by a small random angle drawn from a Gaussian.
 
@@ -248,6 +286,7 @@ def process_single_ray(ex, ey, ez_base, vx, vy, vz, flux,
                        focal_length, z_bottom, z_min_cut, z_hole_top, z_max_cut,
                        radius_max, r_hole, target_z_mm, grid_res, wall_radius_m,
                        reflectivity_parabola, reflectivity_cylinder, reflectivity_gasket,
+                       gasket_specularity,
                        dome_radius, refractive_index, max_multiple_reflections,
                        z_gasket_top, r_gasket, gasket_x_half, gasket_y_half,
                        is_cylindrical_gasket,
@@ -279,6 +318,8 @@ def process_single_ray(ex, ey, ez_base, vx, vy, vz, flux,
         dome_radius: Dome radius, or 0 for a dedomed emitter.
         refractive_index: Dome refractive index.
         max_multiple_reflections: Extra bounces allowed beyond the first.
+        gasket_specularity: How polished the gasket is, from zero for a
+            perfectly matte surface to one for a mirror.
         z_gasket_top: Height of the exposed part of the gasket.
         r_gasket: Aperture radius for a round gasket.
         gasket_x_half, gasket_y_half: Half extents for a rectangular gasket.
@@ -455,10 +496,36 @@ def process_single_ray(ex, ey, ez_base, vx, vy, vz, flux,
             magnitude = math.sqrt(nx ** 2 + ny ** 2 + nz ** 2)
             nx, ny, nz = nx / magnitude, ny / magnitude, nz / magnitude
 
+            # Only a face lit from the outside can reflect. A ray reaching the
+            # back of one is inside the solid, where there is nothing to see.
             projection = dx * nx + dy * ny + dz * nz
+            if hit_type == _HIT_GASKET and projection >= 0.0:
+                return 0.0, -1, -1, -1
+
             dx = dx - 2.0 * projection * nx
             dy = dy - 2.0 * projection * ny
             dz = dz - 2.0 * projection * nz
+
+            # Rubber and silicone scatter; they do not mirror. The gasket picks
+            # a direction between the two, from a cosine weighted hemisphere at
+            # one end and the mirror direction at the other, so the setting
+            # reads as how polished the surface is. Blending the two
+            # directions
+            # and renormalising keeps it continuous, and anything that would
+            # end up below the surface falls back to the diffuse draw.
+            if hit_type == _HIT_GASKET and gasket_specularity < 1.0:
+                sx, sy, sz = diffuse_direction(nx, ny, nz,
+                                               ray_seed * 4096 + bounces + 2731)
+                if gasket_specularity > 0.0:
+                    mix_x = sx + gasket_specularity * (dx - sx)
+                    mix_y = sy + gasket_specularity * (dy - sy)
+                    mix_z = sz + gasket_specularity * (dz - sz)
+                    length = math.sqrt(mix_x * mix_x + mix_y * mix_y
+                                       + mix_z * mix_z)
+                    if (length > 1e-12
+                            and (mix_x * nx + mix_y * ny + mix_z * nz) > 0.0):
+                        sx, sy, sz = mix_x / length, mix_y / length, mix_z / length
+                dx, dy, dz = sx, sy, sz
 
             # Only run the Gaussian blur if the analytic dimple map is toggled off
             if hit_type == _HIT_PARABOLA and scatter_sigma_rad > 0.0 and not use_dimple_op:
@@ -466,6 +533,12 @@ def process_single_ray(ex, ey, ez_base, vx, vy, vz, flux,
                                                ray_seed * 4096 + bounces)
             px, py, pz = hit_x, hit_y, hit_z
             remaining_flux *= reflectivity
+
+            # A surface set to absorb everything used to leave the ray
+            # bouncing on with no flux, doing the same intersection work
+            # for a result that can only be zero.
+            if remaining_flux <= 0.0:
+                return 0.0, -1, -1, -1
 
         elif hit_type == _HIT_ABSORBED:
             return 0.0, -1, -1, -1
@@ -532,7 +605,7 @@ def ray_trace_kernel_gpu(start_idx, end_idx, element_x, element_y,
                          focal_length, ez_base, z_bottom, z_min_cut, z_hole_top,
                          z_max_cut, radius_max, r_hole, target_z_mm, grid_res,
                          wall_radius_m, reflectivity_parabola, reflectivity_cylinder,
-                         reflectivity_gasket, dome_radius, refractive_index,
+                         reflectivity_gasket, gasket_specularity, dome_radius, refractive_index,
                          max_multiple_reflections, z_gasket_top, r_gasket,
                          gasket_x_half, gasket_y_half, is_cylindrical_gasket,
                          emitter_offset_x, emitter_offset_y, transmissivity_lens,
@@ -576,7 +649,7 @@ def ray_trace_kernel_gpu(start_idx, end_idx, element_x, element_y,
         focal_length, z_bottom, z_min_cut, z_hole_top, z_max_cut,
         radius_max, r_hole, target_z_mm, grid_res, wall_radius_m,
         reflectivity_parabola, reflectivity_cylinder, reflectivity_gasket,
-        dome_radius, refractive_index, max_multiple_reflections,
+        gasket_specularity, dome_radius, refractive_index, max_multiple_reflections,
         z_gasket_top, r_gasket, gasket_x_half, gasket_y_half, is_cylindrical_gasket,
         emitter_offset_x, emitter_offset_y, transmissivity_lens,
         use_spherical, dome_polar_step_rad, dome_azimuth_step_rad,
@@ -594,7 +667,7 @@ def ray_trace_kernel_cpu(start_idx, end_idx, element_x, element_y,
                          focal_length, ez_base, z_bottom, z_min_cut, z_hole_top,
                          z_max_cut, radius_max, r_hole, target_z_mm, grid_res,
                          wall_radius_m, reflectivity_parabola, reflectivity_cylinder,
-                         reflectivity_gasket, dome_radius, refractive_index,
+                         reflectivity_gasket, gasket_specularity, dome_radius, refractive_index,
                          max_multiple_reflections, z_gasket_top, r_gasket,
                          gasket_x_half, gasket_y_half, is_cylindrical_gasket,
                          emitter_offset_x, emitter_offset_y, transmissivity_lens,
@@ -621,7 +694,7 @@ def ray_trace_kernel_cpu(start_idx, end_idx, element_x, element_y,
             focal_length, z_bottom, z_min_cut, z_hole_top, z_max_cut,
             radius_max, r_hole, target_z_mm, grid_res, wall_radius_m,
             reflectivity_parabola, reflectivity_cylinder, reflectivity_gasket,
-            dome_radius, refractive_index, max_multiple_reflections,
+            gasket_specularity, dome_radius, refractive_index, max_multiple_reflections,
             z_gasket_top, r_gasket, gasket_x_half, gasket_y_half, is_cylindrical_gasket,
             emitter_offset_x, emitter_offset_y, transmissivity_lens,
             use_spherical, dome_polar_step_rad, dome_azimuth_step_rad,
@@ -668,6 +741,7 @@ def _build_kernel_args(element_x, element_y, element_weight,
         float(geom["radius_max"]), float(geom["r_hole"]), float(target_z_mm),
         int(config.sim_grid_res), float(config.wall_radius_m),
         float(geom["refl_para"]), float(geom["refl_cyl"]), float(geom["refl_gask"]),
+        float(geom["gasket_specularity"]),
         float(geom["dome_radius"]), float(geom["refractive_index"]),
         int(config.max_multiple_reflections),
         float(geom["z_gasket_top"]), float(geom["r_gasket"]),
