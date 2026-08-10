@@ -538,7 +538,7 @@
             "die_gap_output": 0.5
         },
         "Luminus SFT42R 6500K": {
-            "max_current_amps": 8.0,
+            "max_current_amps": 10.0,
             "vf_turn_on_v": 2.336,
             "vf_scale": 0.479,
             "base_efficacy_lm_w": 164.9,
@@ -551,8 +551,8 @@
             "die_length_mm": 2.32,
             "die_width_mm": 2.32,
             "shape": "round",
-            "output_mode": "advanced",
-            "max_lumens": 0.0,
+            "output_mode": "simple",
+            "max_lumens": 3030.0,
             "forward_voltage_v": 0.0,
             "die_layout": "monolithic",
             "die_rows": 1.0,

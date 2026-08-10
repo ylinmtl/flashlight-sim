@@ -269,47 +269,6 @@ def project_dome_to_wall(dome_flux: np.ndarray, config: SimulationConfig):
                 minlength=pixels).reshape(resolution, resolution)
     return wall
 
-    polar_bins, azimuth_bins = dome_flux.shape
-    polar_step = math.radians(config.dome_angle_deg / 2.0) / polar_bins
-    azimuth_step = 2.0 * math.pi / azimuth_bins
-
-    polar = (filled[0] + 0.5) * polar_step
-    azimuth = (filled[1] + 0.5) * azimuth_step
-    flux = dome_flux[filled]
-
-    # Only the forward hemisphere can reach a wall in front of the head; a dome
-    # wider than that simply has nothing to project from those bins.
-    forward = polar < (math.pi / 2.0 - 1e-9)
-    polar, azimuth, flux = polar[forward], azimuth[forward], flux[forward]
-
-    offset = config.target_distance_m * np.tan(polar)
-    cell = (2.0 * config.wall_radius_m) / resolution
-    column = (offset * np.cos(azimuth) + config.wall_radius_m) / cell - 0.5
-    row = (offset * np.sin(azimuth) + config.wall_radius_m) / cell - 0.5
-
-    # Dropping each bin into the nearest pixel is what causes the moire:
-    # the angular lattice and the linear one beat against each other, so
-    # neighbouring pixels collect different numbers of bins and the pattern
-    # shows up as rings. Splitting each bin across the four pixels it sits
-    # between, in proportion to how close it is to each, removes the beat
-    # without blurring anything: the weights sum to one, so not a lumen is
-    # gained or lost, and a bin landing dead centre still lands whole.
-    low_column = np.floor(column).astype(np.int64)
-    low_row = np.floor(row).astype(np.int64)
-    column_fraction = column - low_column
-    row_fraction = row - low_row
-
-    for row_offset, row_weight in ((0, 1.0 - row_fraction), (1, row_fraction)):
-        for col_offset, col_weight in ((0, 1.0 - column_fraction),
-                                       (1, column_fraction)):
-            target_row = low_row + row_offset
-            target_column = low_column + col_offset
-            landed = ((target_column >= 0) & (target_column < resolution)
-                      & (target_row >= 0) & (target_row < resolution))
-            np.add.at(wall, (target_row[landed], target_column[landed]),
-                      (flux * row_weight * col_weight)[landed])
-    return wall
-
 
 def _hemisphere_weight(config: SimulationConfig) -> float:
     """Total Lambertian ray weight over a full hemisphere, on the trace's grid.
@@ -423,7 +382,14 @@ def simulate_wall_illuminance(geom: dict, emitter: dict, current_amps: float, fi
     ray_vz = np.ascontiguousarray(ray_vz, dtype=np.float64)
     ray_flux = np.ascontiguousarray(ray_flux, dtype=np.float64)
 
-    target_z_mm = config.target_distance_m * 1000.0
+    # The parabola equation is centred on its own mathematical vertex
+    # (z=0), but that point is not on the physical part: real material
+    # extends below it, and z_bottom is where that material actually
+    # ends. Target distance is what an operator would measure with a
+    # tape from the reflector sitting on a table, so the wall belongs
+    # z_bottom further out than the vertex-relative number alone would
+    # place it.
+    target_z_mm = geom["z_bottom"] + config.target_distance_m * 1000.0
     total_threads = element_count * len(ray_vx)
 
     use_gpu = False
