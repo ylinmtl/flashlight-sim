@@ -346,6 +346,7 @@ SETTING_LABELS = {
     },
     "Output & Rendering": {
         "plot_scale": "Plot Scale (Distance/Angle)",
+        "plot_intensity_unit": "Intensity Plot Units (Lux/Candela)",
         "plot_show_primary_grid": "Show Primary Grid",
         "plot_show_secondary_grid": "Show Secondary Grid",
         "plot_simple_output_scaling": "Show % Scaling Table in Simple Mode",
@@ -2467,6 +2468,9 @@ class MainWindow(QMainWindow):
             "45-Deg": (np.diagonal(shot.wall_lux), shot.diagonal_distance)
         }
 
+        # Check the global unit setting
+        unit = str(getattr(self.config, "plot_intensity_unit", "Candela")).strip().lower()
+
         # The render engine will automatically append suffixes to this base path
         for name in wanted:
             # Save the PNG Image
@@ -2477,17 +2481,23 @@ class MainWindow(QMainWindow):
                 csv_path = f"{base}_{name}.csv"
                 values_lux, distances = slices[name]
                 
-                # Convert Lux to Candela using the frozen geometry
-                values_cd = values_lux * (shot.shot_config.target_distance_m ** 2)
+                if unit == "lux":
+                    values_final = values_lux
+                    header_intensity = "Illuminance_lux"
+                else:
+                    # Apply exact flat-wall hypotenuse correction
+                    ray_length = np.sqrt(distances ** 2 + shot.shot_config.target_distance_m ** 2)
+                    values_final = values_lux * (ray_length ** 3) / shot.shot_config.target_distance_m
+                    header_intensity = "Intensity_cd"
                 
                 # Calculate angles dynamically so the CSV always has both metrics
                 angles_deg = np.degrees(np.arctan(distances / shot.shot_config.target_distance_m))
                 
                 with open(csv_path, mode='w', newline='') as f:
                     writer = csv.writer(f)
-                    writer.writerow(["Distance_m", "Angle_deg", "Intensity_cd"])
-                    for d, a, cd in zip(distances, angles_deg, values_cd):
-                        writer.writerow([f"{d:.4f}", f"{a:.4f}", f"{cd:.2f}"])
+                    writer.writerow(["Distance_m", "Angle_deg", header_intensity])
+                    for d, a, val in zip(distances, angles_deg, values_final):
+                        writer.writerow([f"{d:.4f}", f"{a:.4f}", f"{val:.2f}"])
             
         self.log_message(f"Saved {len(wanted)} plot(s) of {shot.label} based on {file_path}")
         if export_csv:
@@ -2643,6 +2653,13 @@ class MainWindow(QMainWindow):
         self.chkShowPrimaryGrid.setChecked(getattr(self.config, "plot_show_primary_grid", True))
         self.chkShowSecondaryGrid.setChecked(getattr(self.config, "plot_show_secondary_grid", False))
 
+        unit = str(getattr(self.config, "plot_intensity_unit", "Candela")).strip()
+        for index in range(self.cmbIntensityUnit.count()):
+            if self.cmbIntensityUnit.itemText(index).lower() == unit.lower():
+                self.cmbIntensityUnit.setCurrentIndex(index)
+                break
+        self.cmbIntensityUnit.currentIndexChanged.connect(self.on_intensity_unit_changed)
+
         self.chkSaveWallShot.setChecked(self.config.plot_wall_shot)
         self.chkSaveXAxis.setChecked(self.config.plot_intensity_x)
         self.chkSaveYAxis.setChecked(self.config.plot_intensity_y)
@@ -2658,6 +2675,11 @@ class MainWindow(QMainWindow):
         self.chkSave45Deg.toggled.connect(lambda v: self.update_plot_setting("plot_intensity_45", v))
 
         self.btnSavePlots.clicked.connect(self.save_plots)
+
+    def on_intensity_unit_changed(self):
+        self.config.plot_intensity_unit = self.cmbIntensityUnit.currentText()
+        self.config.save_settings()
+        self.show_selected_plot()
 
     def on_plot_scale_changed(self):
         self.config.plot_scale = self.cmbPlotScale.currentText()

@@ -22,6 +22,7 @@
     },
     "Output & Rendering": {
         "plot_scale": "distance",
+        "plot_intensity_unit": "candela",
         "plot_show_primary_grid": false,
         "plot_show_secondary_grid": false,
         "plot_simple_output_scaling": false,

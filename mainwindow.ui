@@ -1766,6 +1766,27 @@
                 </widget>
                </item>
                <item>
+                <widget class="QLabel" name="lblIntensityUnit">
+                 <property name="text">
+                  <string>Intensity Unit:</string>
+                 </property>
+                </widget>
+               </item>
+               <item>
+                <widget class="QComboBox" name="cmbIntensityUnit">
+                 <item>
+                  <property name="text">
+                   <string>Candela</string>
+                  </property>
+                 </item>
+                 <item>
+                  <property name="text">
+                   <string>Lux</string>
+                  </property>
+                 </item>
+                </widget>
+               </item>
+               <item>
                 <spacer name="horizontalSpacer_Output_Top">
                  <property name="orientation">
                   <enum>Qt::Horizontal</enum>
