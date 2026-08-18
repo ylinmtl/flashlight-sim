@@ -81,7 +81,17 @@ def render_intensity_profile(shot: 'WallShot', suffix_name: str,
                              always_save: bool = False):
     """Renders and optionally saves one intensity profile through the beam."""
     geom_config = shot.shot_config
-    slice_cd = slice_lux * (geom_config.target_distance_m ** 2)
+    
+    # Check unit setting and apply exact inverse-square law if Candela is requested
+    unit = str(getattr(active_config, "plot_intensity_unit", "Candela")).strip().lower()
+    if unit == "lux":
+        slice_plot = slice_lux
+        ylabel = "Illuminance (Lux)"
+    else:
+        # Calculate true hypotenuse distance for every pixel in the 1D array
+        ray_length = np.sqrt(dist_array ** 2 + geom_config.target_distance_m ** 2)
+        slice_plot = slice_lux * (ray_length ** 3) / geom_config.target_distance_m
+        ylabel = "Intensity (Candela)"
 
     # Force identical figsize (10, 10) to the wall shot to guarantee spatial alignment
     figure, ax = plt.subplots(figsize=(10, 10), facecolor="black")
@@ -103,14 +113,14 @@ def render_intensity_profile(shot: 'WallShot', suffix_name: str,
         ax.set_xlim(-geom_config.plot_radius_m, geom_config.plot_radius_m)
         ax.set_xlabel("Horizontal Distance (m)", color="#CCCCCC", fontsize=11, labelpad=10)
 
-    ax.plot(x_values, slice_cd, color="#FFFF00", linewidth=1.5)
-    ax.fill_between(x_values, slice_cd, color="#FFFF00", alpha=0.1)
+    ax.plot(x_values, slice_plot, color="#FFFF00", linewidth=1.5)
+    ax.fill_between(x_values, slice_plot, color="#FFFF00", alpha=0.1)
 
-    ax.set_ylim(0, max(np.max(slice_cd) * 1.05, 1))
-    ax.set_ylabel("Intensity (Candela)", color="#CCCCCC", fontsize=11, labelpad=10)
+    ax.set_ylim(0, max(np.max(slice_plot) * 1.05, 1))
+    ax.set_ylabel(ylabel, color="#CCCCCC", fontsize=11, labelpad=10)
 
     # Format the Y-axis to use commas.
-    ax.yaxis.set_major_formatter(plt.FuncFormatter(lambda x, loc: "{:,}".format(int(x))))
+    ax.yaxis.set_major_formatter(plt.FuncFormatter(lambda x, loc: "{:,}".format(int(x)) if x >= 1000 else f"{x:g}"))
 
     _apply_grids(ax, active_config)
 

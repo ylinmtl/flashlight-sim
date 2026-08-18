@@ -551,7 +551,7 @@
             "die_length_mm": 2.32,
             "die_width_mm": 2.32,
             "shape": "round",
-            "output_mode": "simple",
+            "output_mode": "advanced",
             "max_lumens": 3030.0,
             "forward_voltage_v": 0.0,
             "die_layout": "monolithic",
@@ -730,7 +730,7 @@
             "die_rows": 2.0,
             "die_columns": 2.0,
             "die_gap_mm": 0.2,
-            "die_gap_output": 0.5
+            "die_gap_output": 0.95
         },
         "Cree XHP70.3 HI 4000K": {
             "die_length_mm": 4.0,
@@ -1665,8 +1665,8 @@
             "lens_refractive_index": 1.52
         },
         "Convoy 4x18 11mm": {
-            "diameter_mm": 85.5,
-            "height_mm": 60.8,
+            "diameter_mm": 60.6,
+            "height_mm": 34.6,
             "opening_diameter_mm": 11.1,
             "focus_offset_mm": 0.0,
             "wall_thickness_mm": 1.0,
@@ -1686,8 +1686,8 @@
             "lens_refractive_index": 1.52
         },
         "Convoy 4x18 13mm": {
-            "diameter_mm": 85.5,
-            "height_mm": 60.8,
+            "diameter_mm": 60.6,
+            "height_mm": 34.6,
             "opening_diameter_mm": 13.1,
             "focus_offset_mm": 0.0,
             "wall_thickness_mm": 1.0,
